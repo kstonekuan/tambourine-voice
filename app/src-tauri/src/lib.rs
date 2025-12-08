@@ -233,10 +233,13 @@ fn build_global_shortcut_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
                         // Start recording
                         state.is_recording.store(true, Ordering::SeqCst);
                         log::info!("Toggle: starting recording");
-                        mute_audio();
+                        // Play sound BEFORE muting so it's audible
                         if sound_enabled {
                             audio::play_sound(audio::SoundType::RecordingStart);
+                            // Brief delay to let sound play before muting
+                            std::thread::sleep(std::time::Duration::from_millis(150));
                         }
+                        mute_audio();
                         let _ = app.emit("recording-start", ());
                     }
                 }
@@ -249,10 +252,13 @@ fn build_global_shortcut_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
                             // First press - start recording
                             state.is_recording.store(true, Ordering::SeqCst);
                             log::info!("Hold: starting recording");
-                            mute_audio();
+                            // Play sound BEFORE muting so it's audible
                             if sound_enabled {
                                 audio::play_sound(audio::SoundType::RecordingStart);
+                                // Brief delay to let sound play before muting
+                                std::thread::sleep(std::time::Duration::from_millis(150));
                             }
+                            mute_audio();
                             let _ = app.emit("recording-start", ());
                         }
                     }
