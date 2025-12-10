@@ -14,7 +14,7 @@ import {
 	DEFAULT_PASTE_LAST_HOTKEY,
 	DEFAULT_TOGGLE_HOTKEY,
 } from "./lib/hotkeyDefaults";
-import { useSettings } from "./lib/queries";
+import { useRefreshServerQueriesOnConnect, useSettings } from "./lib/queries";
 import { type HotkeyConfig, tauriAPI } from "./lib/tauri";
 import { useRecordingStore } from "./stores/recordingStore";
 import "./styles.css";
@@ -206,6 +206,10 @@ function SettingsView() {
 
 export default function App() {
 	const [activeView, setActiveView] = useState<View>("home");
+	const connectionState = useRecordingStore((s) => s.state);
+
+	// Refresh server-side queries when connection is established
+	useRefreshServerQueriesOnConnect(connectionState);
 
 	return (
 		<div className="app-layout">

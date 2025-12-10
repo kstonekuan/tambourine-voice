@@ -46,6 +46,7 @@ export interface AppSettings {
 	stt_provider: string | null;
 	llm_provider: string | null;
 	auto_mute_audio: boolean;
+	stt_timeout_seconds: number | null;
 }
 
 export const tauriAPI = {
@@ -123,6 +124,10 @@ export const tauriAPI = {
 
 	async updateAutoMuteAudio(enabled: boolean): Promise<void> {
 		return invoke("update_auto_mute_audio", { enabled });
+	},
+
+	async updateSTTTimeout(timeoutSeconds: number | null): Promise<void> {
+		return invoke("update_stt_timeout", { timeoutSeconds });
 	},
 
 	async isAudioMuteSupported(): Promise<boolean> {
@@ -224,6 +229,12 @@ interface SwitchProviderResponse {
 	error?: string;
 }
 
+interface STTTimeoutResponse {
+	success: boolean;
+	timeout_seconds?: number;
+	error?: string;
+}
+
 export const configAPI = {
 	async getDefaultSections(): Promise<DefaultSectionsResponse> {
 		const response = await fetch(
@@ -268,6 +279,21 @@ export const configAPI = {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ provider }),
+		});
+		return response.json();
+	},
+
+	// STT Timeout APIs
+	async getSTTTimeout(): Promise<STTTimeoutResponse> {
+		const response = await fetch(`${CONFIG_API_URL}/api/config/stt-timeout`);
+		return response.json();
+	},
+
+	async setSTTTimeout(timeoutSeconds: number): Promise<STTTimeoutResponse> {
+		const response = await fetch(`${CONFIG_API_URL}/api/config/stt-timeout`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ timeout_seconds: timeoutSeconds }),
 		});
 		return response.json();
 	},

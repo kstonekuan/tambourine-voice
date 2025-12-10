@@ -17,11 +17,11 @@ from processors.llm_cleanup import (
     MAIN_PROMPT_DEFAULT,
     combine_prompt_sections,
 )
-from services.providers import (
-    LLM_PROVIDER_LABELS,
-    STT_PROVIDER_LABELS,
-    LLMProvider,
-    STTProvider,
+from services.provider_registry import (
+    LLMProviderId,
+    STTProviderId,
+    get_llm_provider_labels,
+    get_stt_provider_labels,
 )
 
 if TYPE_CHECKING:
@@ -32,21 +32,23 @@ if TYPE_CHECKING:
 
     from config.settings import Settings
     from processors.llm_cleanup import TranscriptionToLLMConverter
+    from processors.transcription_buffer import TranscriptionBufferProcessor
 
 # Create router for config endpoints
 config_router = APIRouter()
 
 # Shared state - will be set by main server
 _llm_converter: TranscriptionToLLMConverter | None = None
+_transcription_buffer: TranscriptionBufferProcessor | None = None
 _stt_switcher: ServiceSwitcher | None = None
 _llm_switcher: LLMSwitcher | None = None
-_stt_services: dict[STTProvider, STTService] | None = None
-_llm_services: dict[LLMProvider, LLMService] | None = None
+_stt_services: dict[STTProviderId, STTService] | None = None
+_llm_services: dict[LLMProviderId, LLMService] | None = None
 _settings: Settings | None = None
 
 # Track current active providers
-_current_stt_provider: STTProvider | None = None
-_current_llm_provider: LLMProvider | None = None
+_current_stt_provider: STTProviderId | None = None
+_current_llm_provider: LLMProviderId | None = None
 
 # Event to signal when pipeline has started (received StartFrame)
 _pipeline_started_event: asyncio.Event = asyncio.Event()
@@ -74,11 +76,21 @@ def set_llm_converter(converter: TranscriptionToLLMConverter) -> None:
     _llm_converter = converter
 
 
+def set_transcription_buffer(buffer: TranscriptionBufferProcessor) -> None:
+    """Set the transcription buffer reference for runtime timeout updates.
+
+    Args:
+        buffer: The TranscriptionBufferProcessor instance from the pipeline.
+    """
+    global _transcription_buffer
+    _transcription_buffer = buffer
+
+
 def set_service_switchers(
     stt_switcher: ServiceSwitcher,
     llm_switcher: LLMSwitcher,
-    stt_services: dict[STTProvider, Any],
-    llm_services: dict[LLMProvider, Any],
+    stt_services: dict[STTProviderId, Any],
+    llm_services: dict[LLMProviderId, Any],
     settings: Settings,
 ) -> None:
     """Set the service switcher references for runtime provider switching.
@@ -86,8 +98,8 @@ def set_service_switchers(
     Args:
         stt_switcher: The STT ServiceSwitcher instance
         llm_switcher: The LLM Switcher instance
-        stt_services: Dictionary mapping STT providers to their services
-        llm_services: Dictionary mapping LLM providers to their services
+        stt_services: Dictionary mapping STT provider IDs to their services
+        llm_services: Dictionary mapping LLM provider IDs to their services
         settings: Application settings
     """
     global _stt_switcher, _llm_switcher, _stt_services, _llm_services, _settings
@@ -99,25 +111,12 @@ def set_service_switchers(
     _llm_services = llm_services
     _settings = settings
 
-    # Set initial active providers based on settings
-    # Pipecat uses the first service in the list as default, so we only override if specified
+    # Set initial active providers to first available
     if stt_services:
-        if settings.default_stt_provider:
-            default_stt = STTProvider(settings.default_stt_provider)
-            _current_stt_provider = (
-                default_stt if default_stt in stt_services else next(iter(stt_services.keys()))
-            )
-        else:
-            _current_stt_provider = next(iter(stt_services.keys()))
+        _current_stt_provider = next(iter(stt_services.keys()))
 
     if llm_services:
-        if settings.default_llm_provider:
-            default_llm = LLMProvider(settings.default_llm_provider)
-            _current_llm_provider = (
-                default_llm if default_llm in llm_services else next(iter(llm_services.keys()))
-            )
-        else:
-            _current_llm_provider = next(iter(llm_services.keys()))
+        _current_llm_provider = next(iter(llm_services.keys()))
 
 
 class PromptSectionData(BaseModel):
@@ -211,17 +210,31 @@ class CurrentProvidersResponse(BaseModel):
     llm: str | None
 
 
-class SwitchProviderRequest(BaseModel):
-    """Request to switch a provider."""
+class SwitchSTTProviderRequest(BaseModel):
+    """Request to switch STT provider."""
 
-    provider: str
+    provider: STTProviderId
 
 
-class SwitchProviderResponse(BaseModel):
-    """Response for provider switch."""
+class SwitchSTTProviderResponse(BaseModel):
+    """Response for STT provider switch."""
 
     success: bool
-    provider: str | None = None
+    provider: STTProviderId | None = None
+    error: str | None = None
+
+
+class SwitchLLMProviderRequest(BaseModel):
+    """Request to switch LLM provider."""
+
+    provider: LLMProviderId
+
+
+class SwitchLLMProviderResponse(BaseModel):
+    """Response for LLM provider switch."""
+
+    success: bool
+    provider: LLMProviderId | None = None
     error: str | None = None
 
 
@@ -233,17 +246,23 @@ async def get_available_providers() -> AvailableProvidersResponse:
     """Get list of available STT and LLM providers (those with API keys configured)."""
     stt_providers = []
     llm_providers = []
+    stt_labels = get_stt_provider_labels()
+    llm_labels = get_llm_provider_labels()
 
     if _stt_services:
         stt_providers = [
-            ProviderInfo(value=p.value, label=STT_PROVIDER_LABELS.get(p, p.value))
-            for p in _stt_services
+            ProviderInfo(
+                value=provider_id.value, label=stt_labels.get(provider_id, provider_id.value)
+            )
+            for provider_id in _stt_services
         ]
 
     if _llm_services:
         llm_providers = [
-            ProviderInfo(value=p.value, label=LLM_PROVIDER_LABELS.get(p, p.value))
-            for p in _llm_services
+            ProviderInfo(
+                value=provider_id.value, label=llm_labels.get(provider_id, provider_id.value)
+            )
+            for provider_id in _llm_services
         ]
 
     return AvailableProvidersResponse(stt=stt_providers, llm=llm_providers)
@@ -258,8 +277,8 @@ async def get_current_providers() -> CurrentProvidersResponse:
     )
 
 
-@config_router.post("/api/providers/stt", response_model=SwitchProviderResponse)
-async def switch_stt_provider(data: SwitchProviderRequest) -> SwitchProviderResponse:
+@config_router.post("/api/providers/stt", response_model=SwitchSTTProviderResponse)
+async def switch_stt_provider(data: SwitchSTTProviderRequest) -> SwitchSTTProviderResponse:
     """Switch to a different STT provider.
 
     Args:
@@ -268,34 +287,32 @@ async def switch_stt_provider(data: SwitchProviderRequest) -> SwitchProviderResp
     global _current_stt_provider
 
     if not _stt_switcher or not _stt_services:
-        return SwitchProviderResponse(success=False, error="STT switcher not initialized")
+        return SwitchSTTProviderResponse(success=False, error="STT switcher not initialized")
 
     # Wait for pipeline to start before switching
     await _pipeline_started_event.wait()
 
-    try:
-        provider = STTProvider(data.provider)
-    except ValueError:
-        return SwitchProviderResponse(success=False, error=f"Unknown STT provider: {data.provider}")
+    provider_id = data.provider
 
-    if provider not in _stt_services:
-        return SwitchProviderResponse(
-            success=False, error=f"Provider '{data.provider}' not available (no API key configured)"
+    if provider_id not in _stt_services:
+        return SwitchSTTProviderResponse(
+            success=False,
+            error=f"Provider '{provider_id.value}' not available (no API key configured)",
         )
 
-    service = _stt_services[provider]
+    service = _stt_services[provider_id]
     await _stt_switcher.process_frame(
         ManuallySwitchServiceFrame(service=service),
         FrameDirection.DOWNSTREAM,
     )
-    _current_stt_provider = provider
+    _current_stt_provider = provider_id
 
-    logger.info("switched_stt_provider", provider=provider.value)
-    return SwitchProviderResponse(success=True, provider=provider.value)
+    logger.success("switched_stt_provider", provider=provider_id.value)
+    return SwitchSTTProviderResponse(success=True, provider=provider_id)
 
 
-@config_router.post("/api/providers/llm", response_model=SwitchProviderResponse)
-async def switch_llm_provider(data: SwitchProviderRequest) -> SwitchProviderResponse:
+@config_router.post("/api/providers/llm", response_model=SwitchLLMProviderResponse)
+async def switch_llm_provider(data: SwitchLLMProviderRequest) -> SwitchLLMProviderResponse:
     """Switch to a different LLM provider.
 
     Args:
@@ -304,27 +321,75 @@ async def switch_llm_provider(data: SwitchProviderRequest) -> SwitchProviderResp
     global _current_llm_provider
 
     if not _llm_switcher or not _llm_services:
-        return SwitchProviderResponse(success=False, error="LLM switcher not initialized")
+        return SwitchLLMProviderResponse(success=False, error="LLM switcher not initialized")
 
     # Wait for pipeline to start before switching
     await _pipeline_started_event.wait()
 
-    try:
-        provider = LLMProvider(data.provider)
-    except ValueError:
-        return SwitchProviderResponse(success=False, error=f"Unknown LLM provider: {data.provider}")
+    provider_id = data.provider
 
-    if provider not in _llm_services:
-        return SwitchProviderResponse(
-            success=False, error=f"Provider '{data.provider}' not available (no API key configured)"
+    if provider_id not in _llm_services:
+        return SwitchLLMProviderResponse(
+            success=False,
+            error=f"Provider '{provider_id.value}' not available (no API key configured)",
         )
 
-    service = _llm_services[provider]
+    service = _llm_services[provider_id]
     await _llm_switcher.process_frame(
         ManuallySwitchServiceFrame(service=service),
         FrameDirection.DOWNSTREAM,
     )
-    _current_llm_provider = provider
+    _current_llm_provider = provider_id
 
-    logger.info("switched_llm_provider", provider=provider.value)
-    return SwitchProviderResponse(success=True, provider=provider.value)
+    logger.success("switched_llm_provider", provider=provider_id.value)
+    return SwitchLLMProviderResponse(success=True, provider=provider_id)
+
+
+# =============================================================================
+# STT Timeout Configuration
+# =============================================================================
+
+
+class STTTimeoutRequest(BaseModel):
+    """Request to set STT timeout."""
+
+    timeout_seconds: float
+
+
+class STTTimeoutResponse(BaseModel):
+    """Response for STT timeout operations."""
+
+    success: bool
+    timeout_seconds: float | None = None
+    error: str | None = None
+
+
+@config_router.get("/api/config/stt-timeout", response_model=STTTimeoutResponse)
+async def get_stt_timeout() -> STTTimeoutResponse:
+    """Get the current STT transcription timeout."""
+    if not _transcription_buffer:
+        return STTTimeoutResponse(success=False, error="Transcription buffer not initialized")
+
+    return STTTimeoutResponse(
+        success=True,
+        timeout_seconds=_transcription_buffer.get_transcription_timeout(),
+    )
+
+
+@config_router.post("/api/config/stt-timeout", response_model=STTTimeoutResponse)
+async def set_stt_timeout(data: STTTimeoutRequest) -> STTTimeoutResponse:
+    """Set the STT transcription timeout.
+
+    Increase this value for STT providers that take longer to process.
+    """
+    if not _transcription_buffer:
+        return STTTimeoutResponse(success=False, error="Transcription buffer not initialized")
+
+    if data.timeout_seconds < 0.1 or data.timeout_seconds > 10.0:
+        return STTTimeoutResponse(
+            success=False,
+            error="Timeout must be between 0.1 and 10.0 seconds",
+        )
+
+    _transcription_buffer.set_transcription_timeout(data.timeout_seconds)
+    return STTTimeoutResponse(success=True, timeout_seconds=data.timeout_seconds)

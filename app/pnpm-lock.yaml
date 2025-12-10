@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@daily-co/daily-js':
+        specifier: ^0.85.0
+        version: 0.85.0
       '@mantine/core':
         specifier: ^8.3.10
         version: 8.3.10(@mantine/hooks@8.3.10(react@19.2.1))(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
@@ -25,7 +28,7 @@ importers:
         version: 1.8.0(@pipecat-ai/client-js@1.5.0)
       '@pipecat-ai/voice-ui-kit':
         specifier: ^0.5.0
-        version: 0.5.0(@daily-co/daily-js@0.83.1)(@pipecat-ai/client-js@1.5.0)(@pipecat-ai/client-react@1.1.0(@babel/core@7.28.5)(@babel/template@7.27.2)(@pipecat-ai/client-js@1.5.0)(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(@pipecat-ai/small-webrtc-transport@1.8.0(@pipecat-ai/client-js@1.5.0))(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+        version: 0.5.0(@daily-co/daily-js@0.85.0)(@pipecat-ai/client-js@1.5.0)(@pipecat-ai/client-react@1.1.0(@babel/core@7.28.5)(@babel/template@7.27.2)(@pipecat-ai/client-js@1.5.0)(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(@pipecat-ai/small-webrtc-transport@1.8.0(@pipecat-ai/client-js@1.5.0))(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       '@tailwindcss/vite':
         specifier: ^4.1.17
         version: 4.1.17(vite@7.2.7(@types/node@24.10.2)(jiti@2.6.1)(lightningcss@1.30.2))
@@ -70,8 +73,8 @@ importers:
         specifier: 5.1.2
         version: 5.1.2(vite@7.2.7(@types/node@24.10.2)(jiti@2.6.1)(lightningcss@1.30.2))
       knip:
-        specifier: ^5.72.0
-        version: 5.72.0(@types/node@24.10.2)(typescript@5.9.3)
+        specifier: ^5.73.0
+        version: 5.73.0(@types/node@24.10.2)(typescript@5.9.3)
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -226,6 +229,10 @@ packages:
 
   '@daily-co/daily-js@0.83.1':
     resolution: {integrity: sha512-KXA3zrSnNPZONwhip4TI6ayD3huumI1QBD/xPAjFArvHuFFB7t0QTOS2oxH1bXvdOBJ6XnY08vdlJslTVi2/2w==}
+    engines: {node: '>=10.0.0'}
+
+  '@daily-co/daily-js@0.85.0':
+    resolution: {integrity: sha512-lpl111ZWNTUWDnwYcPuNi9PGJPbLCeCw6LzmEY40nG0hv1jg5JLVW8Rq3Cj/+lOCP6W6h4PXm211ss0FFnxITQ==}
     engines: {node: '>=10.0.0'}
 
   '@emnapi/core@1.7.1':
@@ -1647,8 +1654,8 @@ packages:
     resolution: {integrity: sha512-dcS1ul+9tmeD95T+x28/ehLgd9mENa3LsvDTtzm3vyBEO7RPptvAD+t44WVXaUjTBRcrpFeFlC8WCruUR456hw==}
     engines: {node: '>=0.10.0'}
 
-  knip@5.72.0:
-    resolution: {integrity: sha512-rlyoXI8FcggNtM/QXd/GW0sbsYvNuA/zPXt7bsuVi6kVQogY2PDCr81bPpzNnl0CP8AkFm2Z2plVeL5QQSis2w==}
+  knip@5.73.0:
+    resolution: {integrity: sha512-L6zy2R/aAICy+lQWwdjl2TUY/kv2mqjkyKIL5+F4cUcn+3TQHjqzHen+N43S4oi4FyQ2qPJMNIODusr1vicTUA==}
     engines: {node: '>=18.18.0'}
     hasBin: true
     peerDependencies:
@@ -2251,6 +2258,14 @@ snapshots:
       dequal: 2.0.3
       events: 3.3.0
 
+  '@daily-co/daily-js@0.85.0':
+    dependencies:
+      '@babel/runtime': 7.28.4
+      '@sentry/browser': 8.55.0
+      bowser: 2.13.0
+      dequal: 2.0.3
+      events: 3.3.0
+
   '@emnapi/core@1.7.1':
     dependencies:
       '@emnapi/wasi-threads': 1.1.0
@@ -2517,9 +2532,9 @@ snapshots:
       dequal: 2.0.3
       lodash: 4.17.21
 
-  '@pipecat-ai/voice-ui-kit@0.5.0(@daily-co/daily-js@0.83.1)(@pipecat-ai/client-js@1.5.0)(@pipecat-ai/client-react@1.1.0(@babel/core@7.28.5)(@babel/template@7.27.2)(@pipecat-ai/client-js@1.5.0)(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(@pipecat-ai/small-webrtc-transport@1.8.0(@pipecat-ai/client-js@1.5.0))(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)':
+  '@pipecat-ai/voice-ui-kit@0.5.0(@daily-co/daily-js@0.85.0)(@pipecat-ai/client-js@1.5.0)(@pipecat-ai/client-react@1.1.0(@babel/core@7.28.5)(@babel/template@7.27.2)(@pipecat-ai/client-js@1.5.0)(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(@pipecat-ai/small-webrtc-transport@1.8.0(@pipecat-ai/client-js@1.5.0))(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)':
     dependencies:
-      '@daily-co/daily-js': 0.83.1
+      '@daily-co/daily-js': 0.85.0
       '@pipecat-ai/client-js': 1.5.0
       '@pipecat-ai/client-react': 1.1.0(@babel/core@7.28.5)(@babel/template@7.27.2)(@pipecat-ai/client-js@1.5.0)(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       '@radix-ui/react-dropdown-menu': 2.1.16(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
@@ -3485,7 +3500,7 @@ snapshots:
 
   kind-of@6.0.3: {}
 
-  knip@5.72.0(@types/node@24.10.2)(typescript@5.9.3):
+  knip@5.73.0(@types/node@24.10.2)(typescript@5.9.3):
     dependencies:
       '@nodelib/fs.walk': 1.2.8
       '@types/node': 24.10.2

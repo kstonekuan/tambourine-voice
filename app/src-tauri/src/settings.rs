@@ -193,6 +193,10 @@ pub struct AppSettings {
     /// Whether to automatically mute system audio during recording
     #[serde(default)]
     pub auto_mute_audio: bool,
+
+    /// STT timeout in seconds (None = use server default)
+    #[serde(default)]
+    pub stt_timeout_seconds: Option<f64>,
 }
 
 fn default_toggle_hotkey() -> HotkeyConfig {
@@ -223,6 +227,7 @@ impl Default for AppSettings {
             stt_provider: None,
             llm_provider: None,
             auto_mute_audio: false,
+            stt_timeout_seconds: None,
         }
     }
 }
@@ -401,6 +406,18 @@ impl SettingsManager {
                 .write()
                 .map_err(|e| format!("Failed to write settings: {}", e))?;
             settings.auto_mute_audio = enabled;
+        }
+        self.save()
+    }
+
+    /// Update the STT timeout setting
+    pub fn update_stt_timeout(&self, timeout_seconds: Option<f64>) -> Result<(), String> {
+        {
+            let mut settings = self
+                .settings
+                .write()
+                .map_err(|e| format!("Failed to write settings: {}", e))?;
+            settings.stt_timeout_seconds = timeout_seconds;
         }
         self.save()
     }

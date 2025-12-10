@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from pipecat.frames.frames import (
     Frame,
@@ -26,14 +26,12 @@ from pipecat.frames.frames import (
 )
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.transcriptions.language import Language
+from pydantic import BaseModel, ValidationError
 
 from utils.logger import logger
 
-# Maximum time to wait for pending transcription when stop-recording is received
-TRANSCRIPTION_WAIT_TIMEOUT_SECONDS = 0.8
-
-# Time to wait for late transcriptions after speech stops (adaptive timeout)
-DRAINING_TIMEOUT_SECONDS = 0.2
+# Default timeout for waiting for STT transcriptions (can be overridden at runtime)
+DEFAULT_TRANSCRIPTION_WAIT_TIMEOUT_SECONDS = 0.5
 
 
 # =============================================================================
@@ -94,6 +92,39 @@ State = IdleState | RecordingState | WaitingForSTTState | DrainingState
 
 
 # =============================================================================
+# Transport Message Models (Pydantic)
+# =============================================================================
+
+
+class ClientMessageData(BaseModel):
+    """Data payload for client-message type."""
+
+    t: str  # The actual message type (e.g., "start-recording", "stop-recording")
+
+
+class ClientMessage(BaseModel):
+    """Client message wrapper from RTVI protocol."""
+
+    type: Literal["client-message"]
+    data: ClientMessageData
+
+
+class RecordingCompleteData(BaseModel):
+    """Data payload for recording-complete server message."""
+
+    type: Literal["recording-complete"]
+    hasContent: bool
+
+
+class RTVIServerMessage(BaseModel):
+    """Server message in RTVI format."""
+
+    label: Literal["rtvi-ai"]
+    type: Literal["server-message"]
+    data: RecordingCompleteData
+
+
+# =============================================================================
 # Processor
 # =============================================================================
 
@@ -113,6 +144,22 @@ class TranscriptionBufferProcessor(FrameProcessor):
         self._timeout_task: asyncio.Task[None] | None = None
         self._draining_task: asyncio.Task[None] | None = None
         self._draining_event: asyncio.Event = asyncio.Event()
+        # Configurable timeout for waiting for STT transcriptions (can be updated at runtime)
+        self._transcription_wait_timeout = DEFAULT_TRANSCRIPTION_WAIT_TIMEOUT_SECONDS
+
+    def set_transcription_timeout(self, seconds: float) -> None:
+        """Set the transcription wait timeout.
+
+        Args:
+            seconds: Timeout in seconds to wait for STT transcription.
+                     Increase for slower STT providers.
+        """
+        self._transcription_wait_timeout = seconds
+        logger.info(f"Transcription timeout set to {seconds}s")
+
+    def get_transcription_timeout(self) -> float:
+        """Get the current transcription wait timeout."""
+        return self._transcription_wait_timeout
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         """Process frames using state machine pattern."""
@@ -156,16 +203,23 @@ class TranscriptionBufferProcessor(FrameProcessor):
     # =========================================================================
 
     def _extract_message_type(self, message: dict[str, Any] | Any) -> str | None:
-        """Extract message type from transport message payload."""
+        """Extract message type from transport message payload.
+
+        Uses Pydantic models to parse client-message payloads, with fallback
+        to dict access for other message types.
+        """
         if not isinstance(message, dict):
             return None
 
-        outer_type = message.get("type")
-        if outer_type == "client-message":
-            data = message.get("data", {})
-            if isinstance(data, dict):
-                return data.get("t")
-        return outer_type
+        # Try to parse as ClientMessage (RTVI protocol)
+        try:
+            client_msg = ClientMessage.model_validate(message)
+            return client_msg.data.t
+        except ValidationError:
+            pass
+
+        # Fallback: return outer type for non-client messages
+        return message.get("type")
 
     # =========================================================================
     # State Transition Handlers
@@ -307,13 +361,13 @@ class TranscriptionBufferProcessor(FrameProcessor):
     async def _stt_timeout_handler(self, direction: FrameDirection) -> None:
         """Background task that emits buffer after timeout if speech stopped is not received."""
         try:
-            await asyncio.sleep(TRANSCRIPTION_WAIT_TIMEOUT_SECONDS)
+            await asyncio.sleep(self._transcription_wait_timeout)
             # Only act if still in WaitingForSTT state
             match self._state:
                 case WaitingForSTTState(buffer=buffer) as state:
                     logger.warning(
                         f"Timeout waiting for speech stopped after "
-                        f"{TRANSCRIPTION_WAIT_TIMEOUT_SECONDS}s"
+                        f"{self._transcription_wait_timeout}s"
                     )
                     if buffer.strip():
                         logger.info(f"Timeout, emitting buffer: '{buffer.strip()}'")
@@ -339,20 +393,22 @@ class TranscriptionBufferProcessor(FrameProcessor):
     async def _draining_task_handler(self, direction: FrameDirection) -> None:
         """Wait for late transcriptions with adaptive timeout, then emit.
 
-        Uses an event-based pattern: waits for DRAINING_TIMEOUT_SECONDS, but
+        Uses an event-based pattern: waits for the transcription timeout, but
         resets the timer each time a transcription arrives (signaled via
         _draining_event). Emits when the timeout expires with no new transcriptions.
+
+        Uses the user-configurable transcription timeout to handle slow STT providers.
         """
         try:
             while True:
                 await asyncio.wait_for(
                     self._draining_event.wait(),
-                    timeout=DRAINING_TIMEOUT_SECONDS,
+                    timeout=self._transcription_wait_timeout,
                 )
                 # Transcription arrived - clear event and wait again
                 self._draining_event.clear()
         except TimeoutError:
-            # No transcription for DRAINING_TIMEOUT_SECONDS - emit now
+            # No transcription for draining timeout - emit now
             match self._state:
                 case DrainingState(buffer=buffer) as state:
                     if buffer.strip():
@@ -394,11 +450,10 @@ class TranscriptionBufferProcessor(FrameProcessor):
 
     async def _emit_empty_response(self, direction: FrameDirection) -> None:
         """Send an empty response message to the client."""
-        empty_response = OutputTransportMessageFrame(
-            message={
-                "label": "rtvi-ai",
-                "type": "server-message",
-                "data": {"type": "recording-complete", "hasContent": False},
-            }
+        message = RTVIServerMessage(
+            label="rtvi-ai",
+            type="server-message",
+            data=RecordingCompleteData(type="recording-complete", hasContent=False),
         )
+        empty_response = OutputTransportMessageFrame(message=message.model_dump())
         await self.push_frame(empty_response, direction)

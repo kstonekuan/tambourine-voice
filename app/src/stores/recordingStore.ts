@@ -49,70 +49,49 @@ export const useRecordingStore = create<RecordingState>((set, get) => ({
 
 	startRecording: async () => {
 		const { state, client } = get();
-		console.log(
-			"[Store] startRecording called, state:",
-			state,
-			"client:",
-			!!client,
-		);
 		if (state !== "idle" || !client) {
-			console.log("[Store] startRecording rejected - wrong state or no client");
 			return false;
 		}
 
 		// Signal server to reset buffer and enable mic
 		try {
-			console.log(
-				"[Store] Sending start-recording message and enabling mic...",
-			);
 			client.sendClientMessage("start-recording", {});
 
 			// Re-acquire mic track if it was stopped (uses replaceTrack internally)
 			const selectedMic = client.selectedMic;
 			if (selectedMic) {
-				console.log("[Store] Re-acquiring mic via updateMic...");
 				await client.updateMic(selectedMic.deviceId);
 			}
 
 			client.enableMic(true);
-			console.log("[Store] Mic enabled, transitioning to recording state");
 			set({ state: "recording" });
 			return true;
 		} catch (error) {
-			console.error("[Store] Error starting recording:", error);
+			console.error("[Recording] Error starting:", error);
 			return false;
 		}
 	},
 
 	stopRecording: () => {
 		const { state, client } = get();
-		console.log(
-			"[Store] stopRecording called, state:",
-			state,
-			"client:",
-			!!client,
-		);
 		if (state !== "recording" || !client) {
-			console.log("[Store] stopRecording rejected - wrong state or no client");
 			return false;
 		}
 
 		// Disable mic first
-		console.log("[Store] Disabling mic...");
 		try {
 			client.enableMic(false);
 		} catch (error) {
-			console.warn("[Store] Failed to disable mic:", error);
+			console.warn("[Recording] Failed to disable mic:", error);
 		}
 
 		// Try to send stop message to server
 		try {
 			client.sendClientMessage("stop-recording", {});
-			console.log("[Store] Transitioning to processing state");
 			set({ state: "processing" });
 			return true;
 		} catch (error) {
-			console.warn("[Store] Failed to send stop-recording message:", error);
+			console.warn("[Recording] Failed to send stop message:", error);
 			set({ state: "disconnected" });
 			return true;
 		}
@@ -127,11 +106,10 @@ export const useRecordingStore = create<RecordingState>((set, get) => ({
 				try {
 					const tracks = client.tracks();
 					if (tracks?.local?.audio) {
-						console.log("[Store] Stopping audio track to release microphone");
 						tracks.local.audio.stop();
 					}
 				} catch (error) {
-					console.warn("[Store] Failed to stop audio track:", error);
+					console.warn("[Recording] Failed to stop audio track:", error);
 				}
 			}
 			set({ state: "idle" });

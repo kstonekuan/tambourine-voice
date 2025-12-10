@@ -75,7 +75,7 @@ Examples:
 - "Send it to John I mean Jane" → "Send it to Jane."
 
 ## List Formatting
-When sequence words are detected, format as a numbered list:
+When sequence words are detected, format as a numbered or bulleted list:
 - Triggers: "one", "two", "three" or "first", "second", "third"
 - Capitalize each list item
 
@@ -101,7 +101,9 @@ When you hear terms that sound like entries below, use the correct spelling/form
 Tambourine
 LLM
 ant row pick -> Anthropic
-Claude"""
+Claude
+Pipecat
+Tauri"""
 
 
 def combine_prompt_sections(

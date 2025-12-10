@@ -39,6 +39,7 @@ from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.transports.base_transport import TransportParams
 from pipecat.transports.smallwebrtc.connection import IceServer, SmallWebRTCConnection
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
+from pydantic import BaseModel
 
 from api.config_server import (
     config_router,
@@ -46,13 +47,14 @@ from api.config_server import (
     set_llm_converter,
     set_pipeline_started,
     set_service_switchers,
+    set_transcription_buffer,
 )
 from config.settings import Settings
 from processors.llm_cleanup import LLMResponseToRTVIConverter, TranscriptionToLLMConverter
 from processors.transcription_buffer import TranscriptionBufferProcessor
 from services.providers import (
-    LLMProvider,
-    STTProvider,
+    LLMProviderId,
+    STTProviderId,
     create_all_available_llm_services,
     create_all_available_stt_services,
 )
@@ -71,8 +73,8 @@ ice_servers = [
 
 # Shared state for the pipeline components
 _settings: Settings | None = None
-_stt_services: dict[STTProvider, Any] | None = None
-_llm_services: dict[LLMProvider, Any] | None = None
+_stt_services: dict[STTProviderId, Any] | None = None
+_llm_services: dict[LLMProviderId, Any] | None = None
 
 
 class DebugFrameProcessor(FrameProcessor):
@@ -111,6 +113,18 @@ class DebugFrameProcessor(FrameProcessor):
         await self.push_frame(frame, direction)
 
 
+class CleanedTextData(BaseModel):
+    """Data payload containing cleaned text from LLM."""
+
+    text: str = ""
+
+
+class CleanedTextMessage(BaseModel):
+    """Message containing cleaned text response."""
+
+    data: CleanedTextData
+
+
 class TextResponseProcessor(FrameProcessor):
     """Processor that logs message frames being sent back to the client.
 
@@ -129,11 +143,14 @@ class TextResponseProcessor(FrameProcessor):
 
         if isinstance(frame, StartFrame):
             # Signal that pipeline is fully started (StartFrame has passed through all processors)
-            logger.info("Pipeline fully started (StartFrame passed through all processors)")
+            logger.success("Pipeline fully started (StartFrame passed through all processors)")
             set_pipeline_started()
         elif isinstance(frame, OutputTransportMessageFrame):
-            data = frame.message.get("data", {})
-            text = data.get("text", "")
+            try:
+                msg = CleanedTextMessage.model_validate(frame.message)
+                text = msg.data.text
+            except Exception:
+                text = ""
             logger.info(f"Sending to client: '{text}'")
 
         await self.push_frame(frame, direction)
@@ -179,27 +196,15 @@ async def run_pipeline(webrtc_connection: SmallWebRTCConnection) -> None:
         strategy_type=ServiceSwitcherStrategyManual,
     )
 
-    # Set active provider to default (only if explicitly configured)
-    if _settings.default_stt_provider:
-        default_stt = STTProvider(_settings.default_stt_provider)
-        if default_stt in _stt_services:
-            stt_switcher.strategy.active_service = _stt_services[default_stt]
-            logger.info(f"Default STT provider: {default_stt.value}")
-
-    if _settings.default_llm_provider:
-        default_llm = LLMProvider(_settings.default_llm_provider)
-        if default_llm in _llm_services:
-            llm_switcher.strategy.active_service = _llm_services[default_llm]
-            logger.info(f"Default LLM provider: {default_llm.value}")
-
     # Initialize processors
     debug_input = DebugFrameProcessor(name="input")
     debug_after_stt = DebugFrameProcessor(name="after-stt")
     transcription_to_llm = TranscriptionToLLMConverter()
     transcription_buffer = TranscriptionBufferProcessor()
 
-    # Share converter and switchers with FastAPI config server
+    # Share processors with FastAPI config server for runtime configuration
     set_llm_converter(transcription_to_llm)
+    set_transcription_buffer(transcription_buffer)
     set_service_switchers(
         stt_switcher=stt_switcher,
         llm_switcher=llm_switcher,
@@ -240,7 +245,7 @@ async def run_pipeline(webrtc_connection: SmallWebRTCConnection) -> None:
     # Set up event handlers
     @transport.event_handler("on_client_connected")
     async def on_client_connected(_transport: Any, client: Any) -> None:
-        logger.info(f"Client connected via WebRTC: {client}")
+        logger.success(f"Client connected via WebRTC: {client}")
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(_transport: Any, client: Any) -> None:
@@ -298,7 +303,7 @@ async def lifespan(_fastapi_app: FastAPI):  # noqa: ANN201
                 asyncio.gather(*pipeline_tasks, return_exceptions=True),
                 timeout=2.0,
             )
-            logger.info("All pipeline tasks cancelled")
+            logger.success("All pipeline tasks cancelled")
         except TimeoutError:
             logger.warning("Timeout waiting for pipeline tasks, forcing shutdown")
         pipeline_tasks.clear()
@@ -311,7 +316,7 @@ async def lifespan(_fastapi_app: FastAPI):  # noqa: ANN201
                 asyncio.gather(*coros, return_exceptions=True),
                 timeout=2.0,
             )
-            logger.info("All peer connections cleaned up")
+            logger.success("All peer connections cleaned up")
         except TimeoutError:
             logger.warning("Timeout waiting for peer connections, forcing shutdown")
     peer_connections_map.clear()
@@ -332,8 +337,30 @@ app.add_middleware(
 app.include_router(config_router)
 
 
-@app.post("/api/offer")
-async def webrtc_offer(request: dict[str, Any]) -> dict[str, Any]:
+# =============================================================================
+# WebRTC Models
+# =============================================================================
+
+
+class WebRTCOfferRequest(BaseModel):
+    """WebRTC offer request from client."""
+
+    sdp: str
+    type: str
+    pc_id: str | None = None
+    restart_pc: bool = False
+
+
+class WebRTCOfferResponse(BaseModel):
+    """WebRTC answer response to client."""
+
+    sdp: str
+    type: str
+    pc_id: str
+
+
+@app.post("/api/offer", response_model=WebRTCOfferResponse)
+async def webrtc_offer(request: WebRTCOfferRequest) -> WebRTCOfferResponse:
     """Handle WebRTC offer from client.
 
     This endpoint handles the WebRTC signaling handshake:
@@ -341,28 +368,20 @@ async def webrtc_offer(request: dict[str, Any]) -> dict[str, Any]:
     2. Creates or reuses a SmallWebRTCConnection
     3. Returns SDP answer to client
     4. Starts the Pipecat pipeline in the background
-
-    Args:
-        request: WebRTC offer containing sdp, type, and optional pc_id
-
-    Returns:
-        WebRTC answer with sdp, type, and pc_id
     """
-    pc_id = request.get("pc_id")
-
-    if pc_id and pc_id in peer_connections_map:
+    if request.pc_id and request.pc_id in peer_connections_map:
         # Reuse existing connection (renegotiation)
-        pipecat_connection = peer_connections_map[pc_id]
-        logger.info(f"Reusing existing connection for pc_id: {pc_id}")
+        pipecat_connection = peer_connections_map[request.pc_id]
+        logger.info(f"Reusing existing connection for pc_id: {request.pc_id}")
         await pipecat_connection.renegotiate(
-            sdp=request["sdp"],
-            type=request["type"],
-            restart_pc=request.get("restart_pc", False),
+            sdp=request.sdp,
+            type=request.type,
+            restart_pc=request.restart_pc,
         )
     else:
         # Create new connection
         pipecat_connection = SmallWebRTCConnection(ice_servers)
-        await pipecat_connection.initialize(sdp=request["sdp"], type=request["type"])
+        await pipecat_connection.initialize(sdp=request.sdp, type=request.type)
 
         @pipecat_connection.event_handler("closed")
         async def handle_disconnected(webrtc_connection: SmallWebRTCConnection) -> None:
@@ -377,22 +396,31 @@ async def webrtc_offer(request: dict[str, Any]) -> dict[str, Any]:
     answer = pipecat_connection.get_answer()
     peer_connections_map[answer["pc_id"]] = pipecat_connection
 
-    return answer
+    return WebRTCOfferResponse(**answer)
 
 
 def main() -> None:
     """Main entry point for the server."""
+    # Load settings first so we can use them as defaults
+    try:
+        settings = Settings()
+    except Exception as e:
+        print(f"Configuration error: {e}")
+        print("Please check your .env file and ensure all required API keys are set.")
+        print("See .env.example for reference.")
+        raise SystemExit(1) from e
+
     parser = argparse.ArgumentParser(description="Tambourine Server")
     parser.add_argument(
         "--host",
-        default="127.0.0.1",
-        help="Host to bind to (default: 127.0.0.1)",
+        default=settings.host,
+        help=f"Host to bind to (default: {settings.host})",
     )
     parser.add_argument(
         "--port",
         type=int,
-        default=8765,
-        help="Port to listen on (default: 8765)",
+        default=settings.port,
+        help=f"Port to listen on (default: {settings.port})",
     )
     parser.add_argument(
         "-v",
@@ -408,15 +436,6 @@ def main() -> None:
 
     if args.verbose:
         logger.info("Verbose logging enabled")
-
-    # Load settings
-    try:
-        settings = Settings()
-    except Exception as e:
-        logger.error(f"Configuration error: {e}")
-        logger.warning("Please check your .env file and ensure all required API keys are set.")
-        logger.info("See .env.example for reference.")
-        raise SystemExit(1) from e
 
     # Initialize services
     if not initialize_services(settings):

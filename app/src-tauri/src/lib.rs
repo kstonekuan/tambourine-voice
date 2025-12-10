@@ -243,6 +243,7 @@ pub fn run() {
             commands::settings::update_stt_provider,
             commands::settings::update_llm_provider,
             commands::settings::update_auto_mute_audio,
+            commands::settings::update_stt_timeout,
             commands::settings::reset_hotkeys_to_defaults,
             is_audio_mute_supported,
             commands::history::add_history_entry,

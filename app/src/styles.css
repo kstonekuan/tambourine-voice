@@ -89,6 +89,16 @@ body {
 	justify-content: center;
 }
 
+/* Hide the empty body/label section for icon-only nav links */
+.sidebar-nav-link .mantine-NavLink-body {
+	display: none;
+}
+
+/* Center the icon section when body is hidden */
+.sidebar-nav-link .mantine-NavLink-section {
+	margin: 0;
+}
+
 .sidebar-nav-link[data-active] {
 	background-color: var(--bg-elevated);
 }

@@ -20,7 +20,7 @@ Customizable AI powered voice dictation tool. Open-source alternative to [Wispr 
 
 **Why not proprietary tools?** Unlike Wispr Flow or Superwhisper, this project gives you full control:
 
-- **Swap AI providers** — Choose your STT (Cartesia, Deepgram, AssemblyAI) or LLM (Cerebras, OpenAI, Anthropic, Google, Groq)
+- **Swap AI providers** — Choose your STT (Cartesia, Deepgram, AssemblyAI, and more) and LLM (Cerebras, OpenAI, Anthropic, and more)
 - **Customize processing** — Modify prompts, add custom processors, or chain multiple LLMs
 - **Extensible** — Built on [Pipecat](https://github.com/pipecat-ai/pipecat)'s modular pipeline framework
 
@@ -62,21 +62,18 @@ Customizable AI powered voice dictation tool. Open-source alternative to [Wispr 
 │  - Rust backend for keyboard and audio controls             │
 │  - React frontend with SmallWebRTC client                   │
 │  - System tray with show/hide toggle                        │
-└───────────────────┬─────────────────────┬───────────────────┘
-                    │                     │
-      WebRTC :8765  │                     │  HTTP :8766
-                    ▼                     ▼
+└─────────────────────────────┬───────────────────────────────┘
+                              │
+                          API :8765
+                              ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                  Python Server (server/)                    │
-├─────────────────────────────┬───────────────────────────────┤
-│     Pipecat SmallWebRTC     │       FastAPI Config          │
-│  - Audio processing         │  - Provider switching         │
-│  - STT (Cartesia,           │  - Prompt customization       │
-│    Deepgram, AssemblyAI)    │  - Runtime settings           │
-│  - LLM cleanup (Cerebras,   │                               │
-│    OpenAI, Anthropic, etc.) │                               │
-│  - Returns cleaned text     │                               │
-└─────────────────────────────┴───────────────────────────────┘
+│  - Pipecat SmallWebRTC for audio streaming                  │
+│  - STT providers (Cartesia, Deepgram, Groq, and more)       │
+│  - LLM cleanup (Cerebras, OpenAI, Anthropic, and more)      │
+│  - FastAPI endpoints for config and provider switching      │
+│  - Returns cleaned text to app                              │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Prerequisites
@@ -101,7 +98,8 @@ sudo apt-get install libwebkit2gtk-4.1-dev build-essential curl wget file \
 Sign up and get API keys for the providers you want to use. Some providers with generous free tiers as of this writing:
 - Cartesia: https://cartesia.ai (STT)
 - Cerebras: https://cloud.cerebras.ai (LLM)
-- Groq: https://console.groq.com (LLM)
+- Gemini: https://aistudio.google.com (LLM)
+- Groq: https://console.groq.com (STT/LLM)
 
 ### 2. Set Up the Server
 
@@ -176,33 +174,7 @@ pnpm build         # Build for current platform
 
 ### Server Configuration (.env)
 
-**STT Providers** (at least one required):
-
-| Variable             | Description                | Default |
-| -------------------- | -------------------------- | ------- |
-| `CARTESIA_API_KEY`   | Cartesia API key for STT   | —       |
-| `ASSEMBLYAI_API_KEY` | AssemblyAI API key for STT | —       |
-| `DEEPGRAM_API_KEY`   | Deepgram API key for STT   | —       |
-
-**LLM Providers** (at least one required):
-
-| Variable            | Description               | Default |
-| ------------------- | ------------------------- | ------- |
-| `CEREBRAS_API_KEY`  | Cerebras API key for LLM  | —       |
-| `OPENAI_API_KEY`    | OpenAI API key for LLM    | —       |
-| `GOOGLE_API_KEY`    | Google Gemini API key     | —       |
-| `ANTHROPIC_API_KEY` | Anthropic API key for LLM | —       |
-| `GROQ_API_KEY`      | Groq API key for LLM      | —       |
-
-**Server Settings**:
-
-| Variable                | Description           | Default     |
-| ----------------------- | --------------------- | ----------- |
-| `DEFAULT_STT_PROVIDER`  | Default STT provider  | —           |
-| `DEFAULT_LLM_PROVIDER`  | Default LLM provider  | —           |
-| `DICTATION_SERVER_HOST` | Server host           | `127.0.0.1` |
-| `DICTATION_SERVER_PORT` | Server port           | `8765`      |
-| `LOG_LEVEL`             | Logging level         | `INFO`      |
+Copy `.env.example` to `.env` and add API keys for at least one STT and one LLM provider. See the example file for all supported providers including Deepgram, Cartesia, OpenAI, Anthropic, Cerebras, Groq, AWS, and more. Additional [Pipecat-supported providers](https://docs.pipecat.ai/server/services/supported-services) can be added easily.
 
 ### App Configuration
 

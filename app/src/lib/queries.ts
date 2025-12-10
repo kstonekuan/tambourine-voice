@@ -1,11 +1,50 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
+import { useEffect, useRef } from "react";
 import {
 	type CleanupPromptSections,
 	configAPI,
 	type HotkeyConfig,
 	tauriAPI,
 } from "./tauri";
+
+type ConnectionState =
+	| "disconnected"
+	| "connecting"
+	| "idle"
+	| "recording"
+	| "processing";
+
+/**
+ * Hook to refresh all server-side queries when connection is established.
+ * Call this from a component that has access to the connection state.
+ */
+export function useRefreshServerQueriesOnConnect(
+	connectionState: ConnectionState,
+) {
+	const queryClient = useQueryClient();
+	const previousStateRef = useRef(connectionState);
+
+	useEffect(() => {
+		const wasDisconnected =
+			previousStateRef.current === "disconnected" ||
+			previousStateRef.current === "connecting";
+		const isNowConnected =
+			connectionState === "idle" ||
+			connectionState === "recording" ||
+			connectionState === "processing";
+
+		if (wasDisconnected && isNowConnected) {
+			// Invalidate all server-side queries
+			queryClient.invalidateQueries({ queryKey: ["availableProviders"] });
+			queryClient.invalidateQueries({ queryKey: ["currentProviders"] });
+			queryClient.invalidateQueries({ queryKey: ["sttTimeout"] });
+			queryClient.invalidateQueries({ queryKey: ["defaultSections"] });
+		}
+
+		previousStateRef.current = connectionState;
+	}, [connectionState, queryClient]);
+}
 
 export function useServerUrl() {
 	return useQuery({
@@ -114,14 +153,8 @@ export function useUpdateCleanupPromptSections() {
 export function useResetHotkeysToDefaults() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: async () => {
-			console.log("Resetting hotkeys to defaults...");
-			const result = await tauriAPI.resetHotkeysToDefaults();
-			console.log("Reset hotkeys result:", result);
-			return result;
-		},
+		mutationFn: () => tauriAPI.resetHotkeysToDefaults(),
 		onSuccess: () => {
-			console.log("Reset hotkeys succeeded, invalidating settings query");
 			queryClient.invalidateQueries({ queryKey: ["settings"] });
 		},
 		onError: (error) => {
@@ -247,6 +280,37 @@ export function useSetServerLLMProvider() {
 		mutationFn: (provider: string) => configAPI.setLLMProvider(provider),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["currentProviders"] });
+		},
+	});
+}
+
+// STT Timeout queries and mutations
+export function useSTTTimeout() {
+	return useQuery({
+		queryKey: ["sttTimeout"],
+		queryFn: () => configAPI.getSTTTimeout(),
+		retry: false,
+	});
+}
+
+export function useUpdateSTTTimeout() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (timeoutSeconds: number | null) =>
+			tauriAPI.updateSTTTimeout(timeoutSeconds),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["settings"] });
+		},
+	});
+}
+
+export function useSetServerSTTTimeout() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (timeoutSeconds: number) =>
+			configAPI.setSTTTimeout(timeoutSeconds),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["sttTimeout"] });
 		},
 	});
 }

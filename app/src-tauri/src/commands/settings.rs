@@ -187,6 +187,15 @@ pub async fn update_auto_mute_audio(
     settings_manager.update_auto_mute_audio(enabled)
 }
 
+/// Update the STT timeout setting
+#[tauri::command]
+pub async fn update_stt_timeout(
+    timeout_seconds: Option<f64>,
+    settings_manager: State<'_, SettingsManager>,
+) -> Result<(), String> {
+    settings_manager.update_stt_timeout(timeout_seconds)
+}
+
 /// Reset all hotkeys to their default values
 /// Note: This only updates settings. App restart is required for hotkeys to take effect.
 #[cfg(desktop)]

@@ -2,8 +2,25 @@
 
 import os
 import sys
+from typing import TYPE_CHECKING
 
 from loguru import logger
+
+if TYPE_CHECKING:
+    from loguru import Record
+
+
+def _log_format(record: "Record") -> str:
+    """Custom format function that only shows extra when present."""
+    base = (
+        "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
+        "<level>{level: <8}</level> | "
+        "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
+        "<level>{message}</level>"
+    )
+    if record["extra"]:
+        return base + " {extra}\n{exception}"
+    return base + "\n{exception}"
 
 
 def configure_logging(log_level: str | None = None) -> None:
@@ -26,15 +43,9 @@ def configure_logging(log_level: str | None = None) -> None:
     logger.remove()
 
     # Add custom handler with colorization and formatting
-    log_format = (
-        "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
-        "<level>{level: <8}</level> | "
-        "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
-        "<level>{message}</level>"
-    )
     logger.add(
         sys.stdout,
-        format=log_format,
+        format=_log_format,
         level=log_level_str,
         colorize=True,
     )

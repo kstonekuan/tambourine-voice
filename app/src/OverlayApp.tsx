@@ -74,11 +74,10 @@ function RecordingControl() {
 	useEffect(() => {
 		if (!client || !serverUrl) return;
 
-		console.log("[Pipecat] Connecting to server...");
 		client
 			.connect({ webrtcRequestParams: { endpoint: `${serverUrl}/api/offer` } })
 			.catch((error: unknown) => {
-				console.error("[Pipecat] Initial connection failed:", error);
+				console.error("[Pipecat] Connection failed:", error);
 			});
 	}, [client, serverUrl]);
 
@@ -133,18 +132,12 @@ function RecordingControl() {
 
 	// Handle start/stop recording from hotkeys
 	const onStartRecording = useCallback(async () => {
-		console.log("[Recording] Starting recording...");
-		const success = await startRecording();
-		console.log("[Recording] Start recording result:", success);
+		await startRecording();
 	}, [startRecording]);
 
 	const onStopRecording = useCallback(() => {
-		console.log("[Recording] Stopping recording...");
 		if (stopRecording()) {
-			console.log("[Recording] Stop recording success, waiting for response");
 			startResponseTimeout();
-		} else {
-			console.log("[Recording] Stop recording failed");
 		}
 	}, [stopRecording, startResponseTimeout]);
 
@@ -171,38 +164,26 @@ function RecordingControl() {
 		if (!client) return;
 
 		const onConnected = () => {
-			console.log("[Pipecat] Connected to server");
+			console.debug("[Pipecat] Connected");
 			hasConnectedRef.current = true;
 			handleConnected();
 
 			// Sync cleanup prompt sections to server via REST API
-			// This ensures the server uses the saved prompt from Tauri settings
 			if (settings?.cleanup_prompt_sections) {
 				setServerPromptSections.mutate(settings.cleanup_prompt_sections);
-				console.log(
-					"[Pipecat] Synced cleanup prompt sections to server via REST API",
-				);
 			}
 
 			// Sync provider preferences to server
 			if (settings?.stt_provider) {
 				setServerSTTProvider.mutate(settings.stt_provider);
-				console.log(
-					"[Pipecat] Synced STT provider to server:",
-					settings.stt_provider,
-				);
 			}
 			if (settings?.llm_provider) {
 				setServerLLMProvider.mutate(settings.llm_provider);
-				console.log(
-					"[Pipecat] Synced LLM provider to server:",
-					settings.llm_provider,
-				);
 			}
 		};
 
 		const onDisconnected = () => {
-			console.log("[Pipecat] Disconnected from server");
+			console.debug("[Pipecat] Disconnected");
 
 			// Check if we were recording/processing when disconnect happened
 			const currentState = useRecordingStore.getState().state;
@@ -220,58 +201,34 @@ function RecordingControl() {
 			// SmallWebRTC already tried to reconnect (3 attempts) and gave up
 			// Keep retrying with the same client - must call disconnect() first to reset state
 			if (hasConnectedRef.current && serverUrl) {
-				console.log("[Pipecat] SmallWebRTC gave up, will retry in 3s...");
 				setTimeout(async () => {
 					try {
-						// Must disconnect first to reset client state before reconnecting
 						await client.disconnect();
-						console.log("[Pipecat] Attempting to reconnect...");
 						await client.connect({
 							webrtcRequestParams: { endpoint: `${serverUrl}/api/offer` },
 						});
 					} catch (error: unknown) {
-						// Connection failed - the next Disconnected event will trigger another retry
-						console.error("[Pipecat] Reconnection attempt failed:", error);
+						console.error("[Pipecat] Reconnection failed:", error);
 					}
 				}, 3000);
 			}
 		};
 
 		const onServerMessage = async (message: unknown) => {
-			console.log("[Pipecat] Server message:", message);
 			if (isTranscriptMessage(message)) {
 				clearResponseTimeout();
-				console.log("[Pipecat] Typing text:", message.text);
+				console.debug("[Pipecat] Transcript:", message.text);
 				try {
 					await typeTextMutation.mutateAsync(message.text);
-					console.log("[Pipecat] Text typed successfully");
 				} catch (error) {
 					console.error("[Pipecat] Failed to type text:", error);
 				}
 				addHistoryEntry.mutate(message.text);
 				handleResponse();
 			} else if (isRecordingCompleteMessage(message)) {
-				// Empty recording - no content to type, just reset state
 				clearResponseTimeout();
-				console.log("[Pipecat] Recording complete with no content");
 				handleResponse();
 			}
-		};
-
-		const onMicUpdated = (mic: MediaDeviceInfo) => {
-			console.log("[Pipecat] Mic updated:", mic.label, mic.deviceId);
-		};
-
-		const onTrackStarted = (track: MediaStreamTrack) => {
-			console.log("[Pipecat] Track started:", track.kind, track.label);
-		};
-
-		const onUserStartedSpeaking = () => {
-			console.log("[Pipecat] User started speaking");
-		};
-
-		const onUserStoppedSpeaking = () => {
-			console.log("[Pipecat] User stopped speaking");
 		};
 
 		const onError = (error: unknown) => {
@@ -282,32 +239,18 @@ function RecordingControl() {
 			console.error("[Pipecat] Device error:", error);
 		};
 
-		const onTransportStateChanged = (transportState: unknown) => {
-			console.log("[Pipecat] Transport state changed:", transportState);
-		};
-
 		client.on(RTVIEvent.Connected, onConnected);
 		client.on(RTVIEvent.Disconnected, onDisconnected);
 		client.on(RTVIEvent.ServerMessage, onServerMessage);
-		client.on(RTVIEvent.MicUpdated, onMicUpdated);
-		client.on(RTVIEvent.TrackStarted, onTrackStarted);
-		client.on(RTVIEvent.UserStartedSpeaking, onUserStartedSpeaking);
-		client.on(RTVIEvent.UserStoppedSpeaking, onUserStoppedSpeaking);
 		client.on(RTVIEvent.Error, onError);
 		client.on(RTVIEvent.DeviceError, onDeviceError);
-		client.on(RTVIEvent.TransportStateChanged, onTransportStateChanged);
 
 		return () => {
 			client.off(RTVIEvent.Connected, onConnected);
 			client.off(RTVIEvent.Disconnected, onDisconnected);
 			client.off(RTVIEvent.ServerMessage, onServerMessage);
-			client.off(RTVIEvent.MicUpdated, onMicUpdated);
-			client.off(RTVIEvent.TrackStarted, onTrackStarted);
-			client.off(RTVIEvent.UserStartedSpeaking, onUserStartedSpeaking);
-			client.off(RTVIEvent.UserStoppedSpeaking, onUserStoppedSpeaking);
 			client.off(RTVIEvent.Error, onError);
 			client.off(RTVIEvent.DeviceError, onDeviceError);
-			client.off(RTVIEvent.TransportStateChanged, onTransportStateChanged);
 		};
 	}, [
 		client,
@@ -454,7 +397,6 @@ export default function OverlayApp() {
 
 	// Initial client creation on mount
 	useEffect(() => {
-		console.log("[OverlayApp] Initial client creation...");
 		const transport = new SmallWebRTCTransport({
 			iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
 		});
@@ -468,16 +410,14 @@ export default function OverlayApp() {
 		pipecatClient
 			.initDevices()
 			.then(() => {
-				console.log("[OverlayApp] Devices ready (initial)");
 				setDevicesReady(true);
 			})
 			.catch((error: unknown) => {
-				console.error("Failed to initialize devices:", error);
+				console.error("[Pipecat] Failed to initialize devices:", error);
 				setDevicesReady(true);
 			});
 
 		return () => {
-			console.log("[OverlayApp] Unmounting, cleaning up client...");
 			pipecatClient.disconnect().catch(() => {});
 		};
 	}, []);

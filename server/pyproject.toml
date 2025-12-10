@@ -7,7 +7,7 @@ license = "AGPL-3.0-only"
 readme = "../README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "pipecat-ai[assemblyai,anthropic,cartesia,cerebras,deepgram,google,groq,openai,silero,webrtc]>=0.0.97",
+    "pipecat-ai[anthropic,assemblyai,aws,azure,cartesia,cerebras,deepgram,google,groq,openai,openrouter,silero,webrtc,whisper]>=0.0.97",
     "pydantic-settings>=2.12.0",
     "loguru>=0.7.3",
     "typer>=0.20.0",
