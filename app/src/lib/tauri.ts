@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Store } from "@tauri-apps/plugin-store";
+import ky from "ky";
+import { z } from "zod";
 
 export type ConnectionState =
 	| "disconnected"
@@ -19,6 +21,12 @@ export interface HotkeyConfig {
 	modifiers: string[];
 	key: string;
 }
+
+// Zod schema for HotkeyConfig validation
+export const HotkeyConfigSchema = z.object({
+	modifiers: z.array(z.string()),
+	key: z.string().min(1, "Key is required"),
+});
 
 interface HistoryEntry {
 	id: string;
@@ -85,11 +93,11 @@ async function getStore(): Promise<Store> {
 }
 
 // ============================================================================
-// Hotkey validation helpers
+// Hotkey validation helpers (Zod-based)
 // ============================================================================
 
 /**
- * Check if a hotkey config is the same as another (case-insensitive)
+ * Check if two hotkey configs are equivalent (case-insensitive comparison)
  */
 export function hotkeyIsSameAs(a: HotkeyConfig, b: HotkeyConfig): boolean {
 	if (a.key.toLowerCase() !== b.key.toLowerCase()) return false;
@@ -97,6 +105,34 @@ export function hotkeyIsSameAs(a: HotkeyConfig, b: HotkeyConfig): boolean {
 	return a.modifiers.every((mod) =>
 		b.modifiers.some((other) => mod.toLowerCase() === other.toLowerCase()),
 	);
+}
+
+type HotkeyType = "toggle" | "hold" | "paste_last";
+
+const HOTKEY_LABELS: Record<HotkeyType, string> = {
+	toggle: "toggle",
+	hold: "hold",
+	paste_last: "paste last",
+};
+
+/**
+ * Create a Zod schema for validating a hotkey doesn't conflict with existing hotkeys
+ */
+export function createHotkeyDuplicateSchema(
+	allHotkeys: Record<HotkeyType, HotkeyConfig>,
+	excludeType: HotkeyType,
+) {
+	return HotkeyConfigSchema.superRefine((hotkey, ctx) => {
+		for (const [type, existing] of Object.entries(allHotkeys)) {
+			if (type !== excludeType && hotkeyIsSameAs(hotkey, existing)) {
+				ctx.addIssue({
+					code: "custom",
+					message: `This shortcut is already used for the ${HOTKEY_LABELS[type as HotkeyType]} hotkey`,
+				});
+				return;
+			}
+		}
+	});
 }
 
 /**
@@ -110,28 +146,13 @@ export function validateHotkeyNotDuplicate(
 		hold: HotkeyConfig;
 		paste_last: HotkeyConfig;
 	},
-	excludeType: "toggle" | "hold" | "paste_last",
+	excludeType: HotkeyType,
 ): string | null {
-	const hotkeyEntries: Array<{
-		type: "toggle" | "hold" | "paste_last";
-		hotkey: HotkeyConfig;
-		label: string;
-	}> = [
-		{ type: "toggle", hotkey: allHotkeys.toggle, label: "toggle" },
-		{ type: "hold", hotkey: allHotkeys.hold, label: "hold" },
-		{
-			type: "paste_last",
-			hotkey: allHotkeys.paste_last,
-			label: "paste last",
-		},
-	];
-
-	for (const entry of hotkeyEntries) {
-		if (entry.type !== excludeType && hotkeyIsSameAs(newHotkey, entry.hotkey)) {
-			return `This shortcut is already used for the ${entry.label} hotkey`;
-		}
+	const schema = createHotkeyDuplicateSchema(allHotkeys, excludeType);
+	const result = schema.safeParse(newHotkey);
+	if (!result.success) {
+		return result.error.issues[0]?.message ?? "Invalid hotkey";
 	}
-
 	return null;
 }
 
@@ -324,9 +345,9 @@ export const tauriAPI = {
 	},
 };
 
-// Config API for server-side settings (FastAPI)
-// Now merged with main server (WebRTC + Config on same port)
-const CONFIG_API_URL = "http://127.0.0.1:8765";
+// ============================================================================
+// Config API (FastAPI backend) - using ky HTTP client
+// ============================================================================
 
 export interface DefaultSectionsResponse {
 	main: string;
@@ -366,66 +387,51 @@ interface STTTimeoutResponse {
 	error?: string;
 }
 
-export const configAPI = {
-	async getDefaultSections(): Promise<DefaultSectionsResponse> {
-		const response = await fetch(
-			`${CONFIG_API_URL}/api/prompt/sections/default`,
-		);
-		return response.json();
+// Create ky instance with sensible defaults for local API
+const api = ky.create({
+	prefixUrl: "http://127.0.0.1:8765",
+	timeout: 10000,
+	retry: {
+		limit: 2,
+		methods: ["get", "post"],
 	},
+});
 
-	async setPromptSections(
-		sections: CleanupPromptSections,
-	): Promise<SetPromptResponse> {
-		const response = await fetch(`${CONFIG_API_URL}/api/prompt/sections`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ sections }),
-		});
-		return response.json();
-	},
+export const configAPI = {
+	// Prompt APIs
+	getDefaultSections: () =>
+		api.get("api/prompt/sections/default").json<DefaultSectionsResponse>(),
+
+	setPromptSections: (sections: CleanupPromptSections) =>
+		api
+			.post("api/prompt/sections", { json: { sections } })
+			.json<SetPromptResponse>(),
 
 	// Provider APIs
-	async getAvailableProviders(): Promise<AvailableProvidersResponse> {
-		const response = await fetch(`${CONFIG_API_URL}/api/providers/available`);
-		return response.json();
-	},
+	getAvailableProviders: () =>
+		api.get("api/providers/available").json<AvailableProvidersResponse>(),
 
-	async getCurrentProviders(): Promise<CurrentProvidersResponse> {
-		const response = await fetch(`${CONFIG_API_URL}/api/providers/current`);
-		return response.json();
-	},
+	getCurrentProviders: () =>
+		api.get("api/providers/current").json<CurrentProvidersResponse>(),
 
-	async setSTTProvider(provider: string): Promise<SwitchProviderResponse> {
-		const response = await fetch(`${CONFIG_API_URL}/api/providers/stt`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ provider }),
-		});
-		return response.json();
-	},
+	setSTTProvider: (provider: string) =>
+		api
+			.post("api/providers/stt", { json: { provider } })
+			.json<SwitchProviderResponse>(),
 
-	async setLLMProvider(provider: string): Promise<SwitchProviderResponse> {
-		const response = await fetch(`${CONFIG_API_URL}/api/providers/llm`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ provider }),
-		});
-		return response.json();
-	},
+	setLLMProvider: (provider: string) =>
+		api
+			.post("api/providers/llm", { json: { provider } })
+			.json<SwitchProviderResponse>(),
 
 	// STT Timeout APIs
-	async getSTTTimeout(): Promise<STTTimeoutResponse> {
-		const response = await fetch(`${CONFIG_API_URL}/api/config/stt-timeout`);
-		return response.json();
-	},
+	getSTTTimeout: () =>
+		api.get("api/config/stt-timeout").json<STTTimeoutResponse>(),
 
-	async setSTTTimeout(timeoutSeconds: number): Promise<STTTimeoutResponse> {
-		const response = await fetch(`${CONFIG_API_URL}/api/config/stt-timeout`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ timeout_seconds: timeoutSeconds }),
-		});
-		return response.json();
-	},
+	setSTTTimeout: (timeoutSeconds: number) =>
+		api
+			.post("api/config/stt-timeout", {
+				json: { timeout_seconds: timeoutSeconds },
+			})
+			.json<STTTimeoutResponse>(),
 };

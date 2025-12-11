@@ -10,6 +10,7 @@ import { ThemeProvider, UserAudioComponent } from "@pipecat-ai/voice-ui-kit";
 import { useDrag } from "@use-gesture/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
+import Logo from "./assets/logo.svg?react";
 import {
 	useAddHistoryEntry,
 	useServerUrl,
@@ -307,14 +308,14 @@ function RecordingControl() {
 				height: "fit-content",
 				backgroundColor: "rgba(0, 0, 0, 0.9)",
 				borderRadius: 12,
-				padding: 4,
+				padding: 2,
 				cursor: "grab",
 				userSelect: "none",
 			}}
 		>
 			{state === "processing" ||
-			state === "disconnected" ||
-			state === "connecting" ? (
+				state === "disconnected" ||
+				state === "connecting" ? (
 				<div
 					style={{
 						width: 48,
@@ -330,16 +331,19 @@ function RecordingControl() {
 				<UserAudioComponent
 					onClick={handleClick}
 					isMicEnabled={state === "recording"}
+					noIcon={true}
 					noDevicePicker={true}
 					noVisualizer={state !== "recording"}
 					visualizerProps={{
-						barColor: "#ffffff",
+						barColor: "#eeeeee",
 						backgroundColor: "#000000",
 					}}
 					classNames={{
 						button: "bg-black text-white hover:bg-gray-900",
 					}}
-				/>
+				>
+					{state !== "recording" && <Logo className="size-5" />}
+				</UserAudioComponent>
 			)}
 		</div>
 	);
@@ -373,7 +377,7 @@ export default function OverlayApp() {
 			});
 
 		return () => {
-			pipecatClient.disconnect().catch(() => {});
+			pipecatClient.disconnect().catch(() => { });
 		};
 	}, []);
 

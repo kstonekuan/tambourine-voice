@@ -6,6 +6,9 @@
 
 Customizable AI powered voice dictation tool. Open-source alternative to [Wispr Flow](https://wisprflow.ai) and [Superwhisper](https://superwhisper.com). Speak and your words are typed wherever your cursor is.
 
+> ⚠️ **Build in Progress**
+> This project is under active development. Core features work well, but expect breaking changes to the code, architecture, and configuration as the project evolves.
+
 ## Why?
 
 **You speak faster than you type.** Typing averages 40-50 wpm, but speaking averages 130-160 wpm. Tambourine lets you write at the speed you think, capturing ideas before they slip away.

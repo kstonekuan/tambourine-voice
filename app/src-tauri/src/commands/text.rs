@@ -5,6 +5,15 @@ use std::thread;
 use std::time::Duration;
 use tauri::AppHandle;
 
+/// Delay after clipboard operations to ensure system stability
+const CLIPBOARD_STABILIZATION_DELAY_MS: u64 = 50;
+
+/// Delay between keyboard key press and release events
+const KEY_EVENT_DELAY_MS: u64 = 50;
+
+/// Delay before restoring previous clipboard content
+const CLIPBOARD_RESTORE_DELAY_MS: u64 = 100;
+
 const SERVER_URL: &str = "http://127.0.0.1:8765";
 
 #[tauri::command]
@@ -39,7 +48,7 @@ pub fn type_text_blocking(text: &str) -> Result<(), String> {
     clipboard.set_text(text).map_err(|e| e.to_string())?;
 
     // Small delay for clipboard to stabilize
-    thread::sleep(Duration::from_millis(50));
+    thread::sleep(Duration::from_millis(CLIPBOARD_STABILIZATION_DELAY_MS));
 
     // Simulate Ctrl+V / Cmd+V
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
@@ -52,17 +61,17 @@ pub fn type_text_blocking(text: &str) -> Result<(), String> {
     enigo
         .key(modifier, Direction::Press)
         .map_err(|e| e.to_string())?;
-    thread::sleep(Duration::from_millis(50));
+    thread::sleep(Duration::from_millis(KEY_EVENT_DELAY_MS));
     enigo
         .key(Key::Unicode('v'), Direction::Click)
         .map_err(|e| e.to_string())?;
-    thread::sleep(Duration::from_millis(50));
+    thread::sleep(Duration::from_millis(KEY_EVENT_DELAY_MS));
     enigo
         .key(modifier, Direction::Release)
         .map_err(|e| e.to_string())?;
 
     // Restore previous clipboard after a delay
-    thread::sleep(Duration::from_millis(100));
+    thread::sleep(Duration::from_millis(CLIPBOARD_RESTORE_DELAY_MS));
     let _ = clipboard.set_text(&previous);
 
     Ok(())

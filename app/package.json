@@ -10,8 +10,13 @@
 		"lint": "biome check --write",
 		"typecheck": "tsc --noEmit",
 		"knip": "knip",
-		"cargo": "cargo clippy --all-targets --all-features --manifest-path src-tauri/Cargo.toml && cargo fmt --manifest-path src-tauri/Cargo.toml && cargo test --manifest-path src-tauri/Cargo.toml",
-		"check": "pnpm run lint && pnpm run typecheck && pnpm run knip && pnpm run cargo",
+		"test": "vitest run --reporter=dot",
+		"test:watch": "vitest",
+		"cargo:clippy": "cargo clippy --all-targets --all-features --manifest-path src-tauri/Cargo.toml",
+		"cargo:fmt": "cargo fmt --manifest-path src-tauri/Cargo.toml",
+		"cargo:test": "cargo test --quiet --manifest-path src-tauri/Cargo.toml",
+		"cargo": "pnpm run cargo:clippy && pnpm run cargo:fmt && pnpm run cargo:test",
+		"check": "pnpm run lint && pnpm run typecheck && pnpm run knip && pnpm test && pnpm run cargo",
 		"tauri": "tauri"
 	},
 	"author": "kstonekuan",
@@ -29,6 +34,8 @@
 		"@tauri-apps/api": "^2.9.1",
 		"@tauri-apps/plugin-store": "^2.4.1",
 		"@use-gesture/react": "^10.3.1",
+		"date-fns": "^4.1.0",
+		"ky": "^1.14.1",
 		"lucide-react": "^0.559.0",
 		"react": "^19.2.1",
 		"react-dom": "^19.2.1",
@@ -47,6 +54,7 @@
 		"knip": "^5.73.1",
 		"typescript": "^5.9.3",
 		"vite": "^7.2.7",
-		"vite-plugin-svgr": "^4.5.0"
+		"vite-plugin-svgr": "^4.5.0",
+		"vitest": "^4.0.15"
 	}
 }

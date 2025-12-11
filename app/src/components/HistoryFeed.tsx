@@ -1,6 +1,7 @@
 import { ActionIcon, Button } from "@mantine/core";
 import { useClipboard } from "@mantine/hooks";
 import { useQueryClient } from "@tanstack/react-query";
+import { format, isToday, isYesterday } from "date-fns";
 import { Copy, MessageSquare, Trash2 } from "lucide-react";
 import { useEffect } from "react";
 import {
@@ -11,30 +12,14 @@ import {
 import { tauriAPI } from "../lib/tauri";
 
 function formatTime(timestamp: string): string {
-	const date = new Date(timestamp);
-	return date.toLocaleTimeString("en-US", {
-		hour: "2-digit",
-		minute: "2-digit",
-		hour12: true,
-	});
+	return format(new Date(timestamp), "h:mm a");
 }
 
 function formatDate(timestamp: string): string {
 	const date = new Date(timestamp);
-	const today = new Date();
-	const yesterday = new Date(today);
-	yesterday.setDate(yesterday.getDate() - 1);
-
-	if (date.toDateString() === today.toDateString()) {
-		return "Today";
-	}
-	if (date.toDateString() === yesterday.toDateString()) {
-		return "Yesterday";
-	}
-	return date.toLocaleDateString("en-US", {
-		month: "short",
-		day: "numeric",
-	});
+	if (isToday(date)) return "Today";
+	if (isYesterday(date)) return "Yesterday";
+	return format(date, "MMM d");
 }
 
 interface GroupedHistory {
