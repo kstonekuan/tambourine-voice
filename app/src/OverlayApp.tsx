@@ -314,8 +314,8 @@ function RecordingControl() {
 			}}
 		>
 			{state === "processing" ||
-				state === "disconnected" ||
-				state === "connecting" ? (
+			state === "disconnected" ||
+			state === "connecting" ? (
 				<div
 					style={{
 						width: 48,
@@ -377,7 +377,7 @@ export default function OverlayApp() {
 			});
 
 		return () => {
-			pipecatClient.disconnect().catch(() => { });
+			pipecatClient.disconnect().catch(() => {});
 		};
 	}, []);
 

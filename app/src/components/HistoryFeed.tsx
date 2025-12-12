@@ -1,5 +1,5 @@
-import { ActionIcon, Button } from "@mantine/core";
-import { useClipboard } from "@mantine/hooks";
+import { ActionIcon, Button, Group, Modal, Text } from "@mantine/core";
+import { useClipboard, useDisclosure } from "@mantine/hooks";
 import { useQueryClient } from "@tanstack/react-query";
 import { format, isToday, isYesterday } from "date-fns";
 import { Copy, MessageSquare, Trash2 } from "lucide-react";
@@ -53,6 +53,8 @@ export function HistoryFeed() {
 	const deleteEntry = useDeleteHistoryEntry();
 	const clearHistory = useClearHistory();
 	const clipboard = useClipboard();
+	const [confirmOpened, { open: openConfirm, close: closeConfirm }] =
+		useDisclosure(false);
 
 	// Listen for history changes from other windows (e.g., overlay after transcription)
 	useEffect(() => {
@@ -76,9 +78,11 @@ export function HistoryFeed() {
 	};
 
 	const handleClearAll = () => {
-		if (window.confirm("Are you sure you want to clear all history?")) {
-			clearHistory.mutate();
-		}
+		clearHistory.mutate(undefined, {
+			onSuccess: () => {
+				closeConfirm();
+			},
+		});
 	};
 
 	if (isLoading) {
@@ -137,12 +141,37 @@ export function HistoryFeed() {
 					variant="subtle"
 					size="compact-sm"
 					color="gray"
-					onClick={handleClearAll}
+					onClick={openConfirm}
 					disabled={clearHistory.isPending}
 				>
 					Clear All
 				</Button>
 			</div>
+
+			<Modal
+				opened={confirmOpened}
+				onClose={closeConfirm}
+				title="Clear History"
+				centered
+				size="sm"
+			>
+				<Text size="sm" mb="lg">
+					Are you sure you want to clear all history? This action cannot be
+					undone.
+				</Text>
+				<Group justify="flex-end">
+					<Button variant="default" onClick={closeConfirm}>
+						Cancel
+					</Button>
+					<Button
+						color="red"
+						onClick={handleClearAll}
+						loading={clearHistory.isPending}
+					>
+						Clear All
+					</Button>
+				</Group>
+			</Modal>
 
 			{groupedHistory.map((group) => (
 				<div key={group.date} style={{ marginBottom: 24 }}>
