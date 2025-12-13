@@ -4,6 +4,7 @@ import { PipecatClient, RTVIEvent } from "@pipecat-ai/client-js";
 import {
 	PipecatClientProvider,
 	usePipecatClient,
+	useRTVIClientEvent,
 } from "@pipecat-ai/client-react";
 import { SmallWebRTCTransport } from "@pipecat-ai/small-webrtc-transport";
 import { ThemeProvider, UserAudioComponent } from "@pipecat-ai/voice-ui-kit";
@@ -14,9 +15,6 @@ import Logo from "./assets/logo.svg?react";
 import {
 	useAddHistoryEntry,
 	useServerUrl,
-	useSetServerLLMProvider,
-	useSetServerPromptSections,
-	useSetServerSTTProvider,
 	useSettings,
 	useTypeText,
 } from "./lib/queries";
@@ -33,6 +31,20 @@ const TranscriptMessageSchema = z.object({
 const RecordingCompleteMessageSchema = z.object({
 	type: z.literal("recording-complete"),
 	hasContent: z.boolean().optional(),
+});
+
+// Config response schemas (relayed to main window for notifications)
+const ConfigUpdatedMessageSchema = z.object({
+	type: z.literal("config-updated"),
+	setting: z.string(),
+	value: z.unknown(),
+	success: z.literal(true),
+});
+
+const ConfigErrorMessageSchema = z.object({
+	type: z.literal("config-error"),
+	setting: z.string(),
+	error: z.string(),
 });
 
 function RecordingControl() {
@@ -59,7 +71,10 @@ function RecordingControl() {
 	// Track if we've ever connected (to distinguish initial connection from reconnection)
 	const hasConnectedRef = useRef(false);
 
-	// Simple connection: just call connect() when client and serverUrl are ready
+	// Track previous settings to detect actual changes (for syncing while connected)
+	const prevSettingsRef = useRef(settings);
+
+	// Initial connection: triggered when client and serverUrl are ready
 	// SmallWebRTC handles reconnection internally (3 attempts)
 	useEffect(() => {
 		if (!client || !serverUrl) return;
@@ -74,9 +89,6 @@ function RecordingControl() {
 	// TanStack Query hooks
 	const typeTextMutation = useTypeText();
 	const addHistoryEntry = useAddHistoryEntry();
-	const setServerPromptSections = useSetServerPromptSections();
-	const setServerSTTProvider = useSetServerSTTProvider();
-	const setServerLLMProvider = useSetServerLLMProvider();
 
 	// Response timeout (10s)
 	const { start: startResponseTimeout, clear: clearResponseTimeout } =
@@ -141,30 +153,68 @@ function RecordingControl() {
 		};
 	}, [onStartRecording, onStopRecording]);
 
-	// Connection and response event handlers
-	useEffect(() => {
-		if (!client) return;
-
-		const onConnected = () => {
+	// Connection event handler
+	useRTVIClientEvent(
+		RTVIEvent.Connected,
+		useCallback(() => {
 			console.debug("[Pipecat] Connected");
 			hasConnectedRef.current = true;
 			handleConnected();
 
-			// Sync cleanup prompt sections to server via REST API
-			if (settings?.cleanup_prompt_sections) {
-				setServerPromptSections.mutate(settings.cleanup_prompt_sections);
-			}
+			// Sync settings to server via data channel (with delay to ensure connection is stable)
+			setTimeout(() => {
+				if (settings?.cleanup_prompt_sections) {
+					client?.sendClientMessage("set-prompt-sections", {
+						sections: settings.cleanup_prompt_sections,
+					});
+				}
+				if (settings?.stt_provider) {
+					client?.sendClientMessage("set-stt-provider", {
+						provider: settings.stt_provider,
+					});
+				}
+				if (settings?.llm_provider) {
+					client?.sendClientMessage("set-llm-provider", {
+						provider: settings.llm_provider,
+					});
+				}
+			}, 500);
+		}, [client, settings, handleConnected]),
+	);
 
-			// Sync provider preferences to server
-			if (settings?.stt_provider) {
-				setServerSTTProvider.mutate(settings.stt_provider);
-			}
-			if (settings?.llm_provider) {
-				setServerLLMProvider.mutate(settings.llm_provider);
-			}
-		};
+	// Sync settings when they change WHILE already connected
+	// Uses ref comparison to avoid triggering during reconnection (when state changes but settings don't)
+	useEffect(() => {
+		const prevSettings = prevSettingsRef.current;
+		prevSettingsRef.current = settings;
 
-		const onDisconnected = () => {
+		// Only sync if connected AND settings actually changed
+		if (!client || state !== "idle") return;
+		if (prevSettings === settings) return;
+
+		// Settings changed while connected - sync them
+		if (settings?.cleanup_prompt_sections) {
+			client.sendClientMessage("set-prompt-sections", {
+				sections: settings.cleanup_prompt_sections,
+			});
+		}
+		if (settings?.stt_provider) {
+			client.sendClientMessage("set-stt-provider", {
+				provider: settings.stt_provider,
+			});
+		}
+		if (settings?.llm_provider) {
+			client.sendClientMessage("set-llm-provider", {
+				provider: settings.llm_provider,
+			});
+		}
+	}, [client, state, settings]);
+
+	// Disconnection event handler
+	// Handles cleanup, state transition, and reconnection
+	useRTVIClientEvent(
+		RTVIEvent.Disconnected,
+		useCallback(() => {
 			console.debug("[Pipecat] Disconnected");
 
 			// Check if we were recording/processing when disconnect happened
@@ -172,9 +222,9 @@ function RecordingControl() {
 			if (currentState === "recording" || currentState === "processing") {
 				console.warn("[Pipecat] Disconnected during recording/processing");
 				try {
-					client.enableMic(false);
+					client?.enableMic(false);
 					// Also stop the track to release the mic (removes OS mic indicator)
-					const tracks = client.tracks();
+					const tracks = client?.tracks();
 					if (tracks?.local?.audio) {
 						tracks.local.audio.stop();
 					}
@@ -185,12 +235,12 @@ function RecordingControl() {
 
 			handleDisconnected();
 
+			// Reconnection: only if we've connected before (not on initial connection failure)
 			// SmallWebRTC already tried to reconnect (3 attempts) and gave up
-			// Keep retrying with the same client - must call disconnect() first to reset state
-			if (hasConnectedRef.current && serverUrl) {
+			if (hasConnectedRef.current && serverUrl && client) {
 				setTimeout(async () => {
 					try {
-						await client.disconnect();
+						await client.disconnect(); // Reset client state
 						await client.connect({
 							webrtcRequestParams: { endpoint: `${serverUrl}/api/offer` },
 						});
@@ -199,67 +249,77 @@ function RecordingControl() {
 					}
 				}, 3000);
 			}
-		};
+		}, [client, serverUrl, handleDisconnected]),
+	);
 
-		const onServerMessage = async (message: unknown) => {
-			const transcriptResult = TranscriptMessageSchema.safeParse(message);
-			if (transcriptResult.success) {
-				clearResponseTimeout();
-				const { text } = transcriptResult.data;
-				console.debug("[Pipecat] Transcript:", text);
-				try {
-					await typeTextMutation.mutateAsync(text);
-				} catch (error) {
-					console.error("[Pipecat] Failed to type text:", error);
+	// Server message handler
+	useRTVIClientEvent(
+		RTVIEvent.ServerMessage,
+		useCallback(
+			async (message: unknown) => {
+				const transcriptResult = TranscriptMessageSchema.safeParse(message);
+				if (transcriptResult.success) {
+					clearResponseTimeout();
+					const { text } = transcriptResult.data;
+					console.debug("[Pipecat] Transcript:", text);
+					try {
+						await typeTextMutation.mutateAsync(text);
+					} catch (error) {
+						console.error("[Pipecat] Failed to type text:", error);
+					}
+					addHistoryEntry.mutate(text);
+					handleResponse();
+					return;
 				}
-				addHistoryEntry.mutate(text);
-				handleResponse();
-				return;
-			}
 
-			const recordingCompleteResult =
-				RecordingCompleteMessageSchema.safeParse(message);
-			if (recordingCompleteResult.success) {
-				clearResponseTimeout();
-				handleResponse();
-			}
-		};
+				const recordingCompleteResult =
+					RecordingCompleteMessageSchema.safeParse(message);
+				if (recordingCompleteResult.success) {
+					clearResponseTimeout();
+					handleResponse();
+					return;
+				}
 
-		const onError = (error: unknown) => {
+				// Config response messages - relay to main window for notifications
+				const configUpdatedResult =
+					ConfigUpdatedMessageSchema.safeParse(message);
+				if (configUpdatedResult.success) {
+					tauriAPI.emitConfigResponse({
+						type: "config-updated",
+						setting: configUpdatedResult.data.setting,
+						value: configUpdatedResult.data.value,
+					});
+					return;
+				}
+
+				const configErrorResult = ConfigErrorMessageSchema.safeParse(message);
+				if (configErrorResult.success) {
+					tauriAPI.emitConfigResponse({
+						type: "config-error",
+						setting: configErrorResult.data.setting,
+						error: configErrorResult.data.error,
+					});
+					return;
+				}
+			},
+			[clearResponseTimeout, typeTextMutation, addHistoryEntry, handleResponse],
+		),
+	);
+
+	// Error handlers
+	useRTVIClientEvent(
+		RTVIEvent.Error,
+		useCallback((error: unknown) => {
 			console.error("[Pipecat] Error:", error);
-		};
+		}, []),
+	);
 
-		const onDeviceError = (error: unknown) => {
+	useRTVIClientEvent(
+		RTVIEvent.DeviceError,
+		useCallback((error: unknown) => {
 			console.error("[Pipecat] Device error:", error);
-		};
-
-		client.on(RTVIEvent.Connected, onConnected);
-		client.on(RTVIEvent.Disconnected, onDisconnected);
-		client.on(RTVIEvent.ServerMessage, onServerMessage);
-		client.on(RTVIEvent.Error, onError);
-		client.on(RTVIEvent.DeviceError, onDeviceError);
-
-		return () => {
-			client.off(RTVIEvent.Connected, onConnected);
-			client.off(RTVIEvent.Disconnected, onDisconnected);
-			client.off(RTVIEvent.ServerMessage, onServerMessage);
-			client.off(RTVIEvent.Error, onError);
-			client.off(RTVIEvent.DeviceError, onDeviceError);
-		};
-	}, [
-		client,
-		serverUrl,
-		settings,
-		handleConnected,
-		handleDisconnected,
-		handleResponse,
-		typeTextMutation,
-		addHistoryEntry,
-		clearResponseTimeout,
-		setServerPromptSections,
-		setServerSTTProvider,
-		setServerLLMProvider,
-	]);
+		}, []),
+	);
 
 	// Click handler (toggle mode)
 	const handleClick = useCallback(() => {
@@ -373,7 +433,7 @@ export default function OverlayApp() {
 			})
 			.catch((error: unknown) => {
 				console.error("[Pipecat] Failed to initialize devices:", error);
-				setDevicesReady(true);
+				setDevicesReady(false);
 			});
 
 		return () => {
@@ -399,7 +459,7 @@ export default function OverlayApp() {
 					borderRadius: 12,
 				}}
 			>
-				<Loader size="sm" color="white" />
+				<Loader size="xs" color="white" />
 			</div>
 		);
 	}

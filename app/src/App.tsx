@@ -1,4 +1,5 @@
 import { Kbd, Loader, NavLink, Text, Title, Tooltip } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import { Home, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import { HistoryFeed } from "./components/HistoryFeed";
@@ -15,7 +16,7 @@ import {
 	DEFAULT_TOGGLE_HOTKEY,
 } from "./lib/hotkeyDefaults";
 import { useRefreshServerQueriesOnConnect, useSettings } from "./lib/queries";
-import { type HotkeyConfig, tauriAPI } from "./lib/tauri";
+import { type ConfigResponse, type HotkeyConfig, tauriAPI } from "./lib/tauri";
 import { useRecordingStore } from "./stores/recordingStore";
 import "./styles.css";
 
@@ -204,12 +205,60 @@ function SettingsView() {
 	);
 }
 
+function formatSettingName(setting: string): string {
+	const names: Record<string, string> = {
+		"stt-provider": "STT provider",
+		"llm-provider": "LLM provider",
+		"prompt-sections": "Cleanup prompt",
+		"stt-timeout": "STT timeout",
+	};
+	return names[setting] ?? setting;
+}
+
 export default function App() {
 	const [activeView, setActiveView] = useState<View>("home");
 	const connectionState = useRecordingStore((s) => s.state);
 
 	// Refresh server-side queries when connection is established
 	useRefreshServerQueriesOnConnect(connectionState);
+
+	// Listen for config response events from overlay window and show notifications
+	useEffect(() => {
+		let isMounted = true;
+		let unlisten: (() => void) | undefined;
+
+		const handleConfigResponse = (response: ConfigResponse) => {
+			if (response.type === "config-updated") {
+				notifications.show({
+					title: "Settings Updated",
+					message: `${formatSettingName(response.setting)} updated successfully`,
+					color: "green",
+					autoClose: 2000,
+				});
+			} else if (response.type === "config-error") {
+				notifications.show({
+					title: "Settings Error",
+					message: `Failed to update ${formatSettingName(response.setting)}: ${response.error}`,
+					color: "red",
+					autoClose: 5000,
+				});
+			}
+		};
+
+		tauriAPI.onConfigResponse(handleConfigResponse).then((fn) => {
+			if (isMounted) {
+				unlisten = fn;
+			} else {
+				// Component unmounted before listener was set up - clean up immediately
+				fn();
+			}
+		});
+
+		return () => {
+			isMounted = false;
+			unlisten?.();
+		};
+	}, []);
 
 	return (
 		<div className="app-layout">

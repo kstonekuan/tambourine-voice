@@ -26,6 +26,9 @@ interface RecordingState {
 	startRecording: () => Promise<boolean>; // Returns false if not in valid state
 	stopRecording: () => boolean; // Returns false if not in valid state
 	handleResponse: () => void;
+
+	// Configuration via data channel
+	sendConfigMessage: (type: string, data: unknown) => boolean;
 }
 
 export const useRecordingStore = create<RecordingState>((set, get) => ({
@@ -114,6 +117,25 @@ export const useRecordingStore = create<RecordingState>((set, get) => ({
 		if (state === "processing") {
 			// Track is already stopped in stopRecording(), just transition state
 			set({ state: "idle" });
+		}
+	},
+
+	sendConfigMessage: (type: string, data: unknown) => {
+		const { state, client } = get();
+		// Only send if connected (idle, recording, or processing)
+		if (state === "disconnected" || state === "connecting" || !client) {
+			console.warn(
+				`[Config] Cannot send message in state: ${state}, client: ${!!client}`,
+			);
+			return false;
+		}
+
+		try {
+			client.sendClientMessage(type, data);
+			return true;
+		} catch (error) {
+			console.error("[Config] Failed to send message:", error);
+			return false;
 		}
 	},
 }));

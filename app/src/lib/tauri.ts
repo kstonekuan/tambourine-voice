@@ -12,6 +12,13 @@ export type ConnectionState =
 	| "recording"
 	| "processing";
 
+export interface ConfigResponse {
+	type: "config-updated" | "config-error";
+	setting: string;
+	value?: unknown;
+	error?: string;
+}
+
 interface TypeTextResult {
 	success: boolean;
 	error?: string;
@@ -343,6 +350,19 @@ export const tauriAPI = {
 			callback();
 		});
 	},
+
+	// Config response sync between windows (overlay -> main)
+	async emitConfigResponse(response: ConfigResponse): Promise<void> {
+		return emit("config-response", response);
+	},
+
+	async onConfigResponse(
+		callback: (response: ConfigResponse) => void,
+	): Promise<UnlistenFn> {
+		return listen<ConfigResponse>("config-response", (event) => {
+			callback(event.payload);
+		});
+	},
 };
 
 // ============================================================================
@@ -355,11 +375,6 @@ export interface DefaultSectionsResponse {
 	dictionary: string;
 }
 
-interface SetPromptResponse {
-	success: boolean;
-	error?: string;
-}
-
 interface ProviderInfo {
 	value: string;
 	label: string;
@@ -368,23 +383,6 @@ interface ProviderInfo {
 interface AvailableProvidersResponse {
 	stt: ProviderInfo[];
 	llm: ProviderInfo[];
-}
-
-interface CurrentProvidersResponse {
-	stt: string | null;
-	llm: string | null;
-}
-
-interface SwitchProviderResponse {
-	success: boolean;
-	provider?: string;
-	error?: string;
-}
-
-interface STTTimeoutResponse {
-	success: boolean;
-	timeout_seconds?: number;
-	error?: string;
 }
 
 // Create ky instance with sensible defaults for local API
@@ -398,40 +396,11 @@ const api = ky.create({
 });
 
 export const configAPI = {
-	// Prompt APIs
+	// Static prompt defaults (runtime config goes via data channel)
 	getDefaultSections: () =>
 		api.get("api/prompt/sections/default").json<DefaultSectionsResponse>(),
 
-	setPromptSections: (sections: CleanupPromptSections) =>
-		api
-			.post("api/prompt/sections", { json: { sections } })
-			.json<SetPromptResponse>(),
-
-	// Provider APIs
+	// Available providers (set at server startup)
 	getAvailableProviders: () =>
 		api.get("api/providers/available").json<AvailableProvidersResponse>(),
-
-	getCurrentProviders: () =>
-		api.get("api/providers/current").json<CurrentProvidersResponse>(),
-
-	setSTTProvider: (provider: string) =>
-		api
-			.post("api/providers/stt", { json: { provider } })
-			.json<SwitchProviderResponse>(),
-
-	setLLMProvider: (provider: string) =>
-		api
-			.post("api/providers/llm", { json: { provider } })
-			.json<SwitchProviderResponse>(),
-
-	// STT Timeout APIs
-	getSTTTimeout: () =>
-		api.get("api/config/stt-timeout").json<STTTimeoutResponse>(),
-
-	setSTTTimeout: (timeoutSeconds: number) =>
-		api
-			.post("api/config/stt-timeout", {
-				json: { timeout_seconds: timeoutSeconds },
-			})
-			.json<STTTimeoutResponse>(),
 };

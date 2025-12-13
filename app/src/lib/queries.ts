@@ -36,10 +36,8 @@ export function useRefreshServerQueriesOnConnect(
 			connectionState === "processing";
 
 		if (wasDisconnected && isNowConnected) {
-			// Invalidate all server-side queries
+			// Invalidate server-side queries (static data that may have changed)
 			queryClient.invalidateQueries({ queryKey: ["availableProviders"] });
-			queryClient.invalidateQueries({ queryKey: ["currentProviders"] });
-			queryClient.invalidateQueries({ queryKey: ["sttTimeout"] });
 			queryClient.invalidateQueries({ queryKey: ["defaultSections"] });
 		}
 
@@ -276,13 +274,6 @@ export function useDefaultSections() {
 	});
 }
 
-export function useSetServerPromptSections() {
-	return useMutation({
-		mutationFn: (sections: CleanupPromptSections) =>
-			configAPI.setPromptSections(sections),
-	});
-}
-
 // Provider queries and mutations
 
 export function useAvailableProviders() {
@@ -290,14 +281,6 @@ export function useAvailableProviders() {
 		queryKey: ["availableProviders"],
 		queryFn: () => configAPI.getAvailableProviders(),
 		retry: false, // Don't retry if server not available
-	});
-}
-
-export function useCurrentProviders() {
-	return useQuery({
-		queryKey: ["currentProviders"],
-		queryFn: () => configAPI.getCurrentProviders(),
-		retry: false,
 	});
 }
 
@@ -323,35 +306,7 @@ export function useUpdateLLMProvider() {
 	});
 }
 
-export function useSetServerSTTProvider() {
-	const queryClient = useQueryClient();
-	return useMutation({
-		mutationFn: (provider: string) => configAPI.setSTTProvider(provider),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["currentProviders"] });
-		},
-	});
-}
-
-export function useSetServerLLMProvider() {
-	const queryClient = useQueryClient();
-	return useMutation({
-		mutationFn: (provider: string) => configAPI.setLLMProvider(provider),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["currentProviders"] });
-		},
-	});
-}
-
-// STT Timeout queries and mutations
-export function useSTTTimeout() {
-	return useQuery({
-		queryKey: ["sttTimeout"],
-		queryFn: () => configAPI.getSTTTimeout(),
-		retry: false,
-	});
-}
-
+// STT Timeout mutation (local settings)
 export function useUpdateSTTTimeout() {
 	const queryClient = useQueryClient();
 	return useMutation({
@@ -359,17 +314,6 @@ export function useUpdateSTTTimeout() {
 			tauriAPI.updateSTTTimeout(timeoutSeconds),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["settings"] });
-		},
-	});
-}
-
-export function useSetServerSTTTimeout() {
-	const queryClient = useQueryClient();
-	return useMutation({
-		mutationFn: (timeoutSeconds: number) =>
-			configAPI.setSTTTimeout(timeoutSeconds),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["sttTimeout"] });
 		},
 	});
 }

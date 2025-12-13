@@ -2,11 +2,11 @@ import { Accordion, Loader } from "@mantine/core";
 import { useEffect, useState } from "react";
 import {
 	useDefaultSections,
-	useSetServerPromptSections,
 	useSettings,
 	useUpdateCleanupPromptSections,
 } from "../../lib/queries";
 import type { CleanupPromptSections } from "../../lib/tauri";
+import { useRecordingStore } from "../../stores/recordingStore";
 import { PromptSectionEditor } from "./PromptSectionEditor";
 
 const DEFAULT_SECTIONS: CleanupPromptSections = {
@@ -33,7 +33,7 @@ export function PromptSettings() {
 	const { data: defaultSections, isLoading: isLoadingDefaultSections } =
 		useDefaultSections();
 	const updateCleanupPromptSections = useUpdateCleanupPromptSections();
-	const setServerPromptSections = useSetServerPromptSections();
+	const sendConfigMessage = useRecordingStore((s) => s.sendConfigMessage);
 
 	// Consolidated local state for all sections
 	const [localSections, setLocalSections] = useState<LocalSections>({
@@ -109,11 +109,11 @@ export function PromptSettings() {
 		};
 	};
 
-	// Save all sections to both Tauri and server
+	// Save all sections to both Tauri and server via data channel
 	const saveAllSections = (sections: CleanupPromptSections) => {
 		updateCleanupPromptSections.mutate(sections, {
 			onSuccess: () => {
-				setServerPromptSections.mutate(sections);
+				sendConfigMessage("set-prompt-sections", { sections });
 			},
 		});
 	};

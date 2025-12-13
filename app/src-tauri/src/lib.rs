@@ -383,7 +383,6 @@ pub fn run() {
                 use tauri_nspanel::{CollectionBehavior, PanelLevel, WebviewWindowExt};
                 match overlay.to_panel::<OverlayPanel>() {
                     Ok(panel) => {
-                        log::info!("[NSPanel] Successfully converted overlay to NSPanel");
                         // Configure panel to float above fullscreen apps
                         panel.set_level(PanelLevel::ScreenSaver.value());
                         panel.set_floating_panel(true);
@@ -398,7 +397,7 @@ pub fn run() {
                         let style = tauri_nspanel::StyleMask::empty().nonactivating_panel();
                         panel.set_style_mask(style.value());
 
-                        log::info!("[NSPanel] Configured panel with ScreenSaver level, floating, and CanJoinAllSpaces + FullScreenAuxiliary behavior");
+                        log::info!("[NSPanel] Successfully converted overlay to NSPanel");
                     }
                     Err(e) => {
                         log::error!("[NSPanel] Failed to convert overlay to NSPanel: {:?}", e);
