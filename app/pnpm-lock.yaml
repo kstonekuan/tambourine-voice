@@ -30,8 +30,8 @@ importers:
         specifier: ^1.8.0
         version: 1.8.0(@pipecat-ai/client-js@1.5.0)
       '@pipecat-ai/voice-ui-kit':
-        specifier: ^0.5.0
-        version: 0.5.0(@daily-co/daily-js@0.85.0)(@pipecat-ai/client-js@1.5.0)(@pipecat-ai/client-react@1.1.0(@babel/core@7.28.5)(@babel/template@7.27.2)(@pipecat-ai/client-js@1.5.0)(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@pipecat-ai/small-webrtc-transport@1.8.0(@pipecat-ai/client-js@1.5.0))(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        specifier: ^0.6.0
+        version: 0.6.0(@daily-co/daily-js@0.85.0)(@pipecat-ai/client-js@1.5.0)(@pipecat-ai/client-react@1.1.0(@babel/core@7.28.5)(@babel/template@7.27.2)(@pipecat-ai/client-js@1.5.0)(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@pipecat-ai/small-webrtc-transport@1.8.0(@pipecat-ai/client-js@1.5.0))(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@tailwindcss/vite':
         specifier: ^4.1.18
         version: 4.1.18(vite@7.2.7(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2))
@@ -619,8 +619,8 @@ packages:
     peerDependencies:
       '@pipecat-ai/client-js': ~1.5.0
 
-  '@pipecat-ai/voice-ui-kit@0.5.0':
-    resolution: {integrity: sha512-20vqyEGszce4KnZwWZIjVgQDWMjZYkO46XS3b/3ItSMH4gO108VGn8+cl8MGWjGafZXQF/hfpMiAkK43J5XRpA==}
+  '@pipecat-ai/voice-ui-kit@0.6.0':
+    resolution: {integrity: sha512-flisvUwHi9vplWfWil2ojQBiibvCE8+IkariOIaM4I86NXY8NkiEjzvQBIymOmq3UR+ZVER4NwniAtcLDFeXAA==}
     engines: {node: '>=18'}
     peerDependencies:
       '@daily-co/daily-js': '>=0.84.0'
@@ -1996,6 +1996,16 @@ packages:
       '@types/react':
         optional: true
 
+  react-remove-scroll@2.7.2:
+    resolution: {integrity: sha512-Iqb9NjCCTt6Hf+vOdNIZGdTiH1QSqr27H/Ek9sv/a97gfueI/5h1s3yRi1nngzMUaOOToin5dI1dXKdXiF+u0Q==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      '@types/react': '*'
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+
   react-resizable-panels@3.0.6:
     resolution: {integrity: sha512-b3qKHQ3MLqOgSS+FRYKapNkJZf5EQzuf6+RLiq1/IlTHw99YrZ2NJZLk4hQIzTnnIkRg2LUqyVinu6YWWpUYew==}
     peerDependencies:
@@ -2750,7 +2760,7 @@ snapshots:
       dequal: 2.0.3
       lodash: 4.17.21
 
-  '@pipecat-ai/voice-ui-kit@0.5.0(@daily-co/daily-js@0.85.0)(@pipecat-ai/client-js@1.5.0)(@pipecat-ai/client-react@1.1.0(@babel/core@7.28.5)(@babel/template@7.27.2)(@pipecat-ai/client-js@1.5.0)(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@pipecat-ai/small-webrtc-transport@1.8.0(@pipecat-ai/client-js@1.5.0))(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
+  '@pipecat-ai/voice-ui-kit@0.6.0(@daily-co/daily-js@0.85.0)(@pipecat-ai/client-js@1.5.0)(@pipecat-ai/client-react@1.1.0(@babel/core@7.28.5)(@babel/template@7.27.2)(@pipecat-ai/client-js@1.5.0)(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@pipecat-ai/small-webrtc-transport@1.8.0(@pipecat-ai/client-js@1.5.0))(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
     dependencies:
       '@daily-co/daily-js': 0.85.0
       '@pipecat-ai/client-js': 1.5.0
@@ -2904,7 +2914,7 @@ snapshots:
       aria-hidden: 1.2.6
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
-      react-remove-scroll: 2.7.1(@types/react@19.2.7)(react@19.2.3)
+      react-remove-scroll: 2.7.2(@types/react@19.2.7)(react@19.2.3)
     optionalDependencies:
       '@types/react': 19.2.7
       '@types/react-dom': 19.2.3(@types/react@19.2.7)
@@ -2927,7 +2937,7 @@ snapshots:
       aria-hidden: 1.2.6
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
-      react-remove-scroll: 2.7.1(@types/react@19.2.7)(react@19.2.3)
+      react-remove-scroll: 2.7.2(@types/react@19.2.7)(react@19.2.3)
     optionalDependencies:
       '@types/react': 19.2.7
       '@types/react-dom': 19.2.3(@types/react@19.2.7)
@@ -3039,7 +3049,7 @@ snapshots:
       aria-hidden: 1.2.6
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
-      react-remove-scroll: 2.7.1(@types/react@19.2.7)(react@19.2.3)
+      react-remove-scroll: 2.7.2(@types/react@19.2.7)(react@19.2.3)
     optionalDependencies:
       '@types/react': 19.2.7
       '@types/react-dom': 19.2.3(@types/react@19.2.7)
@@ -4007,6 +4017,17 @@ snapshots:
       '@types/react': 19.2.7
 
   react-remove-scroll@2.7.1(@types/react@19.2.7)(react@19.2.3):
+    dependencies:
+      react: 19.2.3
+      react-remove-scroll-bar: 2.3.8(@types/react@19.2.7)(react@19.2.3)
+      react-style-singleton: 2.2.3(@types/react@19.2.7)(react@19.2.3)
+      tslib: 2.8.1
+      use-callback-ref: 1.3.3(@types/react@19.2.7)(react@19.2.3)
+      use-sidecar: 1.1.3(@types/react@19.2.7)(react@19.2.3)
+    optionalDependencies:
+      '@types/react': 19.2.7
+
+  react-remove-scroll@2.7.2(@types/react@19.2.7)(react@19.2.3):
     dependencies:
       react: 19.2.3
       react-remove-scroll-bar: 2.3.8(@types/react@19.2.7)(react@19.2.3)
