@@ -20,8 +20,6 @@ body {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	border: 1px solid rgba(128, 128, 128, 0.5);
-	border-radius: 12px;
 }
 
 /* Hide tooltips/popups in overlay - use high specificity instead of !important */
