@@ -27,7 +27,7 @@ from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.service_switcher import ServiceSwitcher, ServiceSwitcherStrategyManual
 from pipecat.pipeline.task import PipelineParams, PipelineTask
-from pipecat.processors.frameworks.rtvi import RTVIObserver
+from pipecat.processors.frameworks.rtvi import RTVIObserver, RTVIProcessor
 from pipecat.transports.base_transport import TransportParams
 from pipecat.transports.smallwebrtc.connection import IceServer, SmallWebRTCConnection
 from pipecat.transports.smallwebrtc.request_handler import (
@@ -39,7 +39,7 @@ from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
 
 from api.config_server import config_router
 from config.settings import Settings
-from processors.configuration import ConfigurationProcessor
+from processors.configuration import ConfigurationHandler
 from processors.llm import TranscriptionToLLMConverter
 from processors.transcription_buffer import TranscriptionBufferProcessor
 from services.providers import (
@@ -111,9 +111,12 @@ async def run_pipeline(
     transcription_to_llm = TranscriptionToLLMConverter()
     transcription_buffer = TranscriptionBufferProcessor()
 
-    # Configuration processor handles runtime config via data channel
-    # (replaces global state access from REST endpoints)
-    config_processor = ConfigurationProcessor(
+    # RTVIProcessor handles the RTVI protocol (client messages, server responses)
+    rtvi_processor = RTVIProcessor()
+
+    # ConfigurationHandler processes config messages from RTVI client messages
+    config_handler = ConfigurationHandler(
+        rtvi_processor=rtvi_processor,
         stt_switcher=stt_switcher,
         llm_switcher=llm_switcher,
         llm_converter=transcription_to_llm,
@@ -122,11 +125,34 @@ async def run_pipeline(
         llm_services=services.llm_services,
     )
 
-    # Build pipeline
+    # Register event handler for client messages
+    @rtvi_processor.event_handler("on_client_message")
+    async def on_client_message(processor: RTVIProcessor, message: Any) -> None:
+        """Handle RTVI client messages for configuration and recording control."""
+        _ = processor  # Unused, required by event handler signature
+
+        # Extract message type and data from RTVI client message
+        msg_type = message.type if hasattr(message, "type") else None
+        data = message.data if hasattr(message, "data") else {}
+        if not msg_type:
+            return
+
+        # Handle recording control messages
+        if msg_type == "start-recording":
+            await transcription_buffer.start_recording()
+            return
+        if msg_type == "stop-recording":
+            await transcription_buffer.stop_recording()
+            return
+
+        # Handle configuration messages
+        await config_handler.handle_client_message(msg_type, data)
+
+    # Build pipeline - RTVIProcessor at the start handles RTVI protocol
     pipeline = Pipeline(
         [
             transport.input(),
-            config_processor,  # Handles config messages from data channel
+            rtvi_processor,  # Handles RTVI protocol messages
             stt_switcher,
             transcription_buffer,
             transcription_to_llm,
@@ -135,7 +161,7 @@ async def run_pipeline(
         ]
     )
 
-    # Create pipeline task with debug observer for logging key frames
+    # Create pipeline task with RTVIObserver to send bot-llm-text to client
     task = PipelineTask(
         pipeline,
         params=PipelineParams(
@@ -146,8 +172,8 @@ async def run_pipeline(
         ),
         idle_timeout_frames=(HeartbeatFrame,),
         observers=[
-            RTVIObserver(),
             UserBotLatencyLogObserver(),
+            RTVIObserver(rtvi_processor),  # Sends bot-llm-text messages to client
             PipelineLogObserver(),
         ],
     )

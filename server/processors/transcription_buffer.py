@@ -14,11 +14,10 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Final, Literal
+from typing import Any, Final
 
 from pipecat.frames.frames import (
     Frame,
-    InputTransportMessageFrame,
     TranscriptionFrame,
     UserStartedSpeakingFrame,
     UserStoppedSpeakingFrame,
@@ -26,7 +25,6 @@ from pipecat.frames.frames import (
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.processors.frameworks.rtvi import RTVIServerMessageFrame
 from pipecat.transcriptions.language import Language
-from pydantic import BaseModel, ValidationError
 
 from utils.logger import logger
 
@@ -92,24 +90,6 @@ State = IdleState | RecordingState | WaitingForSTTState | DrainingState
 
 
 # =============================================================================
-# Transport Message Models (Pydantic)
-# =============================================================================
-
-
-class ClientMessageData(BaseModel):
-    """Data payload for client-message type."""
-
-    t: str  # The actual message type (e.g., "start-recording", "stop-recording")
-
-
-class ClientMessage(BaseModel):
-    """Client message wrapper from RTVI protocol."""
-
-    type: Literal["client-message"]
-    data: ClientMessageData
-
-
-# =============================================================================
 # Processor
 # =============================================================================
 
@@ -160,19 +140,6 @@ class TranscriptionBufferProcessor(FrameProcessor):
         """Process frames using state machine pattern."""
         await super().process_frame(frame, direction)
 
-        # Handle client messages (start/stop recording)
-        if isinstance(frame, InputTransportMessageFrame):
-            message_type = self._extract_message_type(frame.message)
-            logger.info(f"Received client message: type={message_type}")
-
-            if message_type == "start-recording":
-                await self._handle_start_recording()
-                return
-
-            if message_type == "stop-recording":
-                await self._handle_stop_recording(direction)
-                return
-
         # Handle speech detection
         if isinstance(frame, UserStartedSpeakingFrame):
             self._handle_speech_started()
@@ -194,27 +161,16 @@ class TranscriptionBufferProcessor(FrameProcessor):
         await self.push_frame(frame, direction)
 
     # =========================================================================
-    # Message Type Extraction
+    # Public API for RTVI Event Handler
     # =========================================================================
 
-    def _extract_message_type(self, message: dict[str, Any] | Any) -> str | None:
-        """Extract message type from transport message payload.
+    async def start_recording(self) -> None:
+        """Start recording - called from RTVI on_client_message handler."""
+        await self._handle_start_recording()
 
-        Uses Pydantic models to parse client-message payloads, with fallback
-        to dict access for other message types.
-        """
-        if not isinstance(message, dict):
-            return None
-
-        # Try to parse as ClientMessage (RTVI protocol)
-        try:
-            client_msg = ClientMessage.model_validate(message)
-            return client_msg.data.t
-        except ValidationError:
-            pass
-
-        # Fallback: return outer type for non-client messages
-        return message.get("type")
+    async def stop_recording(self, direction: FrameDirection = FrameDirection.DOWNSTREAM) -> None:
+        """Stop recording - called from RTVI on_client_message handler."""
+        await self._handle_stop_recording(direction)
 
     # =========================================================================
     # State Transition Handlers

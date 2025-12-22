@@ -1,45 +1,19 @@
-"""Configuration processor for handling runtime configuration via WebRTC data channel.
+"""Configuration handler for runtime configuration via RTVI client messages.
 
-This processor handles configuration messages from the client, allowing runtime
-configuration of the pipeline without global state or REST API endpoints.
+This module provides configuration handling for the pipeline, called from
+RTVIProcessor's on_client_message event handler.
 """
 
 from __future__ import annotations
 
-import asyncio
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
-from pipecat.frames.frames import (
-    Frame,
-    InputTransportMessageFrame,
-    ManuallySwitchServiceFrame,
-    StartFrame,
-)
-from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
-from pipecat.processors.frameworks.rtvi import RTVIServerMessageFrame
-from pydantic import BaseModel, ValidationError
+from pipecat.frames.frames import ManuallySwitchServiceFrame
+from pipecat.processors.frame_processor import FrameDirection
+from pipecat.processors.frameworks.rtvi import RTVIProcessor, RTVIServerMessageFrame
 
 from services.provider_registry import LLMProviderId, STTProviderId
-
-# =============================================================================
-# Transport Message Models (Pydantic) - matches RTVI protocol
-# =============================================================================
-
-
-class ClientMessageData(BaseModel):
-    """Data payload for client-message type."""
-
-    t: str  # The actual message type (e.g., "set-stt-provider")
-    d: dict[str, Any] | None = None  # The actual payload data
-
-
-class ClientMessage(BaseModel):
-    """Client message wrapper from RTVI protocol."""
-
-    type: Literal["client-message"]
-    data: ClientMessageData
-
 
 if TYPE_CHECKING:
     from pipecat.pipeline.llm_switcher import LLMSwitcher
@@ -51,32 +25,33 @@ if TYPE_CHECKING:
     from processors.transcription_buffer import TranscriptionBufferProcessor
 
 
-class ConfigurationProcessor(FrameProcessor):
-    """Handles configuration messages from WebRTC data channel.
+class ConfigurationHandler:
+    """Handles configuration messages from RTVI client messages.
 
-    Processes messages like:
+    This handler is registered with RTVIProcessor's on_client_message event
+    to process config messages like:
     - set-stt-provider: Switch STT service
     - set-llm-provider: Switch LLM service
     - set-prompt-sections: Update LLM prompt
     - set-stt-timeout: Update transcription timeout
 
-    All configuration is scoped to this pipeline instance, eliminating
-    global state and enabling multi-client support.
+    All configuration is scoped to this pipeline instance.
     """
 
     def __init__(
         self,
+        rtvi_processor: RTVIProcessor,
         stt_switcher: ServiceSwitcher,
         llm_switcher: LLMSwitcher,
         llm_converter: TranscriptionToLLMConverter,
         transcription_buffer: TranscriptionBufferProcessor,
         stt_services: dict[STTProviderId, STTService],
         llm_services: dict[LLMProviderId, LLMService],
-        **kwargs: Any,
     ) -> None:
-        """Initialize the configuration processor.
+        """Initialize the configuration handler.
 
         Args:
+            rtvi_processor: The RTVIProcessor to send responses through
             stt_switcher: ServiceSwitcher for STT services
             llm_switcher: LLMSwitcher for LLM services
             llm_converter: TranscriptionToLLMConverter for prompt configuration
@@ -84,115 +59,28 @@ class ConfigurationProcessor(FrameProcessor):
             stt_services: Dictionary mapping STT provider IDs to services
             llm_services: Dictionary mapping LLM provider IDs to services
         """
-        super().__init__(**kwargs)
+        self._rtvi = rtvi_processor
         self._stt_switcher = stt_switcher
         self._llm_switcher = llm_switcher
         self._llm_converter = llm_converter
         self._transcription_buffer = transcription_buffer
         self._stt_services = stt_services
         self._llm_services = llm_services
-        self._pipeline_started = False
-        # True only after StartFrame has propagated through the entire pipeline
-        self._pipeline_fully_ready = False
-        # Queue for config messages received before pipeline is fully ready
-        self._pending_config_messages: list[dict[str, Any]] = []
 
         # Track current providers for logging
         self._current_stt_provider: STTProviderId | None = None
         self._current_llm_provider: LLMProviderId | None = None
 
-    async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
-        """Process frames, handling configuration messages.
+    async def handle_client_message(self, msg_type: str, data: dict[str, Any]) -> bool:
+        """Handle a client message from RTVIProcessor.
 
         Args:
-            frame: The frame to process
-            direction: The direction of frame flow
-        """
-        await super().process_frame(frame, direction)
-
-        if isinstance(frame, StartFrame):
-            self._pipeline_started = True
-            logger.info("Pipeline started - waiting for full propagation")
-        elif isinstance(frame, InputTransportMessageFrame):
-            logger.debug(f"InputTransportMessageFrame received: {frame.message}")
-            # Queue config messages if pipeline is not fully ready yet
-            if not self._pipeline_fully_ready:
-                msg_type, _ = self._extract_message_type_and_data(frame.message)
-                if msg_type in {
-                    "set-stt-provider",
-                    "set-llm-provider",
-                    "set-prompt-sections",
-                    "set-stt-timeout",
-                }:
-                    logger.debug(f"Queuing config message: {msg_type} (pipeline not fully ready)")
-                    self._pending_config_messages.append(frame.message)
-                    return
-            # Handle configuration messages from client
-            handled = await self._handle_config_message(frame.message)
-            if handled:
-                # Don't propagate config messages to rest of pipeline
-                return
-
-        await self.push_frame(frame, direction)
-
-        # After pushing StartFrame downstream, yield to allow it to propagate
-        # through the entire pipeline, then process any queued config messages
-        if isinstance(frame, StartFrame):
-            # Yield control to allow StartFrame to propagate through all processors
-            await asyncio.sleep(0)
-            self._pipeline_fully_ready = True
-            logger.info("Pipeline fully ready - processing queued configuration messages")
-            # Process any config messages that arrived before pipeline was ready
-            for msg in self._pending_config_messages:
-                await self._handle_config_message(msg)
-            self._pending_config_messages.clear()
-
-    def _extract_message_type_and_data(
-        self, message: dict[str, Any] | Any
-    ) -> tuple[str | None, dict[str, Any]]:
-        """Extract message type and data from transport message payload.
-
-        Handles the RTVI protocol's client-message envelope format where
-        messages are wrapped as:
-        {
-            "type": "client-message",
-            "data": {
-                "t": "set-stt-provider",
-                "provider": "deepgram",
-                ...
-            }
-        }
-
-        Args:
-            message: The raw message from the transport
-
-        Returns:
-            Tuple of (message_type, data_dict). Returns (None, {}) if invalid.
-        """
-        if not isinstance(message, dict):
-            return None, {}
-
-        # Try to parse as ClientMessage (RTVI protocol envelope)
-        try:
-            client_msg = ClientMessage.model_validate(message)
-            # Extract the actual type from data.t and payload from data.d
-            msg_type = client_msg.data.t
-            payload = client_msg.data.d or {}
-            return msg_type, payload
-        except ValidationError:
-            return None, {}
-
-    async def _handle_config_message(self, message: dict[str, Any]) -> bool:
-        """Handle a potential configuration message.
-
-        Args:
-            message: The message dict from the client
+            msg_type: The message type (e.g., "set-stt-provider")
+            data: The message data payload
 
         Returns:
             True if the message was handled as a config message
         """
-        msg_type, data = self._extract_message_type_and_data(message)
-
         # Only handle config messages
         if msg_type not in {
             "set-stt-provider",
@@ -238,10 +126,6 @@ class ConfigurationProcessor(FrameProcessor):
             )
             return
 
-        if not self._pipeline_fully_ready:
-            await self._send_config_error("stt-provider", "Pipeline not ready - please try again")
-            return
-
         service = self._stt_services[provider_id]
         await self._stt_switcher.process_frame(
             ManuallySwitchServiceFrame(service=service),
@@ -273,10 +157,6 @@ class ConfigurationProcessor(FrameProcessor):
                 "llm-provider",
                 f"Provider '{provider_value}' not available (no API key configured)",
             )
-            return
-
-        if not self._pipeline_fully_ready:
-            await self._send_config_error("llm-provider", "Pipeline not ready - please try again")
             return
 
         service = self._llm_services[provider_id]
@@ -350,7 +230,7 @@ class ConfigurationProcessor(FrameProcessor):
                 "success": True,
             }
         )
-        await self.push_frame(frame, FrameDirection.DOWNSTREAM)
+        await self._rtvi.push_frame(frame, FrameDirection.DOWNSTREAM)
 
     async def _send_config_error(self, setting: str, error: str) -> None:
         """Send a configuration error message to the client.
@@ -366,5 +246,5 @@ class ConfigurationProcessor(FrameProcessor):
                 "error": error,
             }
         )
-        await self.push_frame(frame, FrameDirection.DOWNSTREAM)
+        await self._rtvi.push_frame(frame, FrameDirection.DOWNSTREAM)
         logger.warning(f"Config error for {setting}: {error}")
