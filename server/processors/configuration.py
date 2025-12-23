@@ -87,6 +87,7 @@ class ConfigurationHandler:
             "set-llm-provider",
             "set-prompt-sections",
             "set-stt-timeout",
+            "get-available-providers",
         }:
             return False
 
@@ -100,6 +101,8 @@ class ConfigurationHandler:
             await self._set_prompt_sections(data.get("sections"))
         elif msg_type == "set-stt-timeout":
             await self._set_stt_timeout(data.get("timeout_seconds"))
+        elif msg_type == "get-available-providers":
+            await self._get_available_providers()
 
         return True
 
@@ -214,6 +217,49 @@ class ConfigurationHandler:
         self._transcription_buffer.set_transcription_timeout(timeout_seconds)
         logger.info(f"Set STT timeout to: {timeout_seconds}s")
         await self._send_config_success("stt-timeout", timeout_seconds)
+
+    async def _get_available_providers(self) -> None:
+        """Return available providers with model info from instantiated services.
+
+        This returns accurate model information from the per-client service
+        instances, ensuring each client sees their own configuration.
+        """
+        from services.provider_registry import get_llm_provider_labels, get_stt_provider_labels
+
+        stt_labels = get_stt_provider_labels()
+        llm_labels = get_llm_provider_labels()
+
+        stt_providers = [
+            {
+                "value": provider_id.value,
+                "label": stt_labels.get(provider_id, provider_id.value),
+                "is_local": provider_id == STTProviderId.WHISPER,
+                "model": getattr(service, "model_name", None),
+            }
+            for provider_id, service in self._stt_services.items()
+        ]
+
+        llm_providers = [
+            {
+                "value": provider_id.value,
+                "label": llm_labels.get(provider_id, provider_id.value),
+                "is_local": provider_id == LLMProviderId.OLLAMA,
+                "model": getattr(service, "model_name", None),
+            }
+            for provider_id, service in self._llm_services.items()
+        ]
+
+        frame = RTVIServerMessageFrame(
+            data={
+                "type": "available-providers",
+                "stt": stt_providers,
+                "llm": llm_providers,
+            }
+        )
+        await self._rtvi.push_frame(frame, FrameDirection.DOWNSTREAM)
+        logger.debug(
+            f"Sent available providers: {len(stt_providers)} STT, {len(llm_providers)} LLM"
+        )
 
     async def _send_config_success(self, setting: str, value: Any) -> None:
         """Send a configuration success message to the client.

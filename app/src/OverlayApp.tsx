@@ -52,6 +52,27 @@ const ConfigErrorMessageSchema = z.object({
 	error: z.string(),
 });
 
+// Available providers schema (relayed to main window for settings UI)
+const AvailableProvidersMessageSchema = z.object({
+	type: z.literal("available-providers"),
+	stt: z.array(
+		z.object({
+			value: z.string(),
+			label: z.string(),
+			is_local: z.boolean(),
+			model: z.string().nullable(),
+		}),
+	),
+	llm: z.array(
+		z.object({
+			value: z.string(),
+			label: z.string(),
+			is_local: z.boolean(),
+			model: z.string().nullable(),
+		}),
+	),
+});
+
 // Non-empty array type for type-safe batched sends
 type NonEmptyArray<T> = [T, ...T[]];
 
@@ -245,6 +266,9 @@ function RecordingControl() {
 
 			// Sync settings to server via data channel (with delay to ensure connection is stable)
 			setTimeout(() => {
+				// Request available providers (for settings UI in main window)
+				client?.sendClientMessage("get-available-providers", {});
+
 				if (settings?.cleanup_prompt_sections) {
 					client?.sendClientMessage("set-prompt-sections", {
 						sections: settings.cleanup_prompt_sections,
@@ -436,6 +460,17 @@ function RecordingControl() {
 						type: "config-error",
 						setting: configErrorResult.data.setting,
 						error: configErrorResult.data.error,
+					});
+					return;
+				}
+
+				// Available providers - relay to main window for settings UI
+				const availableProvidersResult =
+					AvailableProvidersMessageSchema.safeParse(message);
+				if (availableProvidersResult.success) {
+					tauriAPI.emitAvailableProviders({
+						stt: availableProvidersResult.data.stt,
+						llm: availableProvidersResult.data.llm,
 					});
 					return;
 				}

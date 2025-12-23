@@ -43,10 +43,10 @@ from processors.configuration import ConfigurationHandler
 from processors.llm import TranscriptionToLLMConverter
 from processors.transcription_buffer import TranscriptionBufferProcessor
 from services.providers import (
-    LLMProviderId,
-    STTProviderId,
     create_all_available_llm_services,
     create_all_available_stt_services,
+    get_available_llm_providers,
+    get_available_stt_providers,
 )
 from utils.logger import configure_logging
 from utils.observers import PipelineLogObserver
@@ -59,11 +59,14 @@ ICE_SERVERS: Final[list[IceServer]] = [
 
 @dataclass
 class AppServices:
-    """Container for application services, stored on app.state."""
+    """Container for application services, stored on app.state.
+
+    Note: STT and LLM services are created per-connection in run_pipeline()
+    to ensure complete isolation between concurrent clients. Each client
+    gets fresh service instances with independent WebSocket connections.
+    """
 
     settings: Settings
-    stt_services: dict[STTProviderId, Any]
-    llm_services: dict[LLMProviderId, Any]
     webrtc_handler: SmallWebRTCRequestHandler
     active_pipeline_tasks: set[asyncio.Task[None]]
 
@@ -80,6 +83,12 @@ async def run_pipeline(
     """
     logger.info("Starting pipeline for new WebRTC connection")
 
+    # Create fresh service instances for this connection to ensure isolation
+    # between concurrent clients. Each client gets independent WebSocket
+    # connections to STT/LLM providers.
+    stt_services = create_all_available_stt_services(services.settings)
+    llm_services = create_all_available_llm_services(services.settings)
+
     # Create transport using the WebRTC connection
     # (client connects with enableMic: false, only enables when recording starts)
     transport = SmallWebRTCTransport(
@@ -94,8 +103,8 @@ async def run_pipeline(
     # Create service switchers for this connection
     from pipecat.pipeline.base_pipeline import FrameProcessor as PipecatFrameProcessor
 
-    stt_service_list = cast(list[PipecatFrameProcessor], list(services.stt_services.values()))
-    llm_service_list = list(services.llm_services.values())
+    stt_service_list = cast(list[PipecatFrameProcessor], list(stt_services.values()))
+    llm_service_list = list(llm_services.values())
 
     stt_switcher = ServiceSwitcher(
         services=stt_service_list,
@@ -121,8 +130,8 @@ async def run_pipeline(
         llm_switcher=llm_switcher,
         llm_converter=transcription_to_llm,
         transcription_buffer=transcription_buffer,
-        stt_services=services.stt_services,
-        llm_services=services.llm_services,
+        stt_services=stt_services,
+        llm_services=llm_services,
     )
 
     # Register event handler for client messages
@@ -194,7 +203,11 @@ async def run_pipeline(
 
 
 def initialize_services(settings: Settings) -> AppServices | None:
-    """Initialize STT and LLM services.
+    """Initialize application services container.
+
+    Validates that at least one STT and LLM provider is available.
+    Actual service instances are created per-connection in run_pipeline()
+    to ensure complete isolation between concurrent clients.
 
     Args:
         settings: Application settings
@@ -202,24 +215,22 @@ def initialize_services(settings: Settings) -> AppServices | None:
     Returns:
         AppServices instance if successful, None otherwise
     """
-    stt_services = create_all_available_stt_services(settings)
-    llm_services = create_all_available_llm_services(settings)
+    available_stt = get_available_stt_providers(settings)
+    available_llm = get_available_llm_providers(settings)
 
-    if not stt_services:
+    if not available_stt:
         logger.error("No STT providers available. Configure at least one STT API key.")
         return None
 
-    if not llm_services:
+    if not available_llm:
         logger.error("No LLM providers available. Configure at least one LLM API key.")
         return None
 
-    logger.info(f"Available STT providers: {[p.value for p in stt_services]}")
-    logger.info(f"Available LLM providers: {[p.value for p in llm_services]}")
+    logger.info(f"Available STT providers: {[p.value for p in available_stt]}")
+    logger.info(f"Available LLM providers: {[p.value for p in available_llm]}")
 
     return AppServices(
         settings=settings,
-        stt_services=stt_services,
-        llm_services=llm_services,
         webrtc_handler=SmallWebRTCRequestHandler(ice_servers=ICE_SERVERS),
         active_pipeline_tasks=set(),
     )

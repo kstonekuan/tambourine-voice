@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef } from "react";
 import {
+	type AvailableProvidersData,
 	type CleanupPromptSections,
 	configAPI,
 	type HotkeyConfig,
@@ -274,13 +275,30 @@ export function useDefaultSections() {
 	});
 }
 
-// Provider queries and mutations
+// Provider queries - data comes from RTVI message via Tauri event
 
 export function useAvailableProviders() {
-	return useQuery({
+	const queryClient = useQueryClient();
+
+	// Listen for provider data from overlay window (relayed from server via RTVI)
+	useEffect(() => {
+		const unlistenPromise = tauriAPI.onAvailableProviders((data) => {
+			queryClient.setQueryData<AvailableProvidersData>(
+				["availableProviders"],
+				data,
+			);
+		});
+
+		return () => {
+			unlistenPromise.then((unlisten) => unlisten());
+		};
+	}, [queryClient]);
+
+	return useQuery<AvailableProvidersData | null>({
 		queryKey: ["availableProviders"],
-		queryFn: () => configAPI.getAvailableProviders(),
-		retry: false, // Don't retry if server not available
+		queryFn: () => Promise.resolve(null), // No initial fetch, data comes from event
+		staleTime: Number.POSITIVE_INFINITY,
+		enabled: false, // Don't auto-fetch
 	});
 }
 

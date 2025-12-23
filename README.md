@@ -102,7 +102,7 @@ Open-source alternative to [Wispr Flow](https://wisprflow.ai) and [Superwhisper]
 │  - Pipecat SmallWebRTC for audio streaming                  │
 │  - STT providers (Cartesia, Deepgram, Groq, and more)       │
 │  - LLM formatting (Cerebras, OpenAI, Anthropic, and more)   │
-│  - FastAPI endpoints for config and provider switching      │
+│  - Runtime config via WebRTC data channel (RTVI protocol)   │
 │  - Returns cleaned text to app                              │
 └─────────────────────────────────────────────────────────────┘
 ```

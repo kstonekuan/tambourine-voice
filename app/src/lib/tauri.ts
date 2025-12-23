@@ -374,6 +374,19 @@ export const tauriAPI = {
 			callback(event.payload);
 		});
 	},
+
+	// Available providers sync between windows (overlay -> main)
+	async emitAvailableProviders(data: AvailableProvidersData): Promise<void> {
+		return emit("available-providers", data);
+	},
+
+	async onAvailableProviders(
+		callback: (data: AvailableProvidersData) => void,
+	): Promise<UnlistenFn> {
+		return listen<AvailableProvidersData>("available-providers", (event) => {
+			callback(event.payload);
+		});
+	},
 };
 
 // ============================================================================
@@ -386,14 +399,14 @@ export interface DefaultSectionsResponse {
 	dictionary: string;
 }
 
-interface ProviderInfo {
+export interface ProviderInfo {
 	value: string;
 	label: string;
 	is_local: boolean;
-	model?: string;
+	model?: string | null;
 }
 
-interface AvailableProvidersResponse {
+export interface AvailableProvidersData {
 	stt: ProviderInfo[];
 	llm: ProviderInfo[];
 }
@@ -412,8 +425,6 @@ export const configAPI = {
 	// Static prompt defaults (runtime config goes via data channel)
 	getDefaultSections: () =>
 		api.get("api/prompt/sections/default").json<DefaultSectionsResponse>(),
-
-	// Available providers (set at server startup)
-	getAvailableProviders: () =>
-		api.get("api/providers/available").json<AvailableProvidersResponse>(),
+	// Note: Provider info now comes via RTVI message after WebRTC connection
+	// Use tauriAPI.onAvailableProviders() to listen for provider data
 };
