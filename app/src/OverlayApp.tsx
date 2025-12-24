@@ -38,20 +38,19 @@ const RecordingCompleteMessageSchema = z.object({
 	hasContent: z.boolean().optional(),
 });
 
-// Config response schema (discriminated union for config-updated and config-error)
-const ConfigResponseMessageSchema = z.discriminatedUnion("type", [
-	z.object({
-		type: z.literal("config-updated"),
-		setting: z.string(),
-		value: z.unknown(),
-		success: z.literal(true),
-	}),
-	z.object({
-		type: z.literal("config-error"),
-		setting: z.string(),
-		error: z.string(),
-	}),
-]);
+// Config response schemas (relayed to main window for notifications)
+const ConfigUpdatedMessageSchema = z.object({
+	type: z.literal("config-updated"),
+	setting: z.string(),
+	value: z.unknown(),
+	success: z.literal(true),
+});
+
+const ConfigErrorMessageSchema = z.object({
+	type: z.literal("config-error"),
+	setting: z.string(),
+	error: z.string(),
+});
 
 // Available providers schema (relayed to main window for settings UI)
 const AvailableProvidersMessageSchema = z.object({
@@ -441,26 +440,44 @@ function RecordingControl() {
 		RTVIEvent.ServerMessage,
 		useCallback(
 			(message: unknown) => {
-				// Recording complete - reset state
-				if (RecordingCompleteMessageSchema.safeParse(message).success) {
+				const recordingCompleteResult =
+					RecordingCompleteMessageSchema.safeParse(message);
+				if (recordingCompleteResult.success) {
 					clearResponseTimeout();
 					handleResponse();
 					return;
 				}
 
-				// Config responses - relay to main window for notifications
-				const configResult = ConfigResponseMessageSchema.safeParse(message);
-				if (configResult.success) {
-					tauriAPI.emitConfigResponse(configResult.data);
+				// Config response messages - relay to main window for notifications
+				const configUpdatedResult =
+					ConfigUpdatedMessageSchema.safeParse(message);
+				if (configUpdatedResult.success) {
+					tauriAPI.emitConfigResponse({
+						type: "config-updated",
+						setting: configUpdatedResult.data.setting,
+						value: configUpdatedResult.data.value,
+					});
+					return;
+				}
+
+				const configErrorResult = ConfigErrorMessageSchema.safeParse(message);
+				if (configErrorResult.success) {
+					tauriAPI.emitConfigResponse({
+						type: "config-error",
+						setting: configErrorResult.data.setting,
+						error: configErrorResult.data.error,
+					});
 					return;
 				}
 
 				// Available providers - relay to main window for settings UI
-				const providersResult =
+				const availableProvidersResult =
 					AvailableProvidersMessageSchema.safeParse(message);
-				if (providersResult.success) {
-					const { stt, llm } = providersResult.data;
-					tauriAPI.emitAvailableProviders({ stt, llm });
+				if (availableProvidersResult.success) {
+					tauriAPI.emitAvailableProviders({
+						stt: availableProvidersResult.data.stt,
+						llm: availableProvidersResult.data.llm,
+					});
 					return;
 				}
 			},
