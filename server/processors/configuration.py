@@ -256,7 +256,7 @@ class ConfigurationHandler:
                 "llm": llm_providers,
             }
         )
-        await self._rtvi.push_frame(frame, FrameDirection.DOWNSTREAM)
+        await self._rtvi.push_frame(frame)
         logger.debug(
             f"Sent available providers: {len(stt_providers)} STT, {len(llm_providers)} LLM"
         )
@@ -276,7 +276,7 @@ class ConfigurationHandler:
                 "success": True,
             }
         )
-        await self._rtvi.push_frame(frame, FrameDirection.DOWNSTREAM)
+        await self._rtvi.push_frame(frame)
 
     async def _send_config_error(self, setting: str, error: str) -> None:
         """Send a configuration error message to the client.
@@ -292,5 +292,5 @@ class ConfigurationHandler:
                 "error": error,
             }
         )
-        await self._rtvi.push_frame(frame, FrameDirection.DOWNSTREAM)
+        await self._rtvi.push_frame(frame)
         logger.warning(f"Config error for {setting}: {error}")
