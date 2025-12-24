@@ -6,6 +6,7 @@ RTVIProcessor's on_client_message event handler.
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
@@ -67,10 +68,6 @@ class ConfigurationHandler:
         self._stt_services = stt_services
         self._llm_services = llm_services
 
-        # Track current providers for logging
-        self._current_stt_provider: STTProviderId | None = None
-        self._current_llm_provider: LLMProviderId | None = None
-
     async def handle_client_message(self, msg_type: str, data: dict[str, Any]) -> bool:
         """Handle a client message from RTVIProcessor.
 
@@ -81,96 +78,76 @@ class ConfigurationHandler:
         Returns:
             True if the message was handled as a config message
         """
-        # Only handle config messages
-        if msg_type not in {
-            "set-stt-provider",
-            "set-llm-provider",
-            "set-prompt-sections",
-            "set-stt-timeout",
-            "get-available-providers",
-        }:
+        handlers: dict[str, Any] = {
+            "set-stt-provider": lambda: self._switch_provider(
+                provider_value=data.get("provider"),
+                setting_name="stt-provider",
+                provider_enum=STTProviderId,
+                services=self._stt_services,
+                switcher=self._stt_switcher,
+            ),
+            "set-llm-provider": lambda: self._switch_provider(
+                provider_value=data.get("provider"),
+                setting_name="llm-provider",
+                provider_enum=LLMProviderId,
+                services=self._llm_services,
+                switcher=self._llm_switcher,
+            ),
+            "set-prompt-sections": lambda: self._set_prompt_sections(data.get("sections")),
+            "set-stt-timeout": lambda: self._set_stt_timeout(data.get("timeout_seconds")),
+            "get-available-providers": self._send_available_providers,
+        }
+
+        handler = handlers.get(msg_type)
+        if handler is None:
             return False
 
         logger.debug(f"Received config message: type={msg_type}")
-
-        if msg_type == "set-stt-provider":
-            await self._switch_stt_provider(data.get("provider"))
-        elif msg_type == "set-llm-provider":
-            await self._switch_llm_provider(data.get("provider"))
-        elif msg_type == "set-prompt-sections":
-            await self._set_prompt_sections(data.get("sections"))
-        elif msg_type == "set-stt-timeout":
-            await self._set_stt_timeout(data.get("timeout_seconds"))
-        elif msg_type == "get-available-providers":
-            await self._get_available_providers()
-
+        await handler()
         return True
 
-    async def _switch_stt_provider(self, provider_value: str | None) -> None:
-        """Switch to a different STT provider.
+    async def _switch_provider(
+        self,
+        provider_value: str | None,
+        setting_name: str,
+        provider_enum: type[StrEnum],
+        services: dict[Any, Any],
+        switcher: ServiceSwitcher | LLMSwitcher,
+    ) -> None:
+        """Switch to a different provider (generic for STT/LLM).
 
         Args:
-            provider_value: The provider ID string (e.g., "deepgram", "whisper")
+            provider_value: The provider ID string (e.g., "deepgram", "openai")
+            setting_name: The setting name for responses (e.g., "stt-provider")
+            provider_enum: The enum class to validate against
+            services: Dictionary mapping provider IDs to services
+            switcher: The service switcher to use
         """
         if not provider_value:
-            await self._send_config_error("stt-provider", "Provider value is required")
+            await self._send_config_error(setting_name, "Provider value is required")
             return
 
         try:
-            provider_id = STTProviderId(provider_value)
+            provider_id = provider_enum(provider_value)
         except ValueError:
-            await self._send_config_error("stt-provider", f"Unknown provider: {provider_value}")
+            await self._send_config_error(setting_name, f"Unknown provider: {provider_value}")
             return
 
-        if provider_id not in self._stt_services:
+        if provider_id not in services:
             await self._send_config_error(
-                "stt-provider",
+                setting_name,
                 f"Provider '{provider_value}' not available (no API key configured)",
             )
             return
 
-        service = self._stt_services[provider_id]
-        await self._stt_switcher.process_frame(
+        service = services[provider_id]
+        await switcher.process_frame(
             ManuallySwitchServiceFrame(service=service),
             FrameDirection.DOWNSTREAM,
         )
-        self._current_stt_provider = provider_id
 
-        logger.success(f"Switched STT provider to: {provider_value}")
-        await self._send_config_success("stt-provider", provider_value)
-
-    async def _switch_llm_provider(self, provider_value: str | None) -> None:
-        """Switch to a different LLM provider.
-
-        Args:
-            provider_value: The provider ID string (e.g., "openai", "anthropic")
-        """
-        if not provider_value:
-            await self._send_config_error("llm-provider", "Provider value is required")
-            return
-
-        try:
-            provider_id = LLMProviderId(provider_value)
-        except ValueError:
-            await self._send_config_error("llm-provider", f"Unknown provider: {provider_value}")
-            return
-
-        if provider_id not in self._llm_services:
-            await self._send_config_error(
-                "llm-provider",
-                f"Provider '{provider_value}' not available (no API key configured)",
-            )
-            return
-
-        service = self._llm_services[provider_id]
-        await self._llm_switcher.process_frame(
-            ManuallySwitchServiceFrame(service=service),
-            FrameDirection.DOWNSTREAM,
-        )
-        self._current_llm_provider = provider_id
-
-        logger.success(f"Switched LLM provider to: {provider_value}")
-        await self._send_config_success("llm-provider", provider_value)
+        logger.success(f"Switched {setting_name} to: {provider_value}")
+        await self._send_config_success(setting_name, provider_value)
 
     async def _set_prompt_sections(self, sections: dict[str, Any] | None) -> None:
         """Update the LLM formatting prompt sections.
@@ -179,7 +156,6 @@ class ConfigurationHandler:
             sections: The prompt sections configuration, or None to reset to defaults.
         """
         if not sections:
-            # Reset to default
             self._llm_converter.set_prompt_sections()
             logger.info("Reset formatting prompt to default")
             await self._send_config_success("prompt-sections", "default")
@@ -218,36 +194,20 @@ class ConfigurationHandler:
         logger.info(f"Set STT timeout to: {timeout_seconds}s")
         await self._send_config_success("stt-timeout", timeout_seconds)
 
-    async def _get_available_providers(self) -> None:
-        """Return available providers with model info from instantiated services.
-
-        This returns accurate model information from the per-client service
-        instances, ensuring each client sees their own configuration.
-        """
+    async def _send_available_providers(self) -> None:
+        """Send available providers with model info from instantiated services."""
         from services.provider_registry import get_llm_provider_labels, get_stt_provider_labels
 
-        stt_labels = get_stt_provider_labels()
-        llm_labels = get_llm_provider_labels()
-
-        stt_providers = [
-            {
-                "value": provider_id.value,
-                "label": stt_labels.get(provider_id, provider_id.value),
-                "is_local": provider_id == STTProviderId.WHISPER,
-                "model": getattr(service, "model_name", None),
-            }
-            for provider_id, service in self._stt_services.items()
-        ]
-
-        llm_providers = [
-            {
-                "value": provider_id.value,
-                "label": llm_labels.get(provider_id, provider_id.value),
-                "is_local": provider_id == LLMProviderId.OLLAMA,
-                "model": getattr(service, "model_name", None),
-            }
-            for provider_id, service in self._llm_services.items()
-        ]
+        stt_providers = self._build_provider_list(
+            services=self._stt_services,
+            labels=get_stt_provider_labels(),
+            local_provider_ids={STTProviderId.WHISPER},
+        )
+        llm_providers = self._build_provider_list(
+            services=self._llm_services,
+            labels=get_llm_provider_labels(),
+            local_provider_ids={LLMProviderId.OLLAMA},
+        )
 
         frame = RTVIServerMessageFrame(
             data={
@@ -261,13 +221,34 @@ class ConfigurationHandler:
             f"Sent available providers: {len(stt_providers)} STT, {len(llm_providers)} LLM"
         )
 
-    async def _send_config_success(self, setting: str, value: Any) -> None:
-        """Send a configuration success message to the client.
+    def _build_provider_list(
+        self,
+        services: dict[Any, Any],
+        labels: dict[Any, str],
+        local_provider_ids: set[Any],
+    ) -> list[dict[str, Any]]:
+        """Build a provider info list for the client.
 
         Args:
-            setting: The setting that was updated
-            value: The new value
+            services: Dictionary mapping provider IDs to service instances
+            labels: Dictionary mapping provider IDs to display labels
+            local_provider_ids: Set of provider IDs that are local (not cloud)
+
+        Returns:
+            List of provider info dictionaries
         """
+        return [
+            {
+                "value": provider_id.value,
+                "label": labels.get(provider_id, provider_id.value),
+                "is_local": provider_id in local_provider_ids,
+                "model": getattr(service, "model_name", None),
+            }
+            for provider_id, service in services.items()
+        ]
+
+    async def _send_config_success(self, setting: str, value: Any) -> None:
+        """Send a configuration success message to the client."""
         frame = RTVIServerMessageFrame(
             data={
                 "type": "config-updated",
@@ -279,12 +260,7 @@ class ConfigurationHandler:
         await self._rtvi.push_frame(frame)
 
     async def _send_config_error(self, setting: str, error: str) -> None:
-        """Send a configuration error message to the client.
-
-        Args:
-            setting: The setting that failed to update
-            error: The error message
-        """
+        """Send a configuration error message to the client."""
         frame = RTVIServerMessageFrame(
             data={
                 "type": "config-error",
