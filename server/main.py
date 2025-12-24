@@ -281,6 +281,12 @@ app.add_middleware(
 app.include_router(config_router)
 
 
+@app.get("/health")
+async def health_check() -> dict[str, str]:
+    """Health check endpoint for container orchestration (e.g., Lightsail)."""
+    return {"status": "ok"}
+
+
 # =============================================================================
 # WebRTC Endpoints
 # =============================================================================
