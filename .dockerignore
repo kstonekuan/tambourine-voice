@@ -1,0 +1,19 @@
+# Exclude app (desktop client)
+app/
+
+# Python
+__pycache__/
+*.pyc
+server/.venv/
+server/.pytest_cache/
+server/.ruff_cache/
+
+# Git
+.git/
+.github/
+
+# Environment files (will be provided at runtime)
+server/.env
+
+# Keep README.md (needed by pyproject.toml)
+!README.md
