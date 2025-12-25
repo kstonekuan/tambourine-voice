@@ -20,7 +20,12 @@ dependencies = [
 tambourine-voice-server = "main:app"
 
 [dependency-groups]
-dev = ["pytest>=9.0.2", "ruff>=0.14.9", "ty<=0.0.1a34", "yamllint>=1.37.1"]
+dev = [
+    "pytest>=9.0.2",
+    "ruff>=0.14.10",
+    "ty>=0.0.7",        #
+    "yamllint>=1.37.1",
+]
 
 [build-system]
 requires = ["uv_build>=0.9.15"]

@@ -285,7 +285,12 @@ export function useDefaultSections() {
 
 // Provider queries - data comes from RTVI message via Tauri event
 
-export function useAvailableProviders() {
+/**
+ * Hook to set up the available providers event listener.
+ * Call this from a component that stays mounted (like App.tsx) to ensure
+ * the listener is always active and data is cached properly.
+ */
+export function useAvailableProvidersListener() {
 	const queryClient = useQueryClient();
 
 	// Listen for provider data from overlay window (relayed from server via RTVI)
@@ -301,7 +306,14 @@ export function useAvailableProviders() {
 			unlistenPromise.then((unlisten) => unlisten());
 		};
 	}, [queryClient]);
+}
 
+/**
+ * Hook to read available providers from the cache.
+ * The data is populated by useAvailableProvidersListener which should be
+ * called from a parent component that stays mounted.
+ */
+export function useAvailableProviders() {
 	return useQuery<AvailableProvidersData | null>({
 		queryKey: ["availableProviders"],
 		queryFn: () => Promise.resolve(null), // No initial fetch, data comes from event

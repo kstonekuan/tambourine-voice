@@ -16,7 +16,11 @@ import {
 	DEFAULT_PASTE_LAST_HOTKEY,
 	DEFAULT_TOGGLE_HOTKEY,
 } from "./lib/hotkeyDefaults";
-import { useRefreshServerQueriesOnConnect, useSettings } from "./lib/queries";
+import {
+	useAvailableProvidersListener,
+	useRefreshServerQueriesOnConnect,
+	useSettings,
+} from "./lib/queries";
 import { type ConfigResponse, type HotkeyConfig, tauriAPI } from "./lib/tauri";
 import { useRecordingStore } from "./stores/recordingStore";
 import "./app-main.css";
@@ -220,6 +224,9 @@ function formatSettingName(setting: string): string {
 export default function App() {
 	const [activeView, setActiveView] = useState<View>("home");
 	const connectionState = useRecordingStore((s) => s.state);
+
+	// Listen for available providers from overlay window (must stay mounted)
+	useAvailableProvidersListener();
 
 	// Refresh server-side queries when connection is established
 	useRefreshServerQueriesOnConnect(connectionState);

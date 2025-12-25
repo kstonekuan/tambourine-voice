@@ -10,6 +10,15 @@ if TYPE_CHECKING:
     from loguru import Record
 
 
+def _should_log(record: "Record") -> bool:
+    """Filter out known harmless warnings."""
+    # Filter out pipecat timeout warnings (harmless when not streaming audio)
+    return not (
+        record["name"] == "pipecat.transports.smallwebrtc.transport"
+        and "Timeout: No audio frame received" in record["message"]
+    )
+
+
 def _log_format(record: "Record") -> str:
     """Custom format function that only shows extra when present."""
     base = (
@@ -48,4 +57,5 @@ def configure_logging(log_level: str | None = None) -> None:
         format=_log_format,
         level=log_level_str,
         colorize=True,
+        filter=_should_log,
     )
