@@ -1,4 +1,5 @@
-import { Kbd } from "@mantine/core";
+import { Kbd, Switch, Tooltip } from "@mantine/core";
+import { AlertCircle } from "lucide-react";
 import { useEffect } from "react";
 import { useRecordHotkeys } from "react-hotkeys-hook";
 import type { HotkeyConfig } from "../lib/tauri";
@@ -13,6 +14,12 @@ interface HotkeyInputProps {
 	isRecording?: boolean;
 	onStartRecording?: () => void;
 	onStopRecording?: () => void;
+	// Enable/disable toggle
+	enabled?: boolean;
+	onEnabledChange?: (enabled: boolean) => void;
+	enabledLoading?: boolean;
+	// Registration error (if hotkey couldn't be registered)
+	registrationError?: string | null;
 }
 
 // Known modifier keys (lowercase, as returned by react-hotkeys-hook)
@@ -147,6 +154,7 @@ function keysToConfig(keys: Set<string>): HotkeyConfig | null {
 	return {
 		modifiers,
 		key: formatKeyForTauri(mainKey),
+		enabled: true, // New hotkeys are enabled by default
 	};
 }
 
@@ -166,6 +174,10 @@ export function HotkeyInput({
 	isRecording: externalIsRecording,
 	onStartRecording,
 	onStopRecording,
+	enabled,
+	onEnabledChange,
+	enabledLoading,
+	registrationError,
 }: HotkeyInputProps) {
 	const [keys, { start, stop, isRecording: internalIsRecording }] =
 		useRecordHotkeys();
@@ -234,20 +246,76 @@ export function HotkeyInput({
 		.filter((k) => k !== "escape")
 		.map((k) => formatKeyForDisplay(k));
 
+	// Determine if the toggle should be disabled
+	// Can't enable if there's a registration error (need to change hotkey first)
+	const hasRegistrationError =
+		registrationError !== null && registrationError !== undefined;
+	const toggleDisabled =
+		disabled || enabledLoading || (hasRegistrationError && !enabled);
+
 	return (
 		<div>
-			<p className="settings-label">{label}</p>
-			{description && <p className="settings-description">{description}</p>}
+			<div
+				style={{
+					display: "flex",
+					alignItems: "center",
+					justifyContent: "space-between",
+					gap: 12,
+				}}
+			>
+				<div style={{ flex: 1 }}>
+					<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+						<p className="settings-label" style={{ margin: 0 }}>
+							{label}
+						</p>
+						{registrationError && (
+							<Tooltip
+								label={registrationError}
+								multiline
+								w={250}
+								withArrow
+								position="top"
+							>
+								<AlertCircle
+									size={16}
+									style={{ color: "var(--mantine-color-yellow-6)" }}
+								/>
+							</Tooltip>
+						)}
+					</div>
+					{description && <p className="settings-description">{description}</p>}
+				</div>
+				{onEnabledChange !== undefined && (
+					<Tooltip
+						label={
+							registrationError && !enabled
+								? "Change the hotkey to resolve the conflict first"
+								: enabled
+									? "Disable this hotkey"
+									: "Enable this hotkey"
+						}
+						position="left"
+						withArrow
+					>
+						<Switch
+							checked={enabled ?? true}
+							onChange={(e) => onEnabledChange(e.currentTarget.checked)}
+							disabled={toggleDisabled}
+							size="md"
+						/>
+					</Tooltip>
+				)}
+			</div>
 			<button
 				type="button"
 				onClick={handleClick}
-				disabled={disabled}
+				disabled={disabled || !enabled}
 				className={`hotkey-display ${isRecording ? "capturing" : ""}`}
 				style={{
 					width: "100%",
 					marginTop: 8,
-					cursor: disabled ? "not-allowed" : "pointer",
-					opacity: disabled ? 0.5 : 1,
+					cursor: disabled || !enabled ? "not-allowed" : "pointer",
+					opacity: disabled || !enabled ? 0.5 : 1,
 				}}
 			>
 				{isRecording ? (

@@ -43,53 +43,105 @@ describe("HotkeyConfigSchema", () => {
 
 describe("hotkeyIsSameAs", () => {
 	it("returns true for identical hotkeys", () => {
-		const a: HotkeyConfig = { modifiers: ["ctrl", "alt"], key: "Space" };
-		const b: HotkeyConfig = { modifiers: ["ctrl", "alt"], key: "Space" };
+		const a: HotkeyConfig = {
+			modifiers: ["ctrl", "alt"],
+			key: "Space",
+			enabled: true,
+		};
+		const b: HotkeyConfig = {
+			modifiers: ["ctrl", "alt"],
+			key: "Space",
+			enabled: true,
+		};
 		expect(hotkeyIsSameAs(a, b)).toBe(true);
 	});
 
 	it("is case-insensitive for keys", () => {
-		const a: HotkeyConfig = { modifiers: ["ctrl"], key: "space" };
-		const b: HotkeyConfig = { modifiers: ["ctrl"], key: "SPACE" };
+		const a: HotkeyConfig = {
+			modifiers: ["ctrl"],
+			key: "space",
+			enabled: true,
+		};
+		const b: HotkeyConfig = {
+			modifiers: ["ctrl"],
+			key: "SPACE",
+			enabled: true,
+		};
 		expect(hotkeyIsSameAs(a, b)).toBe(true);
 	});
 
 	it("is case-insensitive for modifiers", () => {
-		const a: HotkeyConfig = { modifiers: ["CTRL", "ALT"], key: "Space" };
-		const b: HotkeyConfig = { modifiers: ["ctrl", "alt"], key: "Space" };
+		const a: HotkeyConfig = {
+			modifiers: ["CTRL", "ALT"],
+			key: "Space",
+			enabled: true,
+		};
+		const b: HotkeyConfig = {
+			modifiers: ["ctrl", "alt"],
+			key: "Space",
+			enabled: true,
+		};
 		expect(hotkeyIsSameAs(a, b)).toBe(true);
 	});
 
 	it("returns true for modifiers in different order", () => {
-		const a: HotkeyConfig = { modifiers: ["ctrl", "alt"], key: "Space" };
-		const b: HotkeyConfig = { modifiers: ["alt", "ctrl"], key: "Space" };
+		const a: HotkeyConfig = {
+			modifiers: ["ctrl", "alt"],
+			key: "Space",
+			enabled: true,
+		};
+		const b: HotkeyConfig = {
+			modifiers: ["alt", "ctrl"],
+			key: "Space",
+			enabled: true,
+		};
 		expect(hotkeyIsSameAs(a, b)).toBe(true);
 	});
 
 	it("returns false for different keys", () => {
-		const a: HotkeyConfig = { modifiers: ["ctrl"], key: "Space" };
-		const b: HotkeyConfig = { modifiers: ["ctrl"], key: "Enter" };
+		const a: HotkeyConfig = {
+			modifiers: ["ctrl"],
+			key: "Space",
+			enabled: true,
+		};
+		const b: HotkeyConfig = {
+			modifiers: ["ctrl"],
+			key: "Enter",
+			enabled: true,
+		};
 		expect(hotkeyIsSameAs(a, b)).toBe(false);
 	});
 
 	it("returns false for different modifiers", () => {
-		const a: HotkeyConfig = { modifiers: ["ctrl"], key: "Space" };
-		const b: HotkeyConfig = { modifiers: ["alt"], key: "Space" };
+		const a: HotkeyConfig = {
+			modifiers: ["ctrl"],
+			key: "Space",
+			enabled: true,
+		};
+		const b: HotkeyConfig = { modifiers: ["alt"], key: "Space", enabled: true };
 		expect(hotkeyIsSameAs(a, b)).toBe(false);
 	});
 
 	it("returns false for different modifier counts", () => {
-		const a: HotkeyConfig = { modifiers: ["ctrl", "alt"], key: "Space" };
-		const b: HotkeyConfig = { modifiers: ["ctrl"], key: "Space" };
+		const a: HotkeyConfig = {
+			modifiers: ["ctrl", "alt"],
+			key: "Space",
+			enabled: true,
+		};
+		const b: HotkeyConfig = {
+			modifiers: ["ctrl"],
+			key: "Space",
+			enabled: true,
+		};
 		expect(hotkeyIsSameAs(a, b)).toBe(false);
 	});
 });
 
 describe("createHotkeyDuplicateSchema", () => {
 	const allHotkeys = {
-		toggle: { modifiers: ["ctrl", "alt"], key: "Space" },
-		hold: { modifiers: ["ctrl", "alt"], key: "Backquote" },
-		paste_last: { modifiers: ["ctrl", "alt"], key: "Period" },
+		toggle: { modifiers: ["ctrl", "alt"], key: "Space", enabled: true },
+		hold: { modifiers: ["ctrl", "alt"], key: "Backquote", enabled: true },
+		paste_last: { modifiers: ["ctrl", "alt"], key: "Period", enabled: true },
 	};
 
 	it("allows a unique hotkey when editing toggle", () => {
@@ -139,14 +191,14 @@ describe("createHotkeyDuplicateSchema", () => {
 
 describe("validateHotkeyNotDuplicate", () => {
 	const allHotkeys = {
-		toggle: { modifiers: ["ctrl", "alt"], key: "Space" },
-		hold: { modifiers: ["ctrl", "alt"], key: "Backquote" },
-		paste_last: { modifiers: ["ctrl", "alt"], key: "Period" },
+		toggle: { modifiers: ["ctrl", "alt"], key: "Space", enabled: true },
+		hold: { modifiers: ["ctrl", "alt"], key: "Backquote", enabled: true },
+		paste_last: { modifiers: ["ctrl", "alt"], key: "Period", enabled: true },
 	};
 
 	it("returns null for a unique hotkey", () => {
 		const result = validateHotkeyNotDuplicate(
-			{ modifiers: ["ctrl", "shift"], key: "A" },
+			{ modifiers: ["ctrl", "shift"], key: "A", enabled: true },
 			allHotkeys,
 			"toggle",
 		);
@@ -155,7 +207,7 @@ describe("validateHotkeyNotDuplicate", () => {
 
 	it("returns null when using the same hotkey for the excluded type", () => {
 		const result = validateHotkeyNotDuplicate(
-			{ modifiers: ["ctrl", "alt"], key: "Space" },
+			{ modifiers: ["ctrl", "alt"], key: "Space", enabled: true },
 			allHotkeys,
 			"toggle",
 		);
@@ -164,7 +216,7 @@ describe("validateHotkeyNotDuplicate", () => {
 
 	it("returns error message for duplicate hotkey", () => {
 		const result = validateHotkeyNotDuplicate(
-			{ modifiers: ["ctrl", "alt"], key: "Backquote" },
+			{ modifiers: ["ctrl", "alt"], key: "Backquote", enabled: true },
 			allHotkeys,
 			"toggle",
 		);
@@ -173,7 +225,7 @@ describe("validateHotkeyNotDuplicate", () => {
 
 	it("detects case-insensitive duplicates", () => {
 		const result = validateHotkeyNotDuplicate(
-			{ modifiers: ["CTRL", "ALT"], key: "BACKQUOTE" },
+			{ modifiers: ["CTRL", "ALT"], key: "BACKQUOTE", enabled: true },
 			allHotkeys,
 			"toggle",
 		);

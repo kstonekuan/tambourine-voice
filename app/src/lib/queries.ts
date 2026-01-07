@@ -214,9 +214,49 @@ export function useResetHotkeysToDefaults() {
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["settings"] });
+			queryClient.invalidateQueries({ queryKey: ["shortcutErrors"] });
 		},
 		onError: (error) => {
 			console.error("Reset hotkeys failed:", error);
+		},
+	});
+}
+
+export function useShortcutErrors() {
+	return useQuery({
+		queryKey: ["shortcutErrors"],
+		queryFn: () => tauriAPI.getShortcutErrors(),
+		staleTime: 0, // Always refetch to get the latest errors
+	});
+}
+
+export function useSetHotkeyEnabled() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async ({
+			hotkeyType,
+			enabled,
+		}: {
+			hotkeyType: "toggle" | "hold" | "paste_last";
+			enabled: boolean;
+		}) => {
+			await tauriAPI.setHotkeyEnabled(hotkeyType, enabled);
+			const result = await tauriAPI.registerShortcuts();
+
+			// If enabling failed, throw an error so the UI can show it
+			if (enabled) {
+				const errorKey = `${hotkeyType}_error` as keyof typeof result.errors;
+				const registeredKey = `${hotkeyType}_registered` as keyof typeof result;
+				if (!result[registeredKey] && result.errors[errorKey]) {
+					throw new Error(result.errors[errorKey] as string);
+				}
+			}
+
+			return result;
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["settings"] });
+			queryClient.invalidateQueries({ queryKey: ["shortcutErrors"] });
 		},
 	});
 }

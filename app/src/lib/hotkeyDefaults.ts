@@ -23,16 +23,19 @@ export const DEFAULT_PASTE_LAST_KEY = "Period";
 export const DEFAULT_TOGGLE_HOTKEY: HotkeyConfig = {
 	modifiers: DEFAULT_HOTKEY_MODIFIERS,
 	key: DEFAULT_TOGGLE_KEY,
+	enabled: true,
 };
 
 /** Default hold-to-record hotkey config */
 export const DEFAULT_HOLD_HOTKEY: HotkeyConfig = {
 	modifiers: DEFAULT_HOTKEY_MODIFIERS,
 	key: DEFAULT_HOLD_KEY,
+	enabled: true,
 };
 
 /** Default paste last transcription hotkey config */
 export const DEFAULT_PASTE_LAST_HOTKEY: HotkeyConfig = {
 	modifiers: DEFAULT_HOTKEY_MODIFIERS,
 	key: DEFAULT_PASTE_LAST_KEY,
+	enabled: true,
 };

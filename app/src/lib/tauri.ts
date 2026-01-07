@@ -27,13 +27,30 @@ interface TypeTextResult {
 export interface HotkeyConfig {
 	modifiers: string[];
 	key: string;
+	enabled: boolean;
 }
 
 // Zod schema for HotkeyConfig validation
 export const HotkeyConfigSchema = z.object({
 	modifiers: z.array(z.string()),
 	key: z.string().min(1, "Key is required"),
+	enabled: z.boolean().default(true),
 });
+
+/// Tracks errors from shortcut registration attempts
+export interface ShortcutErrors {
+	toggle_error: string | null;
+	hold_error: string | null;
+	paste_last_error: string | null;
+}
+
+/// Result of shortcut registration attempt
+export interface ShortcutRegistrationResult {
+	toggle_registered: boolean;
+	hold_registered: boolean;
+	paste_last_registered: boolean;
+	errors: ShortcutErrors;
+}
 
 interface HistoryEntry {
 	id: string;
@@ -77,16 +94,19 @@ const DEFAULT_HOTKEY_MODIFIERS = ["ctrl", "alt"];
 export const defaultToggleHotkey: HotkeyConfig = {
 	modifiers: DEFAULT_HOTKEY_MODIFIERS,
 	key: "Space",
+	enabled: true,
 };
 
 export const defaultHoldHotkey: HotkeyConfig = {
 	modifiers: DEFAULT_HOTKEY_MODIFIERS,
 	key: "Backquote",
+	enabled: true,
 };
 
 export const defaultPasteLastHotkey: HotkeyConfig = {
 	modifiers: DEFAULT_HOTKEY_MODIFIERS,
 	key: "Period",
+	enabled: true,
 };
 
 // ============================================================================
@@ -299,12 +319,23 @@ export const tauriAPI = {
 		await store.save();
 	},
 
-	async registerShortcuts(): Promise<void> {
+	async registerShortcuts(): Promise<ShortcutRegistrationResult> {
 		return invoke("register_shortcuts");
 	},
 
 	async unregisterShortcuts(): Promise<void> {
 		return invoke("unregister_shortcuts");
+	},
+
+	async getShortcutErrors(): Promise<ShortcutErrors> {
+		return invoke("get_shortcut_errors");
+	},
+
+	async setHotkeyEnabled(
+		hotkeyType: "toggle" | "hold" | "paste_last",
+		enabled: boolean,
+	): Promise<void> {
+		return invoke("set_hotkey_enabled", { hotkeyType, enabled });
 	},
 
 	// History API

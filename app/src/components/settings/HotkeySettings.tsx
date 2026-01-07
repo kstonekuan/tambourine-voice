@@ -8,7 +8,9 @@ import {
 } from "../../lib/hotkeyDefaults";
 import {
 	useResetHotkeysToDefaults,
+	useSetHotkeyEnabled,
 	useSettings,
+	useShortcutErrors,
 	useUpdateHoldHotkey,
 	useUpdatePasteLastHotkey,
 	useUpdateToggleHotkey,
@@ -20,9 +22,11 @@ type RecordingInput = "toggle" | "hold" | "paste_last" | null;
 
 export function HotkeySettings() {
 	const { data: settings, isLoading } = useSettings();
+	const { data: shortcutErrors } = useShortcutErrors();
 	const updateToggleHotkey = useUpdateToggleHotkey();
 	const updateHoldHotkey = useUpdateHoldHotkey();
 	const updatePasteLastHotkey = useUpdatePasteLastHotkey();
+	const setHotkeyEnabled = useSetHotkeyEnabled();
 	const resetHotkeys = useResetHotkeysToDefaults();
 
 	// Track which input is currently recording (only one at a time)
@@ -33,6 +37,7 @@ export function HotkeySettings() {
 		updateToggleHotkey.error ||
 		updateHoldHotkey.error ||
 		updatePasteLastHotkey.error ||
+		setHotkeyEnabled.error ||
 		resetHotkeys.error;
 
 	const handleToggleHotkeyChange = (config: HotkeyConfig) => {
@@ -70,6 +75,12 @@ export function HotkeySettings() {
 					isRecording={recordingInput === "toggle"}
 					onStartRecording={() => setRecordingInput("toggle")}
 					onStopRecording={() => setRecordingInput(null)}
+					enabled={settings?.toggle_hotkey?.enabled ?? true}
+					onEnabledChange={(enabled) =>
+						setHotkeyEnabled.mutate({ hotkeyType: "toggle", enabled })
+					}
+					enabledLoading={setHotkeyEnabled.isPending}
+					registrationError={shortcutErrors?.toggle_error}
 				/>
 
 				<div style={{ marginTop: 20 }}>
@@ -82,6 +93,12 @@ export function HotkeySettings() {
 						isRecording={recordingInput === "hold"}
 						onStartRecording={() => setRecordingInput("hold")}
 						onStopRecording={() => setRecordingInput(null)}
+						enabled={settings?.hold_hotkey?.enabled ?? true}
+						onEnabledChange={(enabled) =>
+							setHotkeyEnabled.mutate({ hotkeyType: "hold", enabled })
+						}
+						enabledLoading={setHotkeyEnabled.isPending}
+						registrationError={shortcutErrors?.hold_error}
 					/>
 				</div>
 
@@ -95,6 +112,12 @@ export function HotkeySettings() {
 						isRecording={recordingInput === "paste_last"}
 						onStartRecording={() => setRecordingInput("paste_last")}
 						onStopRecording={() => setRecordingInput(null)}
+						enabled={settings?.paste_last_hotkey?.enabled ?? true}
+						onEnabledChange={(enabled) =>
+							setHotkeyEnabled.mutate({ hotkeyType: "paste_last", enabled })
+						}
+						enabledLoading={setHotkeyEnabled.isPending}
+						registrationError={shortcutErrors?.paste_last_error}
 					/>
 				</div>
 

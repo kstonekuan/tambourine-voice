@@ -29,6 +29,14 @@ pub struct HotkeyConfig {
     pub modifiers: Vec<String>,
     /// The main key (e.g., "Space")
     pub key: String,
+    /// Whether the hotkey is enabled (default: true)
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+}
+
+/// Default value for enabled field (used by serde)
+fn default_enabled() -> bool {
+    true
 }
 
 impl Default for HotkeyConfig {
@@ -39,6 +47,7 @@ impl Default for HotkeyConfig {
                 .map(|s| s.to_string())
                 .collect(),
             key: DEFAULT_TOGGLE_KEY.to_string(),
+            enabled: true,
         }
     }
 }
@@ -52,6 +61,7 @@ impl HotkeyConfig {
                 .map(|s| s.to_string())
                 .collect(),
             key: DEFAULT_TOGGLE_KEY.to_string(),
+            enabled: true,
         }
     }
 
@@ -63,6 +73,7 @@ impl HotkeyConfig {
                 .map(|s| s.to_string())
                 .collect(),
             key: DEFAULT_HOLD_KEY.to_string(),
+            enabled: true,
         }
     }
 
@@ -74,6 +85,7 @@ impl HotkeyConfig {
                 .map(|s| s.to_string())
                 .collect(),
             key: DEFAULT_PASTE_LAST_KEY.to_string(),
+            enabled: true,
         }
     }
 

@@ -1,4 +1,24 @@
+use serde::{Deserialize, Serialize};
 use std::sync::atomic::AtomicBool;
+use std::sync::RwLock;
+
+/// Tracks errors from shortcut registration attempts
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ShortcutErrors {
+    /// Error message if toggle shortcut failed to register
+    pub toggle_error: Option<String>,
+    /// Error message if hold shortcut failed to register
+    pub hold_error: Option<String>,
+    /// Error message if paste_last shortcut failed to register
+    pub paste_last_error: Option<String>,
+}
+
+impl ShortcutErrors {
+    /// Check if any shortcut has an error
+    pub fn has_any_error(&self) -> bool {
+        self.toggle_error.is_some() || self.hold_error.is_some() || self.paste_last_error.is_some()
+    }
+}
 
 #[derive(Default)]
 pub struct AppState {
@@ -10,4 +30,6 @@ pub struct AppState {
     pub paste_key_held: AtomicBool,
     /// Tracks if toggle key is currently held down (for debouncing - action happens on release)
     pub toggle_key_held: AtomicBool,
+    /// Tracks errors from shortcut registration attempts
+    pub shortcut_errors: RwLock<ShortcutErrors>,
 }

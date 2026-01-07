@@ -40,11 +40,16 @@ export function PromptSettings() {
 		dictionary: { enabled: false, content: "" },
 	});
 
-	// Track if each section has custom content
+	// Track if each section has custom content (non-null, non-empty string)
+	const mainContent = settings?.cleanup_prompt_sections?.main?.content;
+	const advancedContent = settings?.cleanup_prompt_sections?.advanced?.content;
+	const dictionaryContent =
+		settings?.cleanup_prompt_sections?.dictionary?.content;
+
 	const hasCustomContent = {
-		main: Boolean(settings?.cleanup_prompt_sections?.main?.content),
-		advanced: Boolean(settings?.cleanup_prompt_sections?.advanced?.content),
-		dictionary: Boolean(settings?.cleanup_prompt_sections?.dictionary?.content),
+		main: mainContent != null && mainContent !== "",
+		advanced: advancedContent != null && advancedContent !== "",
+		dictionary: dictionaryContent != null && dictionaryContent !== "",
 	};
 
 	// Sync local state with settings when loaded
