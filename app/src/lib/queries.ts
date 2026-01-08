@@ -92,8 +92,10 @@ export function useUpdateToggleHotkey() {
 			await tauriAPI.updateToggleHotkey(hotkey);
 			await tauriAPI.registerShortcuts();
 		},
-		onSuccess: () => {
+		onSettled: () => {
+			// Always refetch after mutation completes (success or failure)
 			queryClient.invalidateQueries({ queryKey: ["settings"] });
+			queryClient.refetchQueries({ queryKey: ["shortcutErrors"] });
 		},
 	});
 }
@@ -121,8 +123,10 @@ export function useUpdateHoldHotkey() {
 			await tauriAPI.updateHoldHotkey(hotkey);
 			await tauriAPI.registerShortcuts();
 		},
-		onSuccess: () => {
+		onSettled: () => {
+			// Always refetch after mutation completes (success or failure)
 			queryClient.invalidateQueries({ queryKey: ["settings"] });
+			queryClient.refetchQueries({ queryKey: ["shortcutErrors"] });
 		},
 	});
 }
@@ -150,8 +154,10 @@ export function useUpdatePasteLastHotkey() {
 			await tauriAPI.updatePasteLastHotkey(hotkey);
 			await tauriAPI.registerShortcuts();
 		},
-		onSuccess: () => {
+		onSettled: () => {
+			// Always refetch after mutation completes (success or failure)
 			queryClient.invalidateQueries({ queryKey: ["settings"] });
+			queryClient.refetchQueries({ queryKey: ["shortcutErrors"] });
 		},
 	});
 }
@@ -254,9 +260,11 @@ export function useSetHotkeyEnabled() {
 
 			return result;
 		},
-		onSuccess: () => {
+		onSettled: () => {
+			// Always refetch after mutation completes (success or failure)
+			// so shortcut errors are up to date
 			queryClient.invalidateQueries({ queryKey: ["settings"] });
-			queryClient.invalidateQueries({ queryKey: ["shortcutErrors"] });
+			queryClient.refetchQueries({ queryKey: ["shortcutErrors"] });
 		},
 	});
 }
