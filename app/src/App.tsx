@@ -1,7 +1,7 @@
 import { Kbd, Loader, NavLink, Text, Title, Tooltip } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { Home, Settings } from "lucide-react";
-import { useEffect, useState } from "react";
+import { AlertCircle, Home, Settings } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { HistoryFeed } from "./components/HistoryFeed";
 import { Logo } from "./components/Logo";
 import {
@@ -20,6 +20,7 @@ import {
 	useAvailableProvidersListener,
 	useRefreshServerQueriesOnConnect,
 	useSettings,
+	useShortcutErrors,
 } from "./lib/queries";
 import { type ConfigResponse, type HotkeyConfig, tauriAPI } from "./lib/tauri";
 import { useRecordingStore } from "./stores/recordingStore";
@@ -117,14 +118,31 @@ function Sidebar({
 	);
 }
 
-function HotkeyDisplay({ config }: { config: HotkeyConfig }) {
+function HotkeyDisplay({
+	config,
+	error,
+}: {
+	config: HotkeyConfig;
+	error?: string | null;
+}) {
 	const parts = [
 		...config.modifiers.map((m) => m.charAt(0).toUpperCase() + m.slice(1)),
 		config.key,
 	];
 
 	return (
-		<span className="kbd-combo">
+		<span
+			className="kbd-combo"
+			style={{ display: "flex", alignItems: "center", gap: 6 }}
+		>
+			{error && (
+				<Tooltip label={error} multiline w={250} withArrow position="top">
+					<AlertCircle
+						size={14}
+						style={{ color: "var(--mantine-color-yellow-6)", flexShrink: 0 }}
+					/>
+				</Tooltip>
+			)}
 			{parts.map((part, index) => (
 				<span key={part}>
 					<Kbd>{part}</Kbd>
@@ -137,6 +155,7 @@ function HotkeyDisplay({ config }: { config: HotkeyConfig }) {
 
 function InstructionsCard() {
 	const { data: settings } = useSettings();
+	const { data: shortcutErrors } = useShortcutErrors();
 
 	const toggleHotkey = settings?.toggle_hotkey ?? DEFAULT_TOGGLE_HOTKEY;
 	const holdHotkey = settings?.hold_hotkey ?? DEFAULT_HOLD_HOTKEY;
@@ -149,17 +168,26 @@ function InstructionsCard() {
 			<div className="instructions-methods">
 				<div className="instruction-method">
 					<span className="instruction-label">Toggle:</span>
-					<HotkeyDisplay config={toggleHotkey} />
+					<HotkeyDisplay
+						config={toggleHotkey}
+						error={shortcutErrors?.toggle_error}
+					/>
 					<span className="instruction-desc">Press to start/stop</span>
 				</div>
 				<div className="instruction-method">
 					<span className="instruction-label">Hold:</span>
-					<HotkeyDisplay config={holdHotkey} />
+					<HotkeyDisplay
+						config={holdHotkey}
+						error={shortcutErrors?.hold_error}
+					/>
 					<span className="instruction-desc">Hold to record</span>
 				</div>
 				<div className="instruction-method">
 					<span className="instruction-label">Paste:</span>
-					<HotkeyDisplay config={pasteLastHotkey} />
+					<HotkeyDisplay
+						config={pasteLastHotkey}
+						error={shortcutErrors?.paste_last_error}
+					/>
 					<span className="instruction-desc">Paste last result</span>
 				</div>
 			</div>
@@ -224,12 +252,38 @@ function formatSettingName(setting: string): string {
 export default function App() {
 	const [activeView, setActiveView] = useState<View>("home");
 	const connectionState = useRecordingStore((s) => s.state);
+	const hasShownConflictNotification = useRef(false);
 
 	// Listen for available providers from overlay window (must stay mounted)
 	useAvailableProvidersListener();
 
 	// Refresh server-side queries when connection is established
 	useRefreshServerQueriesOnConnect(connectionState);
+
+	// Fetch shortcut errors for startup notification
+	const { data: shortcutErrors } = useShortcutErrors();
+
+	// Show notification on startup if any hotkeys have conflicts
+	useEffect(() => {
+		if (hasShownConflictNotification.current) return;
+		if (!shortcutErrors) return;
+
+		const hasErrors =
+			shortcutErrors.toggle_error ||
+			shortcutErrors.hold_error ||
+			shortcutErrors.paste_last_error;
+
+		if (hasErrors) {
+			hasShownConflictNotification.current = true;
+			notifications.show({
+				title: "Hotkey Conflict Detected",
+				message:
+					"Some hotkeys were disabled due to conflicts. Check settings to resolve.",
+				color: "yellow",
+				autoClose: 5000,
+			});
+		}
+	}, [shortcutErrors]);
 
 	// Listen for config response events from overlay window and show notifications
 	useEffect(() => {

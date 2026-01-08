@@ -230,6 +230,8 @@ export function HotkeyInput({
 
 	const handleClick = () => {
 		if (disabled) return;
+		// Allow changing hotkey even when disabled (enabled=false)
+		// so user can fix conflicts
 
 		if (isRecording) {
 			// Clicking again cancels
@@ -309,13 +311,13 @@ export function HotkeyInput({
 			<button
 				type="button"
 				onClick={handleClick}
-				disabled={disabled || !enabled}
+				disabled={disabled}
 				className={`hotkey-display ${isRecording ? "capturing" : ""}`}
 				style={{
 					width: "100%",
 					marginTop: 8,
-					cursor: disabled || !enabled ? "not-allowed" : "pointer",
-					opacity: disabled || !enabled ? 0.5 : 1,
+					cursor: disabled ? "not-allowed" : "pointer",
+					opacity: disabled ? 0.5 : 1,
 				}}
 			>
 				{isRecording ? (
