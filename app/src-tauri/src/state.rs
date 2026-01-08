@@ -20,6 +20,15 @@ impl ShortcutErrors {
     }
 }
 
+/// Result of shortcut registration attempt
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShortcutRegistrationResult {
+    pub toggle_registered: bool,
+    pub hold_registered: bool,
+    pub paste_last_registered: bool,
+    pub errors: ShortcutErrors,
+}
+
 #[derive(Default)]
 pub struct AppState {
     /// Tracks if currently recording (for both toggle and hold modes)

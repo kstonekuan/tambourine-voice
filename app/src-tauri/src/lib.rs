@@ -484,11 +484,10 @@ fn build_global_shortcut_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
     tauri_plugin_global_shortcut::Builder::new().build()
 }
 
-/// Register shortcuts from store settings (called from setup() after store plugin is available)
-/// This function never fails - it handles errors gracefully by disabling conflicting shortcuts
+/// Core shortcut registration logic - used by both initial startup and re-registration command
 #[cfg(desktop)]
-fn register_initial_shortcuts(app: &AppHandle) {
-    use state::ShortcutErrors;
+pub(crate) fn do_register_shortcuts(app: &AppHandle) -> state::ShortcutRegistrationResult {
+    use state::{ShortcutErrors, ShortcutRegistrationResult};
     use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
     // Read hotkeys from store with defaults
@@ -500,7 +499,7 @@ fn register_initial_shortcuts(app: &AppHandle) {
         get_setting_from_store(app, "paste_last_hotkey", HotkeyConfig::default_paste_last());
 
     log::info!(
-        "Attempting to register shortcuts - Toggle: {} (enabled: {}), Hold: {} (enabled: {}), PasteLast: {} (enabled: {})",
+        "Registering shortcuts - Toggle: {} (enabled: {}), Hold: {} (enabled: {}), PasteLast: {} (enabled: {})",
         toggle_hotkey.to_shortcut_string(),
         toggle_hotkey.enabled,
         hold_hotkey.to_shortcut_string(),
@@ -510,19 +509,24 @@ fn register_initial_shortcuts(app: &AppHandle) {
     );
 
     let shortcut_manager = app.global_shortcut();
-    let mut errors = ShortcutErrors::default();
+    let _ = shortcut_manager.unregister_all();
+
+    let mut result = ShortcutRegistrationResult {
+        toggle_registered: false,
+        hold_registered: false,
+        paste_last_registered: false,
+        errors: ShortcutErrors::default(),
+    };
 
     // Helper to try registering a single shortcut
-    let try_register_shortcut = |hotkey: &mut HotkeyConfig,
-                                 shortcut_type: &str,
-                                 store_key: &str,
-                                 default_fn: fn() -> HotkeyConfig,
-                                 error_slot: &mut Option<String>| {
+    let try_register = |hotkey: &mut HotkeyConfig,
+                        name: &str,
+                        store_key: &str,
+                        default_fn: fn() -> HotkeyConfig,
+                        registered: &mut bool,
+                        error: &mut Option<String>| {
         if !hotkey.enabled {
-            log::info!(
-                "{} shortcut is disabled, skipping registration",
-                shortcut_type
-            );
+            log::info!("{} shortcut is disabled, skipping", name);
             return;
         }
 
@@ -531,64 +535,62 @@ fn register_initial_shortcuts(app: &AppHandle) {
             handle_shortcut_event(app_handle, shortcut, &event);
         }) {
             Ok(_) => {
-                log::info!("{} shortcut registered successfully", shortcut_type);
+                *registered = true;
+                log::info!("{} shortcut registered", name);
             }
             Err(e) => {
-                let error_msg = format!("Hotkey conflict: {}", e);
+                *error = Some(format!("Hotkey conflict: {}", e));
                 log::warn!(
-                    "Failed to register {} shortcut ({}): {}. Disabling hotkey.",
-                    shortcut_type,
-                    hotkey.to_shortcut_string(),
+                    "Failed to register {} shortcut: {}. Auto-disabling.",
+                    name,
                     e
                 );
-
-                // Store the error
-                *error_slot = Some(error_msg);
-
-                // Auto-disable the hotkey in settings
                 hotkey.enabled = false;
-                if let Err(save_err) = save_setting_to_store(app, store_key, hotkey) {
-                    log::error!(
-                        "Failed to save disabled {} hotkey: {}",
-                        shortcut_type,
-                        save_err
-                    );
-                }
+                let _ = save_setting_to_store(app, store_key, hotkey);
             }
         }
     };
 
-    // Register each shortcut individually
-    try_register_shortcut(
+    try_register(
         &mut toggle_hotkey,
         "Toggle",
         "toggle_hotkey",
         HotkeyConfig::default_toggle,
-        &mut errors.toggle_error,
+        &mut result.toggle_registered,
+        &mut result.errors.toggle_error,
     );
-    try_register_shortcut(
+    try_register(
         &mut hold_hotkey,
         "Hold",
         "hold_hotkey",
         HotkeyConfig::default_hold,
-        &mut errors.hold_error,
+        &mut result.hold_registered,
+        &mut result.errors.hold_error,
     );
-    try_register_shortcut(
+    try_register(
         &mut paste_last_hotkey,
         "PasteLast",
         "paste_last_hotkey",
         HotkeyConfig::default_paste_last,
-        &mut errors.paste_last_error,
+        &mut result.paste_last_registered,
+        &mut result.errors.paste_last_error,
     );
 
     // Store errors in app state
     if let Some(state) = app.try_state::<AppState>() {
         if let Ok(mut shortcut_errors) = state.shortcut_errors.write() {
-            *shortcut_errors = errors.clone();
+            *shortcut_errors = result.errors.clone();
         }
     }
 
-    if errors.has_any_error() {
+    result
+}
+
+/// Register shortcuts from store settings (called from setup() after store plugin is available)
+#[cfg(desktop)]
+fn register_initial_shortcuts(app: &AppHandle) {
+    let result = do_register_shortcuts(app);
+    if result.errors.has_any_error() {
         log::warn!("Some shortcuts failed to register. Check settings to resolve conflicts.");
     } else {
         log::info!("All shortcuts registered successfully");
