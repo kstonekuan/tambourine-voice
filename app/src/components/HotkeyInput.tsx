@@ -249,11 +249,8 @@ export function HotkeyInput({
 		.map((k) => formatKeyForDisplay(k));
 
 	// Determine if the toggle should be disabled
-	// Can't enable if there's a registration error (need to change hotkey first)
-	const hasRegistrationError =
-		registrationError !== null && registrationError !== undefined;
-	const toggleDisabled =
-		disabled || enabledLoading || (hasRegistrationError && !enabled);
+	// Allow enabling even with registration error (user may have fixed conflict externally)
+	const toggleDisabled = disabled || enabledLoading;
 
 	return (
 		<div>
@@ -291,7 +288,7 @@ export function HotkeyInput({
 					<Tooltip
 						label={
 							registrationError && !enabled
-								? "Change the hotkey to resolve the conflict first"
+								? "Try enabling (may fail if conflict still exists)"
 								: enabled
 									? "Disable this hotkey"
 									: "Enable this hotkey"

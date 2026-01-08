@@ -39,13 +39,30 @@ tauri_nspanel::tauri_panel! {
 }
 
 /// Normalize a shortcut string for comparison (handles "ctrl" vs "control" differences)
+/// Also handles Tauri's "keyX" format for letter keys (e.g., "keyv" -> "v")
 #[cfg(desktop)]
 pub(crate) fn normalize_shortcut_string(s: &str) -> String {
-    s.to_lowercase()
+    let normalized = s
+        .to_lowercase()
         .replace("ctrl", "control")
         .replace("cmd", "super")
         .replace("meta", "super")
-        .replace("win", "super")
+        .replace("win", "super");
+
+    // Handle Tauri's "keyX" format for letter keys (e.g., "control+alt+keyv" -> "control+alt+v")
+    // Split by '+', normalize each part, rejoin
+    normalized
+        .split('+')
+        .map(|part| {
+            // If part starts with "key" and is followed by a single letter, strip the "key" prefix
+            if part.starts_with("key") && part.len() == 4 {
+                &part[3..]
+            } else {
+                part
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("+")
 }
 
 /// Helper to read a setting from the store with a default fallback
