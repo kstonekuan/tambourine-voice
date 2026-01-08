@@ -132,7 +132,10 @@ function formatKeyForTauri(key: string): string {
 /**
  * Convert recorded keys Set to HotkeyConfig
  */
-function keysToConfig(keys: Set<string>): HotkeyConfig | null {
+function keysToConfig(
+	keys: Set<string>,
+	currentEnabled: boolean,
+): HotkeyConfig | null {
 	const keysArray = Array.from(keys);
 	const modifiers: string[] = [];
 	let mainKey: string | null = null;
@@ -154,7 +157,7 @@ function keysToConfig(keys: Set<string>): HotkeyConfig | null {
 	return {
 		modifiers,
 		key: formatKeyForTauri(mainKey),
-		enabled: true, // New hotkeys are enabled by default
+		enabled: currentEnabled, // Preserve current enabled state
 	};
 }
 
@@ -211,13 +214,13 @@ export function HotkeyInput({
 			return;
 		}
 
-		const config = keysToConfig(keys);
+		const config = keysToConfig(keys, value.enabled);
 		if (config) {
 			onChange(config);
 			stop();
 			onStopRecording?.();
 		}
-	}, [keys, isRecording, onChange, stop, onStopRecording]);
+	}, [keys, isRecording, onChange, stop, onStopRecording, value.enabled]);
 
 	// Sync internal recording state with external state
 	useEffect(() => {

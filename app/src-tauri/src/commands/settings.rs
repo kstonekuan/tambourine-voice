@@ -58,12 +58,12 @@ fn get_setting_from_store<T: serde::de::DeserializeOwned>(
 #[cfg(desktop)]
 #[tauri::command]
 pub async fn register_shortcuts(app: AppHandle) -> Result<ShortcutRegistrationResult, String> {
-    // Read hotkeys from store with defaults
-    let toggle_hotkey: HotkeyConfig =
+    // Read hotkeys from store with defaults (mutable for auto-disable on conflict)
+    let mut toggle_hotkey: HotkeyConfig =
         get_setting_from_store(&app, "toggle_hotkey", HotkeyConfig::default_toggle());
-    let hold_hotkey: HotkeyConfig =
+    let mut hold_hotkey: HotkeyConfig =
         get_setting_from_store(&app, "hold_hotkey", HotkeyConfig::default_hold());
-    let paste_last_hotkey: HotkeyConfig = get_setting_from_store(
+    let mut paste_last_hotkey: HotkeyConfig = get_setting_from_store(
         &app,
         "paste_last_hotkey",
         HotkeyConfig::default_paste_last(),
@@ -106,7 +106,10 @@ pub async fn register_shortcuts(app: AppHandle) -> Result<ShortcutRegistrationRe
             }
             Err(e) => {
                 result.errors.toggle_error = Some(format!("Hotkey conflict: {}", e));
-                log::warn!("Failed to register toggle shortcut: {}", e);
+                log::warn!("Failed to register toggle shortcut: {}. Auto-disabling.", e);
+                // Auto-disable the hotkey on conflict
+                toggle_hotkey.enabled = false;
+                let _ = crate::save_setting_to_store(&app, "toggle_hotkey", &toggle_hotkey);
             }
         }
     }
@@ -123,7 +126,10 @@ pub async fn register_shortcuts(app: AppHandle) -> Result<ShortcutRegistrationRe
             }
             Err(e) => {
                 result.errors.hold_error = Some(format!("Hotkey conflict: {}", e));
-                log::warn!("Failed to register hold shortcut: {}", e);
+                log::warn!("Failed to register hold shortcut: {}. Auto-disabling.", e);
+                // Auto-disable the hotkey on conflict
+                hold_hotkey.enabled = false;
+                let _ = crate::save_setting_to_store(&app, "hold_hotkey", &hold_hotkey);
             }
         }
     }
@@ -140,7 +146,13 @@ pub async fn register_shortcuts(app: AppHandle) -> Result<ShortcutRegistrationRe
             }
             Err(e) => {
                 result.errors.paste_last_error = Some(format!("Hotkey conflict: {}", e));
-                log::warn!("Failed to register paste_last shortcut: {}", e);
+                log::warn!(
+                    "Failed to register paste_last shortcut: {}. Auto-disabling.",
+                    e
+                );
+                // Auto-disable the hotkey on conflict
+                paste_last_hotkey.enabled = false;
+                let _ = crate::save_setting_to_store(&app, "paste_last_hotkey", &paste_last_hotkey);
             }
         }
     }

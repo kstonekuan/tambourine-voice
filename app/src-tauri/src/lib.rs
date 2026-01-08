@@ -81,7 +81,7 @@ fn get_setting_from_store<T: serde::de::DeserializeOwned>(
 
 /// Save a setting to the store
 #[cfg(desktop)]
-fn save_setting_to_store<T: serde::Serialize>(
+pub(crate) fn save_setting_to_store<T: serde::Serialize>(
     app: &AppHandle,
     key: &str,
     value: &T,
