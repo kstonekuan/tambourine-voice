@@ -125,6 +125,7 @@ function HotkeyDisplay({
 	config: HotkeyConfig;
 	error?: string | null;
 }) {
+	const isDisabled = config.enabled === false;
 	const parts = [
 		...config.modifiers.map((m) => m.charAt(0).toUpperCase() + m.slice(1)),
 		config.key,
@@ -133,7 +134,12 @@ function HotkeyDisplay({
 	return (
 		<span
 			className="kbd-combo"
-			style={{ display: "flex", alignItems: "center", gap: 6 }}
+			style={{
+				display: "flex",
+				alignItems: "center",
+				gap: 6,
+				opacity: isDisabled ? 0.5 : 1,
+			}}
 		>
 			{error && (
 				<Tooltip label={error} multiline w={250} withArrow position="top">
@@ -142,6 +148,11 @@ function HotkeyDisplay({
 						style={{ color: "var(--mantine-color-yellow-6)", flexShrink: 0 }}
 					/>
 				</Tooltip>
+			)}
+			{isDisabled && !error && (
+				<span style={{ color: "var(--text-tertiary)", fontSize: 12 }}>
+					(Disabled)
+				</span>
 			)}
 			{parts.map((part, index) => (
 				<span key={part}>
