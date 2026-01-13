@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     whisper_enabled: bool = Field(
         False, description="Enable local Whisper STT (requires model setup)"
     )
+    nemotron_asr_url: str | None = Field(
+        None, description="Nemotron ASR WebSocket URL (ws:// or wss://)"
+    )
 
     # LLM API Keys (at least one required)
     openai_api_key: str | None = Field(None, description="OpenAI API key for LLM")

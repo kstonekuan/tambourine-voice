@@ -26,6 +26,7 @@ from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.processors.frameworks.rtvi import RTVIServerMessageFrame
 from pipecat.transcriptions.language import Language
 
+from processors.frames import FinalizeSTTFrame
 from utils.logger import logger
 
 # Default timeout for waiting for STT transcriptions (can be overridden at runtime)
@@ -196,6 +197,10 @@ class TranscriptionBufferProcessor(FrameProcessor):
                         f"Stop-recording received, waiting for speech to stop "
                         f"(buffer: '{buffer.strip()}')"
                     )
+                    # Signal STT to finalize any pending transcription
+                    # This handles the case where user stops recording mid-speech
+                    # (before VAD detects silence)
+                    await self.push_frame(FinalizeSTTFrame(), FrameDirection.UPSTREAM)
                     self._state = WaitingForSTTState(
                         buffer=state.buffer,
                         user_id=state.user_id,

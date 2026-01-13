@@ -31,6 +31,9 @@ from pipecat.services.speechmatics.stt import SpeechmaticsSTTService
 from pipecat.services.stt_service import STTService
 from pipecat.services.whisper.stt import WhisperSTTService
 
+# Custom service for Nemotron ASR
+from services.nvidia_stt import NVidiaWebSocketSTTService
+
 if TYPE_CHECKING:
     from config.settings import Settings
 
@@ -51,6 +54,7 @@ class STTProviderId(StrEnum):
     DEEPGRAM = "deepgram"
     GOOGLE = "google"
     GROQ = "groq"
+    NEMOTRON = "nemotron"
     OPENAI = "openai"
     WHISPER = "whisper"
 
@@ -288,6 +292,15 @@ STT_PROVIDERS: Final[dict[STTProviderId, STTProviderConfig]] = {
         display_name="Groq",
         service_class=GroqSTTService,
         credential_mapper=ApiKeyMapper("groq_api_key"),
+    ),
+    STTProviderId.NEMOTRON: STTProviderConfig(
+        provider_id=STTProviderId.NEMOTRON,
+        display_name="Nemotron ASR",
+        service_class=NVidiaWebSocketSTTService,
+        credential_mapper=NoAuthMapper(
+            availability_fields=("nemotron_asr_url",),
+            field_mapping={"nemotron_asr_url": "url"},
+        ),
     ),
     STTProviderId.OPENAI: STTProviderConfig(
         provider_id=STTProviderId.OPENAI,
