@@ -60,11 +60,8 @@ export const useRecordingStore = create<RecordingState>((set, get) => ({
 		try {
 			client.sendClientMessage("start-recording", {});
 
-			// Re-acquire mic track if it was stopped (uses replaceTrack internally)
-			const selectedMic = client.selectedMic;
-			if (selectedMic) {
-				await client.updateMic(selectedMic.deviceId);
-			}
+			// Note: updateMic() is called in onStartRecording before this function,
+			// so the mic track is already acquired by the time we get here
 
 			client.enableMic(true);
 			set({ state: "recording" });

@@ -121,6 +121,8 @@ export function useUpdateSelectedMic() {
 		mutationFn: (micId: string | null) => tauriAPI.updateSelectedMic(micId),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["settings"] });
+			// Notify overlay window about settings change
+			tauriAPI.emitSettingsChanged();
 		},
 	});
 }
