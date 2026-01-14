@@ -657,6 +657,16 @@ export default function OverlayApp() {
 		pipecatClient
 			.initDevices()
 			.then(() => {
+				// Stop the audio track to release the microphone
+				// initDevices() acquires the mic to enumerate devices, but we don't need it active until recording starts
+				try {
+					const tracks = pipecatClient.tracks();
+					if (tracks?.local?.audio) {
+						tracks.local.audio.stop();
+					}
+				} catch (error) {
+					console.warn("[Pipecat] Failed to stop initial audio track:", error);
+				}
 				setDevicesReady(true);
 			})
 			.catch((error: unknown) => {
