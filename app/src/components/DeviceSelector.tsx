@@ -18,7 +18,14 @@ export function DeviceSelector() {
 		async function loadDevices() {
 			try {
 				// Request permission first (needed to get device labels)
-				await navigator.mediaDevices.getUserMedia({ audio: true });
+				const stream = await navigator.mediaDevices.getUserMedia({
+					audio: true,
+				});
+
+				// Stop the audio track immediately to release the microphone
+				for (const track of stream.getTracks()) {
+					track.stop();
+				}
 
 				const allDevices = await navigator.mediaDevices.enumerateDevices();
 				const audioInputs = allDevices
