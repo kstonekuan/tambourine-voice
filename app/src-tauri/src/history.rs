@@ -5,6 +5,8 @@ use std::path::PathBuf;
 use std::sync::RwLock;
 use uuid::Uuid;
 
+const MAX_HISTORY_ENTRIES: usize = 500;
+
 /// A single dictation history entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryEntry {
@@ -40,12 +42,10 @@ impl HistoryStorage {
     pub fn new(app_data_dir: PathBuf) -> Self {
         let file_path = app_data_dir.join("history.json");
 
-        // Ensure the directory exists
         if let Some(parent) = file_path.parent() {
             let _ = fs::create_dir_all(parent);
         }
 
-        // Load existing history or use empty
         let data = Self::load_from_file(&file_path).unwrap_or_default();
 
         Self {
@@ -85,12 +85,10 @@ impl HistoryStorage {
                 .write()
                 .map_err(|e| format!("Failed to write history: {}", e))?;
 
-            // Add to the beginning (newest first)
             data.entries.insert(0, entry.clone());
 
-            // Limit to 500 entries
-            if data.entries.len() > 500 {
-                data.entries.truncate(500);
+            if data.entries.len() > MAX_HISTORY_ENTRIES {
+                data.entries.truncate(MAX_HISTORY_ENTRIES);
             }
         }
         self.save()?;

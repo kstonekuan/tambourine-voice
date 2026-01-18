@@ -8,6 +8,7 @@ import { z } from "zod";
 export type ConnectionState =
 	| "disconnected"
 	| "connecting"
+	| "reconnecting"
 	| "idle"
 	| "recording"
 	| "processing";
@@ -109,10 +110,6 @@ export const defaultPasteLastHotkey: HotkeyConfig = {
 	enabled: true,
 };
 
-// ============================================================================
-// Store helpers
-// ============================================================================
-
 let storeInstance: Store | null = null;
 
 async function getStore(): Promise<Store> {
@@ -185,10 +182,6 @@ export function validateHotkeyNotDuplicate(
 	}
 	return null;
 }
-
-// ============================================================================
-// Tauri API
-// ============================================================================
 
 export const tauriAPI = {
 	async typeText(text: string): Promise<TypeTextResult> {
@@ -437,6 +430,32 @@ export const tauriAPI = {
 		});
 	},
 
+	// Reconnection status (overlay -> main)
+	async emitReconnectStarted(): Promise<void> {
+		return emit("reconnect-started", {});
+	},
+
+	async onReconnectStarted(callback: () => void): Promise<UnlistenFn> {
+		return listen("reconnect-started", () => {
+			callback();
+		});
+	},
+
+	async emitReconnectResult(success: boolean, error?: string): Promise<void> {
+		return emit("reconnect-result", { success, error });
+	},
+
+	async onReconnectResult(
+		callback: (result: { success: boolean; error?: string }) => void,
+	): Promise<UnlistenFn> {
+		return listen<{ success: boolean; error?: string }>(
+			"reconnect-result",
+			(event) => {
+				callback(event.payload);
+			},
+		);
+	},
+
 	// Config response sync between windows (overlay -> main)
 	async emitConfigResponse(response: ConfigResponse): Promise<void> {
 		return emit("config-response", response);
@@ -463,10 +482,6 @@ export const tauriAPI = {
 		});
 	},
 };
-
-// ============================================================================
-// Config API (FastAPI backend) - using ky HTTP client
-// ============================================================================
 
 export interface DefaultSectionsResponse {
 	main: string;
@@ -506,6 +521,4 @@ export const configAPI = {
 			.get("api/prompt/sections/default")
 			.json<DefaultSectionsResponse>();
 	},
-	// Note: Provider info now comes via RTVI message after WebRTC connection
-	// Use tauriAPI.onAvailableProviders() to listen for provider data
 };

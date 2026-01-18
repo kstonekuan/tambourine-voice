@@ -200,7 +200,6 @@ async def run_pipeline(
         if not msg_type:
             return
 
-        # Handle recording control messages
         if msg_type == "start-recording":
             await turn_controller.start_recording()
             return
@@ -208,7 +207,6 @@ async def run_pipeline(
             await turn_controller.stop_recording()
             return
 
-        # Handle configuration messages
         await config_handler.handle_client_message(msg_type, data)
 
     # Build pipeline - RTVIProcessor at the start handles RTVI protocol
@@ -325,7 +323,6 @@ async def lifespan(fastapi_app: FastAPI):  # noqa: ANN201
 # Create FastAPI app
 app = FastAPI(title="Tambourine Server", lifespan=lifespan)
 
-# CORS for Tauri frontend
 app.add_middleware(
     CORSMiddleware,  # type: ignore[invalid-argument-type]
     allow_origins=["*"],

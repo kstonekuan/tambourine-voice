@@ -19,7 +19,6 @@ from processors.llm import (
     MAIN_PROMPT_DEFAULT,
 )
 
-# Create router for config endpoints
 config_router = APIRouter()
 
 

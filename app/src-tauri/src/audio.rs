@@ -11,9 +11,9 @@ pub enum SoundType {
     RecordingStop,
 }
 
-// Embed audio files at compile time
 const START_SOUND: &[u8] = include_bytes!("assets/start.mp3");
 const STOP_SOUND: &[u8] = include_bytes!("assets/stop.mp3");
+const DEFAULT_AUDIO_PLAYBACK_DURATION_MS: u64 = 500;
 
 /// Play a sound effect (non-blocking)
 pub fn play_sound(sound_type: SoundType) {
@@ -37,10 +37,9 @@ fn play_sound_blocking(
     let cursor = Cursor::new(sound_data);
     let source = Decoder::new(cursor)?.amplify(0.3);
 
-    // Get duration for sleep, default to 500ms if unknown
     let duration = source
         .total_duration()
-        .unwrap_or(Duration::from_millis(500));
+        .unwrap_or(Duration::from_millis(DEFAULT_AUDIO_PLAYBACK_DURATION_MS));
 
     stream.mixer().add(source);
     thread::sleep(duration + Duration::from_millis(50));

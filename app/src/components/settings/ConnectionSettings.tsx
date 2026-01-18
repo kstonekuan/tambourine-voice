@@ -1,4 +1,5 @@
 import { Button, Loader, TextInput } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import { Check, RefreshCw, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useSettings, useUpdateServerUrl } from "../../lib/queries";
@@ -13,17 +14,15 @@ export function ConnectionSettings() {
 	const [localUrl, setLocalUrl] = useState<string | null>(null);
 	const [pingStatus, setPingStatus] = useState<PingStatus>("idle");
 
-	// Connection state from store
 	const connectionState = useRecordingStore((s) => s.state);
-	const setConnectionState = useRecordingStore((s) => s.setState);
+	const setState = useRecordingStore((s) => s.setState);
 
-	// Listen for connection state changes from the overlay window
 	useEffect(() => {
 		let unlisten: (() => void) | undefined;
 
 		const setup = async () => {
 			unlisten = await tauriAPI.onConnectionStateChanged((newState) => {
-				setConnectionState(newState);
+				setState(newState);
 			});
 		};
 
@@ -32,7 +31,30 @@ export function ConnectionSettings() {
 		return () => {
 			unlisten?.();
 		};
-	}, [setConnectionState]);
+	}, [setState]);
+
+	useEffect(() => {
+		let unlisten: (() => void) | undefined;
+
+		const setup = async () => {
+			unlisten = await tauriAPI.onReconnectResult((result) => {
+				if (!result.success) {
+					notifications.show({
+						title: "Reconnection Failed",
+						message: result.error || "Could not reconnect to the server",
+						color: "red",
+						autoClose: 5000,
+					});
+				}
+			});
+		};
+
+		setup();
+
+		return () => {
+			unlisten?.();
+		};
+	}, []);
 
 	// Use local state if user is editing, otherwise use saved value
 	const displayUrl = localUrl ?? settings?.server_url ?? DEFAULT_SERVER_URL;
@@ -96,6 +118,8 @@ export function ConnectionSettings() {
 
 	// Connection state display helpers
 	const isConnecting = connectionState === "connecting";
+	const isReconnecting = connectionState === "reconnecting";
+	const isButtonDisabled = isConnecting || isReconnecting;
 
 	const getStateDisplay = () => {
 		switch (connectionState) {
@@ -104,6 +128,11 @@ export function ConnectionSettings() {
 			case "connecting":
 				return {
 					text: "Connecting...",
+					color: "var(--mantine-color-yellow-6)",
+				};
+			case "reconnecting":
+				return {
+					text: "Reconnecting...",
 					color: "var(--mantine-color-yellow-6)",
 				};
 			case "idle":
@@ -138,7 +167,7 @@ export function ConnectionSettings() {
 					<div>
 						<p className="settings-label">Status</p>
 						<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-							{isConnecting ? (
+							{isConnecting || isReconnecting ? (
 								<Loader size={12} color="yellow" />
 							) : (
 								<span
@@ -164,13 +193,14 @@ export function ConnectionSettings() {
 					</div>
 					<Button
 						onClick={handleReconnect}
-						disabled={isConnecting}
+						disabled={isButtonDisabled}
+						loading={isReconnecting}
 						size="sm"
 						variant="light"
 						color="gray"
-						leftSection={<RefreshCw size={14} />}
+						leftSection={!isReconnecting && <RefreshCw size={14} />}
 					>
-						Reconnect
+						{isReconnecting ? "Reconnecting..." : "Reconnect"}
 					</Button>
 				</div>
 			</div>

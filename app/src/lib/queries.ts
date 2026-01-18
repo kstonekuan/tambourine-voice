@@ -4,18 +4,12 @@ import { useEffect, useRef } from "react";
 import {
 	type AvailableProvidersData,
 	type CleanupPromptSections,
+	type ConnectionState,
 	configAPI,
 	type HotkeyConfig,
 	tauriAPI,
 	validateHotkeyNotDuplicate,
 } from "./tauri";
-
-type ConnectionState =
-	| "disconnected"
-	| "connecting"
-	| "idle"
-	| "recording"
-	| "processing";
 
 /**
  * Hook to refresh all server-side queries when connection is established.
@@ -28,15 +22,16 @@ export function useRefreshServerQueriesOnConnect(
 	const previousStateRef = useRef(connectionState);
 
 	useEffect(() => {
-		const wasDisconnected =
+		const wasPreviouslyDisconnected =
 			previousStateRef.current === "disconnected" ||
-			previousStateRef.current === "connecting";
-		const isNowConnected =
+			previousStateRef.current === "connecting" ||
+			previousStateRef.current === "reconnecting";
+		const isCurrentlyConnected =
 			connectionState === "idle" ||
 			connectionState === "recording" ||
 			connectionState === "processing";
 
-		if (wasDisconnected && isNowConnected) {
+		if (wasPreviouslyDisconnected && isCurrentlyConnected) {
 			// Invalidate server-side queries (static data that may have changed)
 			queryClient.invalidateQueries({ queryKey: ["availableProviders"] });
 			queryClient.invalidateQueries({ queryKey: ["defaultSections"] });
@@ -121,7 +116,6 @@ export function useUpdateSelectedMic() {
 		mutationFn: (micId: string | null) => tauriAPI.updateSelectedMic(micId),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["settings"] });
-			// Notify overlay window about settings change
 			tauriAPI.emitSettingsChanged();
 		},
 	});

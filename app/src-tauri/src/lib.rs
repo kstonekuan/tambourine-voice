@@ -117,7 +117,6 @@ fn start_recording(
         // Brief delay to let sound play before muting
         std::thread::sleep(std::time::Duration::from_millis(150));
     }
-    // Mute system audio if enabled
     if auto_mute_audio {
         if let Some(manager) = audio_mute_manager {
             if let Err(e) = manager.mute() {
@@ -454,7 +453,12 @@ pub fn run() {
                         panel.set_style_mask(style.value());
 
                         // Force the panel to re-register with the window server after setting behaviors
-                        // This ensures the collection behavior takes effect immediately
+                        // A hide/show cycle is more reliable than order_front_regardless alone
+                        // This mimics what happens when dragging the window - the window server
+                        // re-evaluates and properly applies the collection behavior
+                        panel.hide();
+                        std::thread::sleep(std::time::Duration::from_millis(50));
+                        panel.show();
                         panel.order_front_regardless();
 
                         log::info!("[NSPanel] Successfully converted overlay to NSPanel");
