@@ -26,6 +26,7 @@ import {
 } from "./contexts/ConnectionContext";
 import { useNativeAudioTrack } from "./hooks/useNativeAudioTrack";
 import { useAddHistoryEntry, useSettings, useTypeText } from "./lib/queries";
+import { safeSendClientMessage } from "./lib/safeSendClientMessage";
 import { type CleanupPromptSections, tauriAPI } from "./lib/tauri";
 import "./overlay-global.css";
 
@@ -82,9 +83,20 @@ type ConfigMessage =
 function sendConfigMessages(
 	client: PipecatClient,
 	messages: NonEmptyArray<ConfigMessage>,
+	onCommunicationError?: (error: string) => void,
 ) {
 	for (const { type, data } of messages) {
-		client.sendClientMessage(type, data);
+		const result = safeSendClientMessage(
+			client,
+			type,
+			data,
+			onCommunicationError,
+		);
+		// If a message fails to send, stop sending further messages
+		// The reconnection will handle re-syncing all settings
+		if (!result.success) {
+			break;
+		}
 	}
 }
 
@@ -266,7 +278,10 @@ function RecordingControl() {
 
 				// Signal server to start turn management
 				// This is required for server-side buffer management and turn detection
-				client.sendClientMessage("start-recording", {});
+				// Use safe send to detect communication failures and trigger reconnection
+				safeSendClientMessage(client, "start-recording", {}, (error) =>
+					send({ type: "COMMUNICATION_ERROR", error }),
+				);
 			}
 		} catch (error) {
 			console.warn("[Recording] Failed to start recording:", error);
@@ -311,7 +326,10 @@ function RecordingControl() {
 
 			// Signal server to process the recorded audio
 			// This is required for server-side turn completion
-			client.sendClientMessage("stop-recording", {});
+			// Use safe send to detect communication failures and trigger reconnection
+			safeSendClientMessage(client, "stop-recording", {}, (error) =>
+				send({ type: "COMMUNICATION_ERROR", error }),
+			);
 		}
 	}, [client, displayState, stopNativeCapture, send, startResponseTimeout]);
 
@@ -521,13 +539,26 @@ function RecordingControl() {
 		if (!hasInitialSyncRef.current) {
 			hasInitialSyncRef.current = true;
 
+			// Error handler for communication failures during sync
+			const handleCommunicationError = (error: string) =>
+				send({ type: "COMMUNICATION_ERROR", error });
+
 			// Request available providers (for settings UI in main window)
-			client.sendClientMessage("get-available-providers", {});
+			safeSendClientMessage(
+				client,
+				"get-available-providers",
+				{},
+				handleCommunicationError,
+			);
 
 			// Send all current settings
 			const messages = buildConfigMessages(settings);
 			if (messages.length > 0) {
-				sendConfigMessages(client, messages as NonEmptyArray<ConfigMessage>);
+				sendConfigMessages(
+					client,
+					messages as NonEmptyArray<ConfigMessage>,
+					handleCommunicationError,
+				);
 			}
 			return;
 		}
@@ -537,9 +568,13 @@ function RecordingControl() {
 
 		const messages = buildConfigMessages(settings, prevSettings);
 		if (messages.length > 0) {
-			sendConfigMessages(client, messages as NonEmptyArray<ConfigMessage>);
+			sendConfigMessages(
+				client,
+				messages as NonEmptyArray<ConfigMessage>,
+				(error) => send({ type: "COMMUNICATION_ERROR", error }),
+			);
 		}
-	}, [client, displayState, settings, buildConfigMessages]);
+	}, [client, displayState, settings, buildConfigMessages, send]);
 
 	// LLM text streaming handlers (using official RTVI protocol via RTVIObserver)
 	useRTVIClientEvent(
@@ -630,9 +665,26 @@ function RecordingControl() {
 
 	useRTVIClientEvent(
 		RTVIEvent.Error,
-		useCallback((error: unknown) => {
-			console.error("[Pipecat] Error:", error);
-		}, []),
+		useCallback(
+			(error: unknown) => {
+				console.error("[Pipecat] Error:", error);
+
+				// Check if this is a fatal error that requires reconnection
+				const errorData = error as {
+					data?: { message?: string; fatal?: boolean };
+				};
+				if (errorData?.data?.fatal) {
+					console.warn(
+						"[Pipecat] Fatal error detected, triggering reconnection",
+					);
+					send({
+						type: "COMMUNICATION_ERROR",
+						error: errorData.data.message ?? "Fatal error",
+					});
+				}
+			},
+			[send],
+		),
 	);
 
 	useRTVIClientEvent(

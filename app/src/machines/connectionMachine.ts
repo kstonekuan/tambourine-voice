@@ -38,7 +38,8 @@ type ConnectionEvents =
 	| { type: "START_RECORDING" }
 	| { type: "STOP_RECORDING" }
 	| { type: "RESPONSE_RECEIVED" }
-	| { type: "SERVER_URL_CHANGED"; serverUrl: string };
+	| { type: "SERVER_URL_CHANGED"; serverUrl: string }
+	| { type: "COMMUNICATION_ERROR"; error: string };
 
 // Actor that creates a fresh PipecatClient instance
 const createClientActor = fromPromise<PipecatClient, void>(async () => {
@@ -182,17 +183,25 @@ export const connectionMachine = setup({
 			tauriAPI.emitReconnectResult(params.success, params.error);
 		},
 		// Clean up client resources (mic, tracks, connection)
+		// IMPORTANT: Close the RTCPeerConnection directly first to prevent the library's
+		// internal event handlers from trying to send messages during graceful shutdown.
+		// Without this, track-ended events trigger sends on an already-closing data channel,
+		// causing InvalidStateError in the library code.
 		cleanupClient: ({ context }): void => {
 			if (context.client) {
 				try {
-					context.client.enableMic(false);
-					const tracks = context.client.tracks();
-					if (tracks?.local?.audio) {
-						tracks.local.audio.stop();
+					// Close peer connection immediately to prevent internal sends
+					const transport = context.client.transport as SmallWebRTCTransport;
+					const peerConnection = (
+						transport as unknown as { pc?: RTCPeerConnection }
+					).pc;
+					if (peerConnection) {
+						peerConnection.close();
 					}
 				} catch {
-					// Ignore cleanup errors
+					// Ignore errors - peer connection may not exist yet
 				}
+				// Still call disconnect for any remaining cleanup (state reset, etc.)
 				context.client.disconnect().catch(() => {});
 			}
 		},
@@ -299,6 +308,10 @@ export const connectionMachine = setup({
 			},
 			on: {
 				DISCONNECTED: "retrying",
+				COMMUNICATION_ERROR: {
+					target: "retrying",
+					actions: "cleanupClient",
+				},
 				START_RECORDING: "recording",
 				SERVER_URL_CHANGED: {
 					target: "initializing",
@@ -340,6 +353,10 @@ export const connectionMachine = setup({
 					target: "retrying",
 					actions: "cleanupClient",
 				},
+				COMMUNICATION_ERROR: {
+					target: "retrying",
+					actions: "cleanupClient",
+				},
 				STOP_RECORDING: "processing",
 			},
 		},
@@ -359,6 +376,10 @@ export const connectionMachine = setup({
 			},
 			on: {
 				DISCONNECTED: {
+					target: "retrying",
+					actions: "cleanupClient",
+				},
+				COMMUNICATION_ERROR: {
 					target: "retrying",
 					actions: "cleanupClient",
 				},

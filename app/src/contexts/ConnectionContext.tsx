@@ -43,28 +43,39 @@ export function ConnectionProvider({ children }: ConnectionProviderProps) {
 
 	// Listen for manual reconnect requests from main window
 	useEffect(() => {
+		let isCancelled = false;
 		let unlisten: (() => void) | undefined;
 
 		const setup = async () => {
-			unlisten = await tauriAPI.onReconnect(() => {
+			const unlistenFn = await tauriAPI.onReconnect(() => {
 				console.log("[XState] Manual reconnect requested");
 				connectionActor.send({ type: "RECONNECT" });
 			});
+
+			// Handle React Strict Mode: if effect was already cleaned up
+			// while async setup was in progress, clean up immediately
+			if (isCancelled) {
+				unlistenFn();
+			} else {
+				unlisten = unlistenFn;
+			}
 		};
 
 		setup();
 
 		return () => {
+			isCancelled = true;
 			unlisten?.();
 		};
 	}, []);
 
 	// Listen for settings changes that may require reconnection
 	useEffect(() => {
+		let isCancelled = false;
 		let unlisten: (() => void) | undefined;
 
 		const setup = async () => {
-			unlisten = await tauriAPI.onSettingsChanged(async () => {
+			const unlistenFn = await tauriAPI.onSettingsChanged(async () => {
 				// Check if server URL changed
 				const newUrl = await tauriAPI.getServerUrl();
 				const currentState = connectionActor.getSnapshot();
@@ -85,11 +96,20 @@ export function ConnectionProvider({ children }: ConnectionProviderProps) {
 					}
 				}
 			});
+
+			// Handle React Strict Mode: if effect was already cleaned up
+			// while async setup was in progress, clean up immediately
+			if (isCancelled) {
+				unlistenFn();
+			} else {
+				unlisten = unlistenFn;
+			}
 		};
 
 		setup();
 
 		return () => {
+			isCancelled = true;
 			unlisten?.();
 		};
 	}, []);
