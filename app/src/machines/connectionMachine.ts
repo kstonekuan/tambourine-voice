@@ -41,6 +41,21 @@ type ConnectionEvents =
 	| { type: "SERVER_URL_CHANGED"; serverUrl: string }
 	| { type: "COMMUNICATION_ERROR"; error: string };
 
+/**
+ * Closes the RTCPeerConnection immediately to prevent the library's internal
+ * event handlers from sending messages during disconnect (which causes errors).
+ */
+function closePeerConnectionImmediately(client: PipecatClient): void {
+	try {
+		const transport = client.transport as SmallWebRTCTransport;
+		const peerConnection = (transport as unknown as { pc?: RTCPeerConnection })
+			.pc;
+		peerConnection?.close();
+	} catch {
+		// Peer connection may not exist yet
+	}
+}
+
 // Actor that creates a fresh PipecatClient instance
 const createClientActor = fromPromise<PipecatClient, void>(async () => {
 	const transport = new SmallWebRTCTransport({
@@ -182,28 +197,11 @@ export const connectionMachine = setup({
 		): void => {
 			tauriAPI.emitReconnectResult(params.success, params.error);
 		},
-		// Clean up client resources (mic, tracks, connection)
-		// IMPORTANT: Close the RTCPeerConnection directly first to prevent the library's
-		// internal event handlers from trying to send messages during graceful shutdown.
-		// Without this, track-ended events trigger sends on an already-closing data channel,
-		// causing InvalidStateError in the library code.
 		cleanupClient: ({ context }): void => {
-			if (context.client) {
-				try {
-					// Close peer connection immediately to prevent internal sends
-					const transport = context.client.transport as SmallWebRTCTransport;
-					const peerConnection = (
-						transport as unknown as { pc?: RTCPeerConnection }
-					).pc;
-					if (peerConnection) {
-						peerConnection.close();
-					}
-				} catch {
-					// Ignore errors - peer connection may not exist yet
-				}
-				// Still call disconnect for any remaining cleanup (state reset, etc.)
-				context.client.disconnect().catch(() => {});
-			}
+			if (!context.client) return;
+
+			closePeerConnectionImmediately(context.client);
+			context.client.disconnect().catch(() => {});
 		},
 		logState: (_, params: { state: string }): void => {
 			console.log(`[XState] → ${params.state}`);

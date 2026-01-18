@@ -41,76 +41,67 @@ export function ConnectionProvider({ children }: ConnectionProviderProps) {
 		initConnection();
 	}, []);
 
-	// Listen for manual reconnect requests from main window
 	useEffect(() => {
-		let isCancelled = false;
-		let unlisten: (() => void) | undefined;
+		let effectWasCleanedUp = false;
+		let unsubscribe: (() => void) | undefined;
 
-		const setup = async () => {
-			const unlistenFn = await tauriAPI.onReconnect(() => {
+		const subscribeToReconnectEvents = async () => {
+			const unsubscribeFn = await tauriAPI.onReconnect(() => {
 				console.log("[XState] Manual reconnect requested");
 				connectionActor.send({ type: "RECONNECT" });
 			});
 
-			// Handle React Strict Mode: if effect was already cleaned up
-			// while async setup was in progress, clean up immediately
-			if (isCancelled) {
-				unlistenFn();
+			if (effectWasCleanedUp) {
+				unsubscribeFn();
 			} else {
-				unlisten = unlistenFn;
+				unsubscribe = unsubscribeFn;
 			}
 		};
 
-		setup();
+		subscribeToReconnectEvents();
 
 		return () => {
-			isCancelled = true;
-			unlisten?.();
+			effectWasCleanedUp = true;
+			unsubscribe?.();
 		};
 	}, []);
 
-	// Listen for settings changes that may require reconnection
 	useEffect(() => {
-		let isCancelled = false;
-		let unlisten: (() => void) | undefined;
+		let effectWasCleanedUp = false;
+		let unsubscribe: (() => void) | undefined;
 
-		const setup = async () => {
-			const unlistenFn = await tauriAPI.onSettingsChanged(async () => {
-				// Check if server URL changed
-				const newUrl = await tauriAPI.getServerUrl();
+		const subscribeToSettingsChanges = async () => {
+			const unsubscribeFn = await tauriAPI.onSettingsChanged(async () => {
+				const newServerUrl = await tauriAPI.getServerUrl();
 				const currentState = connectionActor.getSnapshot();
-
-				// If connected and URL may have changed, trigger reconnection
-				if (
+				const isConnected =
 					currentState.matches("idle") ||
 					currentState.matches("recording") ||
-					currentState.matches("processing")
-				) {
-					// Compare with current URL in context
-					if (newUrl && newUrl !== currentState.context.serverUrl) {
-						console.log("[XState] Server URL changed, reconnecting");
-						connectionActor.send({
-							type: "SERVER_URL_CHANGED",
-							serverUrl: newUrl,
-						});
-					}
+					currentState.matches("processing");
+				const serverUrlChanged =
+					newServerUrl && newServerUrl !== currentState.context.serverUrl;
+
+				if (isConnected && serverUrlChanged) {
+					console.log("[XState] Server URL changed, reconnecting");
+					connectionActor.send({
+						type: "SERVER_URL_CHANGED",
+						serverUrl: newServerUrl,
+					});
 				}
 			});
 
-			// Handle React Strict Mode: if effect was already cleaned up
-			// while async setup was in progress, clean up immediately
-			if (isCancelled) {
-				unlistenFn();
+			if (effectWasCleanedUp) {
+				unsubscribeFn();
 			} else {
-				unlisten = unlistenFn;
+				unsubscribe = unsubscribeFn;
 			}
 		};
 
-		setup();
+		subscribeToSettingsChanges();
 
 		return () => {
-			isCancelled = true;
-			unlisten?.();
+			effectWasCleanedUp = true;
+			unsubscribe?.();
 		};
 	}, []);
 
