@@ -52,7 +52,7 @@
 		"@types/react": "19.2.8",
 		"@types/react-dom": "19.2.3",
 		"@vitejs/plugin-react": "5.1.2",
-		"knip": "5.81.0",
+		"knip": "5.82.1",
 		"typescript": "5.9.3",
 		"vite": "7.3.1",
 		"vite-plugin-svgr": "4.5.0",
