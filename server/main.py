@@ -17,7 +17,7 @@ from typing import Annotated, Any, Final, cast
 
 import typer
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
@@ -41,6 +41,7 @@ from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
 
 from api.config_server import config_router
 from config.settings import Settings
+from processors.client_manager import ClientConnectionManager
 from processors.configuration import ConfigurationHandler
 from processors.context_manager import DictationContextManager
 from processors.turn_controller import TurnController
@@ -120,6 +121,7 @@ class AppServices:
     settings: Settings
     webrtc_handler: SmallWebRTCRequestHandler
     active_pipeline_tasks: set[asyncio.Task[None]]
+    client_manager: ClientConnectionManager
 
 
 async def run_pipeline(
@@ -287,6 +289,7 @@ def initialize_services(settings: Settings) -> AppServices | None:
         settings=settings,
         webrtc_handler=SmallWebRTCRequestHandler(ice_servers=ICE_SERVERS),
         active_pipeline_tasks=set(),
+        client_manager=ClientConnectionManager(),
     )
 
 
@@ -360,6 +363,27 @@ async def health_check() -> dict[str, str]:
 
 
 # =============================================================================
+# Client Registration Endpoints
+# =============================================================================
+
+
+@app.post("/api/client/register")
+async def register_client(request: Request) -> dict[str, str]:
+    """Generate, register, and return a new client UUID.
+
+    This endpoint is called by clients on first connection or when their
+    stored UUID is rejected (e.g., after server restart).
+
+    Returns:
+        A dictionary containing the newly generated UUID.
+    """
+    services: AppServices = request.app.state.services
+    client_uuid = services.client_manager.generate_and_register_uuid()
+    logger.info(f"Registered new client: {client_uuid}")
+    return {"uuid": client_uuid}
+
+
+# =============================================================================
 # WebRTC Endpoints
 # =============================================================================
 
@@ -373,11 +397,31 @@ async def webrtc_offer(
 
     This endpoint handles the WebRTC signaling handshake:
     1. Receives SDP offer from client (filtering mDNS candidates)
-    2. Creates or reuses a SmallWebRTCConnection via the handler
-    3. Returns SDP answer to client
-    4. Spawns the Pipecat pipeline as a background task
+    2. Validates client UUID from request_data (rejects unregistered UUIDs)
+    3. Disconnects any existing connection with the same UUID
+    4. Creates or reuses a SmallWebRTCConnection via the handler
+    5. Returns SDP answer to client
+    6. Spawns the Pipecat pipeline as a background task
     """
     services: AppServices = request.app.state.services
+
+    # Extract client UUID from request_data
+    client_uuid: str | None = None
+    if webrtc_request.request_data:
+        client_uuid = webrtc_request.request_data.get("clientUUID")
+
+    # Validate UUID is registered (if provided)
+    if client_uuid and not services.client_manager.is_registered(client_uuid):
+        logger.warning(f"Rejected unregistered client UUID: {client_uuid}")
+        raise HTTPException(
+            status_code=401,
+            detail="Unregistered client UUID. Please register first.",
+        )
+
+    # Disconnect existing connection with same UUID (one client = one connection)
+    if client_uuid:
+        await services.client_manager.disconnect_existing(client_uuid)
+        logger.info(f"Client connecting with UUID: {client_uuid}")
 
     # Filter mDNS candidates from SDP to prevent aioice resolution issues.
     # See filter_mdns_candidates_from_sdp() docstring for details.
@@ -397,6 +441,10 @@ async def webrtc_offer(
         task = asyncio.create_task(run_pipeline(connection, services))
         services.active_pipeline_tasks.add(task)
         task.add_done_callback(services.active_pipeline_tasks.discard)
+
+        # Track connection by UUID for supersession handling
+        if client_uuid:
+            services.client_manager.register_connection(client_uuid, connection, task)
 
     answer = await services.webrtc_handler.handle_web_request(
         request=webrtc_request,

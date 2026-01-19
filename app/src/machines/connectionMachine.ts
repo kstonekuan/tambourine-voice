@@ -7,7 +7,7 @@ import {
 	fromPromise,
 	setup,
 } from "xstate";
-import { type ConnectionState, tauriAPI } from "../lib/tauri";
+import { type ConnectionState, configAPI, tauriAPI } from "../lib/tauri";
 
 /**
  * XState-based connection state machine for managing PipecatClient lifecycle.
@@ -22,6 +22,7 @@ import { type ConnectionState, tauriAPI } from "../lib/tauri";
 // Context type for the state machine
 interface ConnectionContext {
 	client: PipecatClient | null;
+	clientUUID: string | null;
 	serverUrl: string;
 	retryCount: number;
 	error: string | null;
@@ -39,7 +40,8 @@ type ConnectionEvents =
 	| { type: "STOP_RECORDING" }
 	| { type: "RESPONSE_RECEIVED" }
 	| { type: "SERVER_URL_CHANGED"; serverUrl: string }
-	| { type: "COMMUNICATION_ERROR"; error: string };
+	| { type: "COMMUNICATION_ERROR"; error: string }
+	| { type: "UUID_REJECTED" };
 
 /**
  * Closes the RTCPeerConnection immediately to prevent the library's internal
@@ -56,8 +58,24 @@ function closePeerConnectionImmediately(client: PipecatClient): void {
 	}
 }
 
-// Actor that creates a fresh PipecatClient instance
-const createClientActor = fromPromise<PipecatClient, void>(async () => {
+// Actor that creates a fresh PipecatClient instance and ensures UUID is registered
+const createClientActor = fromPromise<
+	{ client: PipecatClient; clientUUID: string },
+	{ serverUrl: string }
+>(async ({ input }) => {
+	const { serverUrl } = input;
+
+	// Ensure we have a registered UUID (register if needed)
+	let clientUUID = await tauriAPI.getClientUUID();
+	if (!clientUUID) {
+		console.debug("[XState] No stored UUID, registering with server");
+		clientUUID = await configAPI.registerClient(serverUrl);
+		await tauriAPI.setClientUUID(clientUUID);
+		console.debug("[XState] Registered and stored new UUID:", clientUUID);
+	} else {
+		console.debug("[XState] Using stored UUID:", clientUUID);
+	}
+
 	const transport = new SmallWebRTCTransport({
 		iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
 	});
@@ -79,7 +97,7 @@ const createClientActor = fromPromise<PipecatClient, void>(async () => {
 		// Ignore cleanup errors
 	}
 
-	return client;
+	return { client, clientUUID };
 });
 
 /**
@@ -90,12 +108,15 @@ const createClientActor = fromPromise<PipecatClient, void>(async () => {
  * - RTVIEvent.Connected fires when WebRTC connection is established ("connected" state)
  * - sendClientMessage() requires the data channel which is only available in "ready" state
  * - This gap caused "transport not in ready state" errors
+ *
+ * Passes clientUUID in requestData for server-side client identification.
+ * Handles 401 errors (unregistered UUID) by sending UUID_REJECTED event.
  */
 const connectActor = fromCallback<
-	{ type: "CONNECTED" } | { type: "DISCONNECTED" },
-	{ client: PipecatClient; serverUrl: string }
+	{ type: "CONNECTED" } | { type: "DISCONNECTED" } | { type: "UUID_REJECTED" },
+	{ client: PipecatClient; serverUrl: string; clientUUID: string }
 >(({ sendBack, input }) => {
-	const { client, serverUrl } = input;
+	const { client, serverUrl, clientUUID } = input;
 
 	const handleTransportStateChanged = (state: string) => {
 		console.debug("[XState] Transport state changed:", state);
@@ -115,14 +136,24 @@ const connectActor = fromCallback<
 	client.on(RTVIEvent.TransportStateChanged, handleTransportStateChanged);
 	client.on(RTVIEvent.Disconnected, handleDisconnected);
 
-	// Start connection (fire-and-forget, events will drive state)
+	// Start connection with clientUUID in requestData
 	client
 		.connect({
-			webrtcRequestParams: { endpoint: `${serverUrl}/api/offer` },
+			webrtcRequestParams: {
+				endpoint: `${serverUrl}/api/offer`,
+				requestData: { clientUUID },
+			},
 		})
-		.catch((error) => {
+		.catch((error: unknown) => {
+			// Check for 401 (unregistered UUID) - server rejected our UUID
+			const httpError = error as { response?: { status?: number } };
+			if (httpError?.response?.status === 401) {
+				console.warn("[XState] UUID rejected by server, will re-register");
+				sendBack({ type: "UUID_REJECTED" });
+				return;
+			}
 			console.error("[XState] Connection error:", error);
-			// Connection errors will eventually trigger a disconnect event
+			// Other connection errors will eventually trigger a disconnect event
 		});
 
 	// Cleanup function - remove event listeners when state exits
@@ -221,6 +252,7 @@ export const connectionMachine = setup({
 	initial: "disconnected",
 	context: {
 		client: null,
+		clientUUID: null,
 		serverUrl: "",
 		retryCount: 0,
 		error: null,
@@ -240,7 +272,7 @@ export const connectionMachine = setup({
 			},
 		},
 
-		// Create a fresh PipecatClient before attempting connection
+		// Create a fresh PipecatClient and ensure UUID is registered
 		initializing: {
 			entry: [
 				{ type: "emitConnectionState", params: { state: "connecting" } },
@@ -248,9 +280,13 @@ export const connectionMachine = setup({
 			],
 			invoke: {
 				src: "createClient",
+				input: ({ context }) => ({ serverUrl: context.serverUrl }),
 				onDone: {
 					target: "connecting",
-					actions: assign({ client: ({ event }) => event.output }),
+					actions: assign({
+						client: ({ event }) => event.output.client,
+						clientUUID: ({ event }) => event.output.clientUUID,
+					}),
 				},
 				onError: {
 					target: "retrying",
@@ -268,11 +304,12 @@ export const connectionMachine = setup({
 		connecting: {
 			entry: [{ type: "logState", params: { state: "connecting" } }],
 			invoke: {
-				// Use connect actor which initiates the connection
+				// Use connect actor which initiates the connection with clientUUID
 				src: "connect",
 				input: ({ context }) => ({
 					client: context.client as PipecatClient,
 					serverUrl: context.serverUrl,
+					clientUUID: context.clientUUID as string,
 				}),
 			},
 			on: {
@@ -281,6 +318,22 @@ export const connectionMachine = setup({
 					actions: assign({ retryCount: 0, error: null }),
 				},
 				DISCONNECTED: "retrying",
+				// UUID rejected by server (e.g., after server restart)
+				// Clear stored UUID and go back to initializing to re-register
+				UUID_REJECTED: {
+					target: "initializing",
+					actions: [
+						"cleanupClient",
+						async () => {
+							await tauriAPI.clearClientUUID();
+							console.debug("[XState] Cleared invalid UUID, will re-register");
+						},
+						assign({
+							client: () => null,
+							clientUUID: () => null,
+						}),
+					],
+				},
 			},
 			after: {
 				connectionTimeout: {

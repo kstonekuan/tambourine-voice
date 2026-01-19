@@ -197,6 +197,24 @@ export const tauriAPI = {
 		return invoke("get_server_url");
 	},
 
+	// Client UUID management for server identification
+	async getClientUUID(): Promise<string | null> {
+		const store = await getStore();
+		return (await store.get<string | null>("client_uuid")) ?? null;
+	},
+
+	async setClientUUID(uuid: string): Promise<void> {
+		const store = await getStore();
+		await store.set("client_uuid", uuid);
+		await store.save();
+	},
+
+	async clearClientUUID(): Promise<void> {
+		const store = await getStore();
+		await store.delete("client_uuid");
+		await store.save();
+	},
+
 	async onStartRecording(callback: () => void): Promise<UnlistenFn> {
 		return listen("recording-start", callback);
 	},
@@ -520,5 +538,14 @@ export const configAPI = {
 		return api
 			.get("api/prompt/sections/default")
 			.json<DefaultSectionsResponse>();
+	},
+
+	// Client registration for UUID-based identification
+	registerClient: async (serverUrl: string): Promise<string> => {
+		const api = createApiClient(serverUrl);
+		const response = await api
+			.post("api/client/register")
+			.json<{ uuid: string }>();
+		return response.uuid;
 	},
 };
