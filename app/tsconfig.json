@@ -1,23 +1,38 @@
 {
 	"compilerOptions": {
+		/* Language and Environment */
 		"target": "ES2020",
+		"lib": ["DOM", "DOM.Iterable", "ESNext"],
+		"jsx": "react-jsx",
+
+		/* Modules */
 		"module": "ESNext",
 		"moduleResolution": "bundler",
-		"allowSyntheticDefaultImports": true,
-		"esModuleInterop": true,
-		"strict": true,
-		"skipLibCheck": true,
-		"jsx": "react-jsx",
-		"lib": ["DOM", "DOM.Iterable", "ESNext"],
-		"noEmit": true,
-		"isolatedModules": true,
 		"resolveJsonModule": true,
-		"noUncheckedIndexedAccess": true,
+		"isolatedModules": true,
+
+		/* Interop */
+		"esModuleInterop": true,
+		"allowSyntheticDefaultImports": true,
+
+		/* Emit */
+		"noEmit": true,
+
+		/* Type Checking */
+		"strict": true,
 		"noImplicitReturns": true,
+		"noImplicitOverride": true,
+		"noFallthroughCasesInSwitch": true,
+		"noUncheckedIndexedAccess": true,
+		"noPropertyAccessFromIndexSignature": true,
 		"useUnknownInCatchVariables": true,
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,
-		"noFallthroughCasesInSwitch": true
+
+		/* Build */
+		"incremental": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true
 	},
 	"include": ["src/**/*", "vite.config.ts"]
 }

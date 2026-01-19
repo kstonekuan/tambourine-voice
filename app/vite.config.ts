@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import svgr from "vite-plugin-svgr";
 
-const host = process.env.TAURI_DEV_HOST;
+const host = process.env["TAURI_DEV_HOST"];
 
 export default defineConfig({
 	plugins: [react(), tailwindcss(), svgr()],
@@ -26,13 +26,13 @@ export default defineConfig({
 	envPrefix: ["VITE_", "TAURI_"],
 	build: {
 		target:
-			process.env.TAURI_PLATFORM === "windows"
+			process.env["TAURI_PLATFORM"] === "windows"
 				? "chrome105"
-				: process.env.TAURI_PLATFORM === "macos"
+				: process.env["TAURI_PLATFORM"] === "macos"
 					? "safari13"
 					: "chrome105",
-		minify: !process.env.TAURI_DEBUG ? "esbuild" : false,
-		sourcemap: !!process.env.TAURI_DEBUG,
+		minify: !process.env["TAURI_DEBUG"] ? "esbuild" : false,
+		sourcemap: !!process.env["TAURI_DEBUG"],
 		rollupOptions: {
 			input: {
 				main: "index.html",
