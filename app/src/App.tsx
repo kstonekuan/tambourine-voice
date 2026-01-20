@@ -3,6 +3,7 @@ import { notifications } from "@mantine/notifications";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Home, Settings } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { match } from "ts-pattern";
 import { HistoryFeed } from "./components/HistoryFeed";
 import { Logo } from "./components/Logo";
 import { AudioSettings } from "./components/settings/AudioSettings";
@@ -307,49 +308,47 @@ export default function App() {
 		let unlisten: (() => void) | undefined;
 
 		const handleConfigResponse = (response: ConfigResponse) => {
-			if (response.type === "config-updated") {
-				notifications.show({
-					title: "Settings Updated",
-					message: `${formatSettingName(response.setting)} updated successfully`,
-					color: "green",
-					autoClose: 2000,
-				});
-			} else if (response.type === "config-error") {
-				notifications.show({
-					title: "Settings Error",
-					message: `Failed to update ${formatSettingName(response.setting)}: ${response.error}`,
-					color: "red",
-					autoClose: 5000,
-				});
+			match(response)
+				.with({ type: "config-updated" }, ({ setting, value: _value }) => {
+					notifications.show({
+						title: "Settings Updated",
+						message: `${formatSettingName(setting)} updated successfully`,
+						color: "green",
+						autoClose: 2000,
+					});
+				})
+				.with({ type: "config-error" }, ({ setting, error }) => {
+					notifications.show({
+						title: "Settings Error",
+						message: `Failed to update ${formatSettingName(setting)}: ${error}`,
+						color: "red",
+						autoClose: 5000,
+					});
 
-				// Auto-fallback to first available provider when a provider is unavailable
-				if (
-					response.setting === "stt-provider" ||
-					response.setting === "llm-provider"
-				) {
-					const providers = queryClient.getQueryData<AvailableProvidersData>([
-						"availableProviders",
-					]);
-					if (providers) {
-						const providerList =
-							response.setting === "stt-provider"
-								? providers.stt
-								: providers.llm;
-						const firstProvider = providerList[0];
-						if (firstProvider) {
-							const updateFn =
-								response.setting === "stt-provider"
-									? tauriAPI.updateSTTProvider
-									: tauriAPI.updateLLMProvider;
+					// Auto-fallback to first available provider when a provider is unavailable
+					if (setting === "stt-provider" || setting === "llm-provider") {
+						const providers = queryClient.getQueryData<AvailableProvidersData>([
+							"availableProviders",
+						]);
+						if (providers) {
+							const providerList =
+								setting === "stt-provider" ? providers.stt : providers.llm;
+							const firstProvider = providerList[0];
+							if (firstProvider) {
+								const updateFn =
+									setting === "stt-provider"
+										? tauriAPI.updateSTTProvider
+										: tauriAPI.updateLLMProvider;
 
-							updateFn(firstProvider.value).then(() => {
-								queryClient.invalidateQueries({ queryKey: ["settings"] });
-								tauriAPI.emitSettingsChanged();
-							});
+								updateFn(firstProvider.value).then(() => {
+									queryClient.invalidateQueries({ queryKey: ["settings"] });
+									tauriAPI.emitSettingsChanged();
+								});
+							}
 						}
 					}
-				}
-			}
+				})
+				.exhaustive();
 		};
 
 		tauriAPI.onConfigResponse(handleConfigResponse).then((fn) => {

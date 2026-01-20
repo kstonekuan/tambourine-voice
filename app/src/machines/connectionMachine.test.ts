@@ -24,6 +24,10 @@ vi.mock("../lib/tauri", () => ({
 	},
 }));
 
+// Suppress console.debug/log output from the real machine during tests
+vi.spyOn(console, "debug").mockImplementation(() => {});
+vi.spyOn(console, "log").mockImplementation(() => {});
+
 // Type for the sendBack function used by connect actor
 type ConnectSendBack = (
 	event:

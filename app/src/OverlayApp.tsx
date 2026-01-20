@@ -16,6 +16,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { useDrag } from "@use-gesture/react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { match } from "ts-pattern";
 import { z } from "zod";
 import Logo from "./assets/logo.svg?react";
 import {
@@ -26,49 +27,45 @@ import {
 } from "./contexts/ConnectionContext";
 import { useNativeAudioTrack } from "./hooks/useNativeAudioTrack";
 import { useAddHistoryEntry, useSettings, useTypeText } from "./lib/queries";
-import { safeSendClientMessage } from "./lib/safeSendClientMessage";
+import {
+	matchSendResult,
+	safeSendClientMessage,
+} from "./lib/safeSendClientMessage";
 import { type CleanupPromptSections, tauriAPI } from "./lib/tauri";
 import "./overlay-global.css";
 
 const SERVER_RESPONSE_TIMEOUT_MS = 10_000;
 
-const RecordingCompleteMessageSchema = z.object({
-	type: z.literal("recording-complete"),
-	hasContent: z.boolean().optional(),
+// Server message schemas as a discriminated union for single-parse handling
+const ProviderSchema = z.object({
+	value: z.string(),
+	label: z.string(),
+	is_local: z.boolean(),
+	model: z.string().nullable(),
 });
 
-const ConfigUpdatedMessageSchema = z.object({
-	type: z.literal("config-updated"),
-	setting: z.string(),
-	value: z.unknown(),
-	success: z.literal(true),
-});
-
-const ConfigErrorMessageSchema = z.object({
-	type: z.literal("config-error"),
-	setting: z.string(),
-	error: z.string(),
-});
-
-const AvailableProvidersMessageSchema = z.object({
-	type: z.literal("available-providers"),
-	stt: z.array(
-		z.object({
-			value: z.string(),
-			label: z.string(),
-			is_local: z.boolean(),
-			model: z.string().nullable(),
-		}),
-	),
-	llm: z.array(
-		z.object({
-			value: z.string(),
-			label: z.string(),
-			is_local: z.boolean(),
-			model: z.string().nullable(),
-		}),
-	),
-});
+const ServerMessageSchema = z.discriminatedUnion("type", [
+	z.object({
+		type: z.literal("recording-complete"),
+		hasContent: z.boolean().optional(),
+	}),
+	z.object({
+		type: z.literal("config-updated"),
+		setting: z.string(),
+		value: z.unknown(),
+		success: z.literal(true),
+	}),
+	z.object({
+		type: z.literal("config-error"),
+		setting: z.string(),
+		error: z.string(),
+	}),
+	z.object({
+		type: z.literal("available-providers"),
+		stt: z.array(ProviderSchema),
+		llm: z.array(ProviderSchema),
+	}),
+]);
 
 // Non-empty array type for type-safe batched sends
 type NonEmptyArray<T> = [T, ...T[]];
@@ -94,7 +91,12 @@ function sendConfigMessages(
 		);
 		// If a message fails to send, stop sending further messages
 		// The reconnection will handle re-syncing all settings
-		if (!result.success) {
+		const shouldContinue = matchSendResult(result, {
+			onSuccess: () => true,
+			onNotReady: () => false,
+			onSendFailed: () => false,
+		});
+		if (!shouldContinue) {
 			break;
 		}
 	}
@@ -129,40 +131,33 @@ const InitialLoadingSpinner = (
 	</div>
 );
 
+type DisplayState =
+	| "disconnected"
+	| "connecting"
+	| "reconnecting"
+	| "idle"
+	| "recording"
+	| "processing";
+
 /**
  * Helper to convert XState state value to the ConnectionState string type
  * used by the UI and Tauri events.
  */
 function getDisplayState(
 	stateValue: string | Record<string, unknown>,
-):
-	| "disconnected"
-	| "connecting"
-	| "reconnecting"
-	| "idle"
-	| "recording"
-	| "processing" {
+): DisplayState {
 	// XState state values can be strings or objects (for nested states)
 	const state =
 		typeof stateValue === "string" ? stateValue : Object.keys(stateValue)[0];
 
-	switch (state) {
-		case "disconnected":
-			return "disconnected";
-		case "initializing":
-		case "connecting":
-			return "connecting";
-		case "retrying":
-			return "reconnecting";
-		case "idle":
-			return "idle";
-		case "recording":
-			return "recording";
-		case "processing":
-			return "processing";
-		default:
-			return "disconnected";
-	}
+	return match(state)
+		.with("disconnected", () => "disconnected" as const)
+		.with("initializing", "connecting", () => "connecting" as const)
+		.with("retrying", () => "reconnecting" as const)
+		.with("idle", () => "idle" as const)
+		.with("recording", () => "recording" as const)
+		.with("processing", () => "processing" as const)
+		.otherwise(() => "disconnected" as const);
 }
 
 function RecordingControl() {
@@ -645,46 +640,32 @@ function RecordingControl() {
 		RTVIEvent.ServerMessage,
 		useCallback(
 			(message: unknown) => {
-				const recordingCompleteResult =
-					RecordingCompleteMessageSchema.safeParse(message);
-				if (recordingCompleteResult.success) {
-					clearResponseTimeout();
-					send({ type: "RESPONSE_RECEIVED" });
-					return;
-				}
+				const result = ServerMessageSchema.safeParse(message);
+				if (!result.success) return;
 
-				// Config response messages - relay to main window for notifications
-				const configUpdatedResult =
-					ConfigUpdatedMessageSchema.safeParse(message);
-				if (configUpdatedResult.success) {
-					tauriAPI.emitConfigResponse({
-						type: "config-updated",
-						setting: configUpdatedResult.data.setting,
-						value: configUpdatedResult.data.value,
-					});
-					return;
-				}
-
-				const configErrorResult = ConfigErrorMessageSchema.safeParse(message);
-				if (configErrorResult.success) {
-					tauriAPI.emitConfigResponse({
-						type: "config-error",
-						setting: configErrorResult.data.setting,
-						error: configErrorResult.data.error,
-					});
-					return;
-				}
-
-				// Available providers - relay to main window for settings UI
-				const availableProvidersResult =
-					AvailableProvidersMessageSchema.safeParse(message);
-				if (availableProvidersResult.success) {
-					tauriAPI.emitAvailableProviders({
-						stt: availableProvidersResult.data.stt,
-						llm: availableProvidersResult.data.llm,
-					});
-					return;
-				}
+				match(result.data)
+					.with({ type: "recording-complete" }, () => {
+						clearResponseTimeout();
+						send({ type: "RESPONSE_RECEIVED" });
+					})
+					.with({ type: "config-updated" }, ({ setting, value }) => {
+						tauriAPI.emitConfigResponse({
+							type: "config-updated",
+							setting,
+							value,
+						});
+					})
+					.with({ type: "config-error" }, ({ setting, error }) => {
+						tauriAPI.emitConfigResponse({
+							type: "config-error",
+							setting,
+							error,
+						});
+					})
+					.with({ type: "available-providers" }, ({ stt, llm }) => {
+						tauriAPI.emitAvailableProviders({ stt, llm });
+					})
+					.exhaustive();
 			},
 			[clearResponseTimeout, send],
 		),

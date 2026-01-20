@@ -1,9 +1,53 @@
 import type { PipecatClient } from "@pipecat-ai/client-js";
 import type { SmallWebRTCTransport } from "@pipecat-ai/small-webrtc-transport";
+import { match } from "ts-pattern";
 
-type SendResult =
-	| { success: true }
-	| { success: false; reason: "not_ready" | "send_failed"; error?: string };
+export type SendResultSuccess = { success: true };
+export type SendResultNotReady = {
+	success: false;
+	reason: "not_ready";
+	error?: string;
+};
+export type SendResultSendFailed = {
+	success: false;
+	reason: "send_failed";
+	error: string;
+};
+
+export type SendResult =
+	| SendResultSuccess
+	| SendResultNotReady
+	| SendResultSendFailed;
+
+/**
+ * Pattern match on SendResult with exhaustive checking.
+ * Ensures all result variants are handled at compile time.
+ *
+ * @example
+ * matchSendResult(result, {
+ *   onSuccess: () => console.log("Message sent"),
+ *   onNotReady: (error) => console.warn("Transport not ready:", error),
+ *   onSendFailed: (error) => console.error("Send failed:", error),
+ * });
+ */
+export function matchSendResult<T>(
+	result: SendResult,
+	handlers: {
+		onSuccess: () => T;
+		onNotReady: (error: string | undefined) => T;
+		onSendFailed: (error: string) => T;
+	},
+): T {
+	return match(result)
+		.with({ success: true }, () => handlers.onSuccess())
+		.with({ success: false, reason: "not_ready" }, (r) =>
+			handlers.onNotReady(r.error),
+		)
+		.with({ success: false, reason: "send_failed" }, (r) =>
+			handlers.onSendFailed(r.error),
+		)
+		.exhaustive();
+}
 
 /**
  * Safely sends a message through the PipecatClient, detecting failures

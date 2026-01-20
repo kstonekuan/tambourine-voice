@@ -1,3 +1,5 @@
+// biome-ignore-all lint/complexity/useLiteralKeys: https://github.com/biomejs/biome/issues/463
+
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";

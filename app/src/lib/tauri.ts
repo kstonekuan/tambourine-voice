@@ -3,7 +3,6 @@ import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Store } from "@tauri-apps/plugin-store";
 import ky from "ky";
-import { z } from "zod";
 
 export type ConnectionState =
 	| "disconnected"
@@ -13,12 +12,13 @@ export type ConnectionState =
 	| "recording"
 	| "processing";
 
-export interface ConfigResponse {
-	type: "config-updated" | "config-error";
-	setting: string;
-	value?: unknown;
-	error?: string;
-}
+/**
+ * Discriminated union for config responses.
+ * Each variant has only its relevant fields, enabling exhaustive pattern matching.
+ */
+export type ConfigResponse =
+	| { type: "config-updated"; setting: string; value: unknown }
+	| { type: "config-error"; setting: string; error: string };
 
 interface TypeTextResult {
 	success: boolean;
@@ -30,13 +30,6 @@ export interface HotkeyConfig {
 	key: string;
 	enabled: boolean;
 }
-
-// Zod schema for HotkeyConfig validation
-export const HotkeyConfigSchema = z.object({
-	modifiers: z.array(z.string()),
-	key: z.string().min(1, "Key is required"),
-	enabled: z.boolean().default(true),
-});
 
 /// Tracks errors from shortcut registration attempts
 export interface ShortcutErrors {
@@ -86,30 +79,6 @@ export interface AppSettings {
 
 export const DEFAULT_SERVER_URL = "http://127.0.0.1:8765";
 
-// ============================================================================
-// Default values - must match Rust defaults
-// ============================================================================
-
-const DEFAULT_HOTKEY_MODIFIERS = ["ctrl", "alt"];
-
-export const defaultToggleHotkey: HotkeyConfig = {
-	modifiers: DEFAULT_HOTKEY_MODIFIERS,
-	key: "Space",
-	enabled: true,
-};
-
-export const defaultHoldHotkey: HotkeyConfig = {
-	modifiers: DEFAULT_HOTKEY_MODIFIERS,
-	key: "Backquote",
-	enabled: true,
-};
-
-export const defaultPasteLastHotkey: HotkeyConfig = {
-	modifiers: DEFAULT_HOTKEY_MODIFIERS,
-	key: "Period",
-	enabled: true,
-};
-
 let storeInstance: Store | null = null;
 
 async function getStore(): Promise<Store> {
@@ -120,7 +89,8 @@ async function getStore(): Promise<Store> {
 }
 
 // ============================================================================
-// Hotkey validation helpers (Zod-based)
+// Hotkey validation helpers (for immediate UI feedback)
+// Rust provides the same validation as a safety net on save
 // ============================================================================
 
 /**
@@ -134,7 +104,7 @@ export function hotkeyIsSameAs(a: HotkeyConfig, b: HotkeyConfig): boolean {
 	);
 }
 
-type HotkeyType = "toggle" | "hold" | "paste_last";
+export type HotkeyType = "toggle" | "hold" | "paste_last";
 
 const HOTKEY_LABELS: Record<HotkeyType, string> = {
 	toggle: "toggle",
@@ -143,28 +113,9 @@ const HOTKEY_LABELS: Record<HotkeyType, string> = {
 };
 
 /**
- * Create a Zod schema for validating a hotkey doesn't conflict with existing hotkeys
- */
-export function createHotkeyDuplicateSchema(
-	allHotkeys: Record<HotkeyType, HotkeyConfig>,
-	excludeType: HotkeyType,
-) {
-	return HotkeyConfigSchema.superRefine((hotkey, ctx) => {
-		for (const [type, existing] of Object.entries(allHotkeys)) {
-			if (type !== excludeType && hotkeyIsSameAs(hotkey, existing)) {
-				ctx.addIssue({
-					code: "custom",
-					message: `This shortcut is already used for the ${HOTKEY_LABELS[type as HotkeyType]} hotkey`,
-				});
-				return;
-			}
-		}
-	});
-}
-
-/**
  * Validate that a hotkey doesn't conflict with other hotkeys
  * Returns error message if invalid, null if valid
+ * Used for immediate UI feedback - Rust provides the same validation as a safety net
  */
 export function validateHotkeyNotDuplicate(
 	newHotkey: HotkeyConfig,
@@ -175,10 +126,10 @@ export function validateHotkeyNotDuplicate(
 	},
 	excludeType: HotkeyType,
 ): string | null {
-	const schema = createHotkeyDuplicateSchema(allHotkeys, excludeType);
-	const result = schema.safeParse(newHotkey);
-	if (!result.success) {
-		return result.error.issues[0]?.message ?? "Invalid hotkey";
+	for (const [type, existing] of Object.entries(allHotkeys)) {
+		if (type !== excludeType && hotkeyIsSameAs(newHotkey, existing)) {
+			return `This shortcut is already used for the ${HOTKEY_LABELS[type as HotkeyType]} hotkey`;
+		}
 	}
 	return null;
 }
@@ -227,118 +178,59 @@ export const tauriAPI = {
 		return listen("prepare-recording", callback);
 	},
 
-	// Settings API - using store plugin directly
-	// Parallelized with Promise.all for faster loading (all reads are independent)
+	// Settings API - uses Rust commands for single source of truth
+	// Rust applies defaults, TypeScript just passes through
 	async getSettings(): Promise<AppSettings> {
-		const store = await getStore();
-
-		const [
-			toggleHotkey,
-			holdHotkey,
-			pasteLastHotkey,
-			selectedMicId,
-			soundEnabled,
-			cleanupPromptSections,
-			sttProvider,
-			llmProvider,
-			autoMuteAudio,
-			sttTimeoutSeconds,
-			serverUrl,
-		] = await Promise.all([
-			store.get<HotkeyConfig>("toggle_hotkey"),
-			store.get<HotkeyConfig>("hold_hotkey"),
-			store.get<HotkeyConfig>("paste_last_hotkey"),
-			store.get<string | null>("selected_mic_id"),
-			store.get<boolean>("sound_enabled"),
-			store.get<CleanupPromptSections | null>("cleanup_prompt_sections"),
-			store.get<string | null>("stt_provider"),
-			store.get<string | null>("llm_provider"),
-			store.get<boolean>("auto_mute_audio"),
-			store.get<number | null>("stt_timeout_seconds"),
-			store.get<string>("server_url"),
-		]);
-
-		return {
-			toggle_hotkey: toggleHotkey ?? defaultToggleHotkey,
-			hold_hotkey: holdHotkey ?? defaultHoldHotkey,
-			paste_last_hotkey: pasteLastHotkey ?? defaultPasteLastHotkey,
-			selected_mic_id: selectedMicId ?? null,
-			sound_enabled: soundEnabled ?? true,
-			cleanup_prompt_sections: cleanupPromptSections ?? null,
-			stt_provider: sttProvider ?? null,
-			llm_provider: llmProvider ?? null,
-			auto_mute_audio: autoMuteAudio ?? false,
-			stt_timeout_seconds: sttTimeoutSeconds ?? null,
-			server_url: serverUrl ?? DEFAULT_SERVER_URL,
-		};
+		return invoke("get_settings");
 	},
 
 	async updateToggleHotkey(hotkey: HotkeyConfig): Promise<void> {
-		const store = await getStore();
-		await store.set("toggle_hotkey", hotkey);
-		await store.save();
+		return invoke("update_hotkey", { hotkeyType: "toggle", config: hotkey });
 	},
 
 	async updateHoldHotkey(hotkey: HotkeyConfig): Promise<void> {
-		const store = await getStore();
-		await store.set("hold_hotkey", hotkey);
-		await store.save();
+		return invoke("update_hotkey", { hotkeyType: "hold", config: hotkey });
 	},
 
 	async updatePasteLastHotkey(hotkey: HotkeyConfig): Promise<void> {
-		const store = await getStore();
-		await store.set("paste_last_hotkey", hotkey);
-		await store.save();
+		return invoke("update_hotkey", {
+			hotkeyType: "paste_last",
+			config: hotkey,
+		});
 	},
 
 	async updateSelectedMic(micId: string | null): Promise<void> {
-		const store = await getStore();
-		await store.set("selected_mic_id", micId);
-		await store.save();
+		return invoke("update_selected_mic", { micId });
 	},
 
 	async updateSoundEnabled(enabled: boolean): Promise<void> {
-		const store = await getStore();
-		await store.set("sound_enabled", enabled);
-		await store.save();
+		return invoke("update_sound_enabled", { enabled });
 	},
 
 	async updateCleanupPromptSections(
 		sections: CleanupPromptSections | null,
 	): Promise<void> {
-		const store = await getStore();
-		await store.set("cleanup_prompt_sections", sections);
-		await store.save();
+		return invoke("update_cleanup_prompt_sections", { sections });
 	},
 
 	async updateSTTProvider(provider: string | null): Promise<void> {
-		const store = await getStore();
-		await store.set("stt_provider", provider);
-		await store.save();
+		return invoke("update_stt_provider", { provider });
 	},
 
 	async updateLLMProvider(provider: string | null): Promise<void> {
-		const store = await getStore();
-		await store.set("llm_provider", provider);
-		await store.save();
+		return invoke("update_llm_provider", { provider });
 	},
 
 	async updateAutoMuteAudio(enabled: boolean): Promise<void> {
-		const store = await getStore();
-		await store.set("auto_mute_audio", enabled);
-		await store.save();
+		return invoke("update_auto_mute_audio", { enabled });
 	},
 
 	async updateSTTTimeout(timeoutSeconds: number | null): Promise<void> {
-		const store = await getStore();
-		await store.set("stt_timeout_seconds", timeoutSeconds);
-		await store.save();
+		return invoke("update_stt_timeout", { timeoutSeconds });
 	},
 
 	async updateServerUrl(url: string): Promise<void> {
-		const store = await getStore();
-		await store.set("server_url", url);
-		await store.save();
+		return invoke("update_server_url", { url });
 	},
 
 	async isAudioMuteSupported(): Promise<boolean> {
@@ -346,11 +238,7 @@ export const tauriAPI = {
 	},
 
 	async resetHotkeysToDefaults(): Promise<void> {
-		const store = await getStore();
-		await store.set("toggle_hotkey", defaultToggleHotkey);
-		await store.set("hold_hotkey", defaultHoldHotkey);
-		await store.set("paste_last_hotkey", defaultPasteLastHotkey);
-		await store.save();
+		return invoke("reset_hotkeys_to_defaults");
 	},
 
 	async registerShortcuts(): Promise<ShortcutRegistrationResult> {

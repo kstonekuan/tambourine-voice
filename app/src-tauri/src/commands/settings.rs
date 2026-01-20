@@ -1,4 +1,7 @@
-use crate::settings::HotkeyConfig;
+use crate::settings::{
+    check_hotkey_conflict, AppSettings, CleanupPromptSections, HotkeyConfig, HotkeyType,
+    SettingsError, DEFAULT_SERVER_URL,
+};
 use crate::state::{AppState, ShortcutErrors, ShortcutRegistrationResult};
 use tauri::{AppHandle, Manager};
 
@@ -101,5 +104,237 @@ pub async fn set_hotkey_enabled(
     _hotkey_type: String,
     _enabled: bool,
 ) -> Result<(), String> {
+    Ok(())
+}
+
+// ============================================================================
+// SETTINGS CRUD COMMANDS
+// ============================================================================
+
+/// Get all application settings with defaults applied
+/// This is the single source of truth for reading settings
+#[cfg(desktop)]
+#[tauri::command]
+pub fn get_settings(app: AppHandle) -> Result<AppSettings, String> {
+    Ok(AppSettings {
+        toggle_hotkey: get_setting_from_store(
+            &app,
+            "toggle_hotkey",
+            HotkeyConfig::default_toggle(),
+        ),
+        hold_hotkey: get_setting_from_store(&app, "hold_hotkey", HotkeyConfig::default_hold()),
+        paste_last_hotkey: get_setting_from_store(
+            &app,
+            "paste_last_hotkey",
+            HotkeyConfig::default_paste_last(),
+        ),
+        selected_mic_id: get_setting_from_store(&app, "selected_mic_id", None),
+        sound_enabled: get_setting_from_store(&app, "sound_enabled", true),
+        cleanup_prompt_sections: get_setting_from_store(&app, "cleanup_prompt_sections", None),
+        stt_provider: get_setting_from_store(&app, "stt_provider", None),
+        llm_provider: get_setting_from_store(&app, "llm_provider", None),
+        auto_mute_audio: get_setting_from_store(&app, "auto_mute_audio", false),
+        stt_timeout_seconds: get_setting_from_store(&app, "stt_timeout_seconds", None),
+        server_url: get_setting_from_store(&app, "server_url", DEFAULT_SERVER_URL.to_string()),
+    })
+}
+
+// Stub for non-desktop platforms
+#[cfg(not(desktop))]
+#[tauri::command]
+pub fn get_settings(_app: AppHandle) -> Result<AppSettings, String> {
+    Ok(AppSettings::default())
+}
+
+/// Update a hotkey with validation
+#[cfg(desktop)]
+#[tauri::command]
+pub async fn update_hotkey(
+    app: AppHandle,
+    hotkey_type: HotkeyType,
+    config: HotkeyConfig,
+) -> Result<(), SettingsError> {
+    // Get current settings to check for conflicts
+    let settings =
+        get_settings(app.clone()).map_err(|e| SettingsError::StoreError(e.to_string()))?;
+
+    // Check for conflicts with other hotkeys
+    if let Some(error) = check_hotkey_conflict(&config, &settings, hotkey_type) {
+        return Err(error);
+    }
+
+    // Save the hotkey
+    crate::save_setting_to_store(&app, hotkey_type.store_key(), &config)
+        .map_err(SettingsError::StoreError)?;
+
+    log::info!(
+        "Updated {} hotkey to: {}",
+        hotkey_type.display_name(),
+        config.to_shortcut_string()
+    );
+    Ok(())
+}
+
+// Stub for non-desktop platforms
+#[cfg(not(desktop))]
+#[tauri::command]
+pub async fn update_hotkey(
+    _app: AppHandle,
+    _hotkey_type: HotkeyType,
+    _config: HotkeyConfig,
+) -> Result<(), SettingsError> {
+    Ok(())
+}
+
+/// Update selected microphone ID
+#[cfg(desktop)]
+#[tauri::command]
+pub async fn update_selected_mic(app: AppHandle, mic_id: Option<String>) -> Result<(), String> {
+    crate::save_setting_to_store(&app, "selected_mic_id", &mic_id)?;
+    log::info!("Updated selected microphone: {:?}", mic_id);
+    Ok(())
+}
+
+#[cfg(not(desktop))]
+#[tauri::command]
+pub async fn update_selected_mic(_app: AppHandle, _mic_id: Option<String>) -> Result<(), String> {
+    Ok(())
+}
+
+/// Update sound enabled setting
+#[cfg(desktop)]
+#[tauri::command]
+pub async fn update_sound_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
+    crate::save_setting_to_store(&app, "sound_enabled", &enabled)?;
+    log::info!("Updated sound enabled: {}", enabled);
+    Ok(())
+}
+
+#[cfg(not(desktop))]
+#[tauri::command]
+pub async fn update_sound_enabled(_app: AppHandle, _enabled: bool) -> Result<(), String> {
+    Ok(())
+}
+
+/// Update cleanup prompt sections
+#[cfg(desktop)]
+#[tauri::command]
+pub async fn update_cleanup_prompt_sections(
+    app: AppHandle,
+    sections: Option<CleanupPromptSections>,
+) -> Result<(), String> {
+    crate::save_setting_to_store(&app, "cleanup_prompt_sections", &sections)?;
+    log::info!("Updated cleanup prompt sections");
+    Ok(())
+}
+
+#[cfg(not(desktop))]
+#[tauri::command]
+pub async fn update_cleanup_prompt_sections(
+    _app: AppHandle,
+    _sections: Option<CleanupPromptSections>,
+) -> Result<(), String> {
+    Ok(())
+}
+
+/// Update STT provider
+#[cfg(desktop)]
+#[tauri::command]
+pub async fn update_stt_provider(app: AppHandle, provider: Option<String>) -> Result<(), String> {
+    crate::save_setting_to_store(&app, "stt_provider", &provider)?;
+    log::info!("Updated STT provider: {:?}", provider);
+    Ok(())
+}
+
+#[cfg(not(desktop))]
+#[tauri::command]
+pub async fn update_stt_provider(_app: AppHandle, _provider: Option<String>) -> Result<(), String> {
+    Ok(())
+}
+
+/// Update LLM provider
+#[cfg(desktop)]
+#[tauri::command]
+pub async fn update_llm_provider(app: AppHandle, provider: Option<String>) -> Result<(), String> {
+    crate::save_setting_to_store(&app, "llm_provider", &provider)?;
+    log::info!("Updated LLM provider: {:?}", provider);
+    Ok(())
+}
+
+#[cfg(not(desktop))]
+#[tauri::command]
+pub async fn update_llm_provider(_app: AppHandle, _provider: Option<String>) -> Result<(), String> {
+    Ok(())
+}
+
+/// Update auto mute audio setting
+#[cfg(desktop)]
+#[tauri::command]
+pub async fn update_auto_mute_audio(app: AppHandle, enabled: bool) -> Result<(), String> {
+    crate::save_setting_to_store(&app, "auto_mute_audio", &enabled)?;
+    log::info!("Updated auto mute audio: {}", enabled);
+    Ok(())
+}
+
+#[cfg(not(desktop))]
+#[tauri::command]
+pub async fn update_auto_mute_audio(_app: AppHandle, _enabled: bool) -> Result<(), String> {
+    Ok(())
+}
+
+/// Update STT timeout
+#[cfg(desktop)]
+#[tauri::command]
+pub async fn update_stt_timeout(
+    app: AppHandle,
+    timeout_seconds: Option<u32>,
+) -> Result<(), String> {
+    crate::save_setting_to_store(&app, "stt_timeout_seconds", &timeout_seconds)?;
+    log::info!("Updated STT timeout: {:?}", timeout_seconds);
+    Ok(())
+}
+
+#[cfg(not(desktop))]
+#[tauri::command]
+pub async fn update_stt_timeout(
+    _app: AppHandle,
+    _timeout_seconds: Option<u32>,
+) -> Result<(), String> {
+    Ok(())
+}
+
+/// Update server URL
+#[cfg(desktop)]
+#[tauri::command]
+pub async fn update_server_url(app: AppHandle, url: String) -> Result<(), String> {
+    crate::save_setting_to_store(&app, "server_url", &url)?;
+    log::info!("Updated server URL: {}", url);
+    Ok(())
+}
+
+#[cfg(not(desktop))]
+#[tauri::command]
+pub async fn update_server_url(_app: AppHandle, _url: String) -> Result<(), String> {
+    Ok(())
+}
+
+/// Reset all hotkeys to their default values
+#[cfg(desktop)]
+#[tauri::command]
+pub async fn reset_hotkeys_to_defaults(app: AppHandle) -> Result<(), String> {
+    crate::save_setting_to_store(&app, "toggle_hotkey", &HotkeyConfig::default_toggle())?;
+    crate::save_setting_to_store(&app, "hold_hotkey", &HotkeyConfig::default_hold())?;
+    crate::save_setting_to_store(
+        &app,
+        "paste_last_hotkey",
+        &HotkeyConfig::default_paste_last(),
+    )?;
+    log::info!("Reset all hotkeys to defaults");
+    Ok(())
+}
+
+#[cfg(not(desktop))]
+#[tauri::command]
+pub async fn reset_hotkeys_to_defaults(_app: AppHandle) -> Result<(), String> {
     Ok(())
 }

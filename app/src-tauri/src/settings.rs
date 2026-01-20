@@ -5,6 +5,13 @@ use std::str::FromStr;
 use tauri_plugin_global_shortcut::Shortcut;
 
 // ============================================================================
+// DEFAULT SETTINGS CONSTANTS - Single source of truth for all defaults
+// ============================================================================
+
+/// Default server URL
+pub const DEFAULT_SERVER_URL: &str = "http://127.0.0.1:8765";
+
+// ============================================================================
 // DEFAULT HOTKEY CONSTANTS - Single source of truth for all default hotkeys
 // ============================================================================
 
@@ -114,4 +121,163 @@ impl HotkeyConfig {
                 .expect("Default hotkey must be valid")
         })
     }
+
+    /// Check if two hotkey configs are equivalent (case-insensitive comparison)
+    pub fn is_same_as(&self, other: &HotkeyConfig) -> bool {
+        if self.key.to_lowercase() != other.key.to_lowercase() {
+            return false;
+        }
+        if self.modifiers.len() != other.modifiers.len() {
+            return false;
+        }
+        self.modifiers.iter().all(|mod_a| {
+            other
+                .modifiers
+                .iter()
+                .any(|mod_b| mod_a.to_lowercase() == mod_b.to_lowercase())
+        })
+    }
+}
+
+// ============================================================================
+// PROMPT SECTION TYPES
+// ============================================================================
+
+/// Configuration for a single prompt section
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PromptSection {
+    pub enabled: bool,
+    pub content: Option<String>,
+}
+
+/// Configuration for all cleanup prompt sections
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CleanupPromptSections {
+    pub main: PromptSection,
+    pub advanced: PromptSection,
+    pub dictionary: PromptSection,
+}
+
+// ============================================================================
+// APP SETTINGS - Complete settings structure
+// ============================================================================
+
+/// Complete application settings matching the TypeScript AppSettings interface
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppSettings {
+    pub toggle_hotkey: HotkeyConfig,
+    pub hold_hotkey: HotkeyConfig,
+    pub paste_last_hotkey: HotkeyConfig,
+    pub selected_mic_id: Option<String>,
+    pub sound_enabled: bool,
+    pub cleanup_prompt_sections: Option<CleanupPromptSections>,
+    pub stt_provider: Option<String>,
+    pub llm_provider: Option<String>,
+    pub auto_mute_audio: bool,
+    pub stt_timeout_seconds: Option<u32>,
+    pub server_url: String,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            toggle_hotkey: HotkeyConfig::default_toggle(),
+            hold_hotkey: HotkeyConfig::default_hold(),
+            paste_last_hotkey: HotkeyConfig::default_paste_last(),
+            selected_mic_id: None,
+            sound_enabled: true,
+            cleanup_prompt_sections: None,
+            stt_provider: None,
+            llm_provider: None,
+            auto_mute_audio: false,
+            stt_timeout_seconds: None,
+            server_url: DEFAULT_SERVER_URL.to_string(),
+        }
+    }
+}
+
+// ============================================================================
+// SETTINGS ERRORS
+// ============================================================================
+
+/// Type of hotkey for error reporting
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum HotkeyType {
+    Toggle,
+    Hold,
+    PasteLast,
+}
+
+impl HotkeyType {
+    pub fn store_key(&self) -> &'static str {
+        match self {
+            HotkeyType::Toggle => "toggle_hotkey",
+            HotkeyType::Hold => "hold_hotkey",
+            HotkeyType::PasteLast => "paste_last_hotkey",
+        }
+    }
+
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            HotkeyType::Toggle => "toggle",
+            HotkeyType::Hold => "hold",
+            HotkeyType::PasteLast => "paste last",
+        }
+    }
+}
+
+/// Errors that can occur during settings operations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum SettingsError {
+    /// Hotkey conflicts with another existing hotkey
+    HotkeyConflict {
+        message: String,
+        conflicting_type: HotkeyType,
+    },
+    /// Invalid value for a field
+    InvalidValue { field: String, message: String },
+    /// Error accessing the store
+    StoreError(String),
+}
+
+impl std::fmt::Display for SettingsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SettingsError::HotkeyConflict { message, .. } => write!(f, "{}", message),
+            SettingsError::InvalidValue { field, message } => {
+                write!(f, "Invalid value for {}: {}", field, message)
+            }
+            SettingsError::StoreError(msg) => write!(f, "Store error: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for SettingsError {}
+
+/// Check if a hotkey conflicts with any existing hotkeys (excluding the one being updated)
+pub fn check_hotkey_conflict(
+    new_hotkey: &HotkeyConfig,
+    settings: &AppSettings,
+    exclude_type: HotkeyType,
+) -> Option<SettingsError> {
+    let hotkeys_to_check = [
+        (HotkeyType::Toggle, &settings.toggle_hotkey),
+        (HotkeyType::Hold, &settings.hold_hotkey),
+        (HotkeyType::PasteLast, &settings.paste_last_hotkey),
+    ];
+
+    for (hotkey_type, existing) in hotkeys_to_check {
+        if hotkey_type != exclude_type && new_hotkey.is_same_as(existing) {
+            return Some(SettingsError::HotkeyConflict {
+                message: format!(
+                    "This shortcut is already used for the {} hotkey",
+                    hotkey_type.display_name()
+                ),
+                conflicting_type: hotkey_type,
+            });
+        }
+    }
+    None
 }
