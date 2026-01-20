@@ -73,7 +73,7 @@ Open-source alternative to [Wispr Flow](https://wisprflow.ai), [Superwhisper](ht
 - **Transcription History** - View and copy previous dictations
 - **Paste Last Transcription** - Re-type previous dictation with `Ctrl+Alt+.`
 - **Auto-Mute Audio** - Automatically mute system audio while dictating (Windows/macOS)
-- **Misc.** - System try integration, microphone selection, sound feedback, configure hotkeys
+- **Misc.** - System tray integration, microphone selection, sound feedback, configure hotkeys
 
 ## Planned Features
 
@@ -265,7 +265,7 @@ The app connects to `localhost:8765` by default via WebRTC. Settings are persist
 - **Desktop App:** Rust, Tauri
 - **Frontend:** TypeScript, React, Vite
 - **UI:** Mantine, Tailwind CSS
-- **State Management:** Zustand, Tanstack Query
+- **State Management:** Zustand, Tanstack Query, XState
 - **Backend:** Python, FastAPI
 - **Voice Pipeline:** Pipecat
 - **Communications:** WebRTC
