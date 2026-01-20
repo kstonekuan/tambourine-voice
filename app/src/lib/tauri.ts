@@ -436,4 +436,16 @@ export const configAPI = {
 			.json<{ uuid: string }>();
 		return response.uuid;
 	},
+
+	// Verify if a client UUID is still registered with the server
+	verifyClient: async (
+		serverUrl: string,
+		clientUUID: string,
+	): Promise<boolean> => {
+		const api = createApiClient(serverUrl);
+		const response = await api
+			.get(`api/client/verify/${clientUUID}`)
+			.json<{ registered: boolean }>();
+		return response.registered;
+	},
 };

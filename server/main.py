@@ -383,6 +383,21 @@ async def register_client(request: Request) -> dict[str, str]:
     return {"uuid": client_uuid}
 
 
+@app.get("/api/client/verify/{client_uuid}")
+async def verify_client(client_uuid: str, request: Request) -> dict[str, bool]:
+    """Verify if a client UUID is registered with the server.
+
+    This endpoint allows clients to check if their stored UUID is still valid
+    (e.g., after server restart where in-memory registrations are lost).
+
+    Returns:
+        A dictionary with 'registered' boolean indicating if UUID is valid.
+    """
+    services: AppServices = request.app.state.services
+    is_registered = services.client_manager.is_registered(client_uuid)
+    return {"registered": is_registered}
+
+
 # =============================================================================
 # WebRTC Endpoints
 # =============================================================================
@@ -390,7 +405,6 @@ async def register_client(request: Request) -> dict[str, str]:
 
 @app.post("/api/offer")
 async def webrtc_offer(
-    webrtc_request: SmallWebRTCRequest,
     request: Request,
 ) -> dict[str, str] | None:
     """Handle WebRTC offer from client using SmallWebRTCRequestHandler.
@@ -405,13 +419,27 @@ async def webrtc_offer(
     """
     services: AppServices = request.app.state.services
 
+    # Parse request body using from_dict to handle camelCase requestData field
+    # FastAPI's auto-parsing doesn't use the classmethod that handles the conversion
+    request_body = await request.json()
+    webrtc_request = SmallWebRTCRequest.from_dict(request_body)
+
     # Extract client UUID from request_data
     client_uuid: str | None = None
     if webrtc_request.request_data:
         client_uuid = webrtc_request.request_data.get("clientUUID")
+    logger.info(f"Incoming client UUID: {client_uuid}")
 
-    # Validate UUID is registered (if provided)
-    if client_uuid and not services.client_manager.is_registered(client_uuid):
+    # Require UUID - clients must register first
+    if not client_uuid:
+        logger.warning("Rejected connection without client UUID")
+        raise HTTPException(
+            status_code=401,
+            detail="Client UUID required. Please register first.",
+        )
+
+    # Validate UUID is registered
+    if not services.client_manager.is_registered(client_uuid):
         logger.warning(f"Rejected unregistered client UUID: {client_uuid}")
         raise HTTPException(
             status_code=401,
@@ -419,9 +447,8 @@ async def webrtc_offer(
         )
 
     # Disconnect existing connection with same UUID (one client = one connection)
-    if client_uuid:
-        await services.client_manager.disconnect_existing(client_uuid)
-        logger.info(f"Client connecting with UUID: {client_uuid}")
+    await services.client_manager.disconnect_existing(client_uuid)
+    logger.info(f"Client connecting with UUID: {client_uuid}")
 
     # Filter mDNS candidates from SDP to prevent aioice resolution issues.
     # See filter_mdns_candidates_from_sdp() docstring for details.
@@ -443,8 +470,7 @@ async def webrtc_offer(
         task.add_done_callback(services.active_pipeline_tasks.discard)
 
         # Track connection by UUID for supersession handling
-        if client_uuid:
-            services.client_manager.register_connection(client_uuid, connection, task)
+        services.client_manager.register_connection(client_uuid, connection, task)
 
     answer = await services.webrtc_handler.handle_web_request(
         request=webrtc_request,

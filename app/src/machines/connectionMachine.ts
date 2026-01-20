@@ -65,15 +65,37 @@ const createClientActor = fromPromise<
 >(async ({ input }) => {
 	const { serverUrl } = input;
 
-	// Ensure we have a registered UUID (register if needed)
+	// Ensure we have a registered UUID (register if needed, verify if exists)
 	let clientUUID = await tauriAPI.getClientUUID();
+	if (clientUUID) {
+		// Verify stored UUID is still registered with the server
+		// (server may have restarted, losing in-memory registrations)
+		try {
+			const isRegistered = await configAPI.verifyClient(serverUrl, clientUUID);
+			if (!isRegistered) {
+				console.debug(
+					"[XState] Stored UUID no longer registered, will re-register",
+				);
+				await tauriAPI.clearClientUUID();
+				clientUUID = null;
+			} else {
+				console.debug(
+					"[XState] Verified stored UUID is registered:",
+					clientUUID,
+				);
+			}
+		} catch (error) {
+			console.warn("[XState] Failed to verify UUID, will re-register:", error);
+			await tauriAPI.clearClientUUID();
+			clientUUID = null;
+		}
+	}
+
 	if (!clientUUID) {
-		console.debug("[XState] No stored UUID, registering with server");
+		console.debug("[XState] Registering new UUID with server");
 		clientUUID = await configAPI.registerClient(serverUrl);
 		await tauriAPI.setClientUUID(clientUUID);
 		console.debug("[XState] Registered and stored new UUID:", clientUUID);
-	} else {
-		console.debug("[XState] Using stored UUID:", clientUUID);
 	}
 
 	const transport = new SmallWebRTCTransport({
@@ -145,14 +167,29 @@ const connectActor = fromCallback<
 			},
 		})
 		.catch((error: unknown) => {
+			console.error("[XState] Connection error:", error);
+			console.debug(
+				"[XState] Error details:",
+				JSON.stringify(error, Object.getOwnPropertyNames(error)),
+			);
+
 			// Check for 401 (unregistered UUID) - server rejected our UUID
-			const httpError = error as { response?: { status?: number } };
-			if (httpError?.response?.status === 401) {
-				console.warn("[XState] UUID rejected by server, will re-register");
+			// Try multiple error formats as different HTTP libraries structure errors differently
+			const httpError = error as {
+				response?: { status?: number };
+				status?: number;
+				message?: string;
+			};
+			const status = httpError?.response?.status ?? httpError?.status;
+			const is401 = status === 401 || httpError?.message?.includes("401");
+
+			if (is401) {
+				console.warn(
+					"[XState] UUID rejected by server (401), will re-register",
+				);
 				sendBack({ type: "UUID_REJECTED" });
 				return;
 			}
-			console.error("[XState] Connection error:", error);
 			// Other connection errors will eventually trigger a disconnect event
 		});
 
