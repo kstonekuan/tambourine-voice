@@ -273,7 +273,12 @@ function RecordingControl() {
 
 			// Enable mic and transition to recording state
 			if (client) {
-				client.enableMic(true);
+				try {
+					client.enableMic(true);
+				} catch (error) {
+					console.warn("[Recording] Failed to enable mic:", error);
+					return;
+				}
 				send({ type: "START_RECORDING" });
 
 				// Signal server to start turn management
@@ -302,12 +307,31 @@ function RecordingControl() {
 		stopNativeCapture();
 		lastMicIdRef.current = undefined;
 
-		if (client && displayState === "recording") {
-			// Disable mic first
+		// Always disable mic and detach track, regardless of displayState
+		// This ensures the mic indicator goes away even if state changed
+		if (client) {
+			// Disable mic to release any browser getUserMedia stream
 			try {
 				client.enableMic(false);
 			} catch (error) {
 				console.warn("[Recording] Failed to disable mic:", error);
+			}
+
+			// Detach the native audio track from WebRTC sender to stop transmitting
+			// (enableMic only affects the client's internal track, not our injected native track)
+			try {
+				const transport = client.transport as SmallWebRTCTransport;
+				const pc = (transport as unknown as { pc?: RTCPeerConnection }).pc;
+				if (pc) {
+					const audioSender = pc
+						.getSenders()
+						.find((s) => s.track?.kind === "audio");
+					if (audioSender) {
+						audioSender.replaceTrack(null);
+					}
+				}
+			} catch (error) {
+				console.warn("[Recording] Failed to detach audio track:", error);
 			}
 
 			// Stop the audio track immediately to release the microphone
@@ -319,7 +343,10 @@ function RecordingControl() {
 			} catch (error) {
 				console.warn("[Recording] Failed to stop audio track:", error);
 			}
+		}
 
+		// Only do state transitions and server signaling if we were actually recording
+		if (client && displayState === "recording") {
 			// Transition to processing state and start timeout
 			send({ type: "STOP_RECORDING" });
 			startResponseTimeout();
@@ -745,6 +772,7 @@ function RecordingControl() {
 				padding: 2,
 				cursor: "grab",
 				userSelect: "none",
+				touchAction: "none",
 			}}
 		>
 			{displayState === "processing" ||

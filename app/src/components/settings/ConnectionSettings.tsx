@@ -13,6 +13,11 @@ export function ConnectionSettings() {
 	const updateServerUrl = useUpdateServerUrl();
 	const [localUrl, setLocalUrl] = useState<string | null>(null);
 	const [pingStatus, setPingStatus] = useState<PingStatus>("idle");
+	const [clientUUID, setClientUUID] = useState<string | null>(null);
+
+	useEffect(() => {
+		tauriAPI.getClientUUID().then(setClientUUID);
+	}, []);
 
 	const connectionState = useRecordingStore((s) => s.state);
 	const setState = useRecordingStore((s) => s.setState);
@@ -283,6 +288,34 @@ export function ConnectionSettings() {
 							</Button>
 						)}
 					</div>
+				</div>
+			</div>
+
+			{/* Client ID Row */}
+			<div className="settings-card" style={{ marginTop: 12 }}>
+				<div
+					className="settings-row"
+					style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}
+				>
+					<div>
+						<p className="settings-label">Client ID</p>
+						<p className="settings-description">
+							Unique identifier for this client instance
+						</p>
+					</div>
+					<TextInput
+						value={clientUUID ?? "Not assigned yet"}
+						readOnly
+						styles={{
+							input: {
+								fontFamily: "monospace",
+								fontSize: "13px",
+								color: clientUUID ? undefined : "var(--mantine-color-dimmed)",
+								cursor: "default",
+								backgroundColor: "var(--mantine-color-dark-6)",
+							},
+						}}
+					/>
 				</div>
 			</div>
 		</div>

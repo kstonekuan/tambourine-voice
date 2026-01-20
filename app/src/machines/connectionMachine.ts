@@ -238,9 +238,6 @@ export const connectionMachine = setup({
 			console.log(`[XState] → ${params.state}`);
 		},
 	},
-	guards: {
-		canRetry: ({ context }) => context.retryCount < 10,
-	},
 	delays: {
 		connectionTimeout: 30000,
 		// Exponential backoff: 1s, 2s, 4s, 8s... capped at 30s
@@ -451,19 +448,7 @@ export const connectionMachine = setup({
 				{ type: "logState", params: { state: "retrying" } },
 			],
 			after: {
-				retryDelay: [
-					{ target: "initializing", guard: "canRetry" },
-					{
-						target: "disconnected",
-						actions: [
-							{
-								type: "emitReconnectResult",
-								params: { success: false, error: "Max retries exceeded" },
-							},
-							assign({ error: () => "Max retries exceeded" }),
-						],
-					},
-				],
+				retryDelay: "initializing",
 			},
 			on: {
 				// Manual reconnect resets retry counter and retries immediately
