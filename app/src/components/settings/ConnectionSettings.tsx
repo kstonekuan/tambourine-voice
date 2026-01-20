@@ -1,6 +1,6 @@
 import { Button, Loader, TextInput } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { Check, RefreshCw, X } from "lucide-react";
+import { Check, Copy, RefreshCw, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useSettings, useUpdateServerUrl } from "../../lib/queries";
 import { DEFAULT_SERVER_URL, tauriAPI } from "../../lib/tauri";
@@ -14,10 +14,18 @@ export function ConnectionSettings() {
 	const [localUrl, setLocalUrl] = useState<string | null>(null);
 	const [pingStatus, setPingStatus] = useState<PingStatus>("idle");
 	const [clientUUID, setClientUUID] = useState<string | null>(null);
+	const [uuidCopied, setUuidCopied] = useState(false);
 
 	useEffect(() => {
 		tauriAPI.getClientUUID().then(setClientUUID);
 	}, []);
+
+	const handleCopyUUID = useCallback(() => {
+		if (!clientUUID) return;
+		navigator.clipboard.writeText(clientUUID);
+		setUuidCopied(true);
+		setTimeout(() => setUuidCopied(false), 2000);
+	}, [clientUUID]);
 
 	const connectionState = useRecordingStore((s) => s.state);
 	const setState = useRecordingStore((s) => s.setState);
@@ -295,27 +303,38 @@ export function ConnectionSettings() {
 			<div className="settings-card" style={{ marginTop: 12 }}>
 				<div
 					className="settings-row"
-					style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}
+					style={{ justifyContent: "space-between", alignItems: "center" }}
 				>
 					<div>
 						<p className="settings-label">Client ID</p>
-						<p className="settings-description">
-							Unique identifier for this client instance
-						</p>
-					</div>
-					<TextInput
-						value={clientUUID ?? "Not assigned yet"}
-						readOnly
-						styles={{
-							input: {
+						<p
+							style={{
 								fontFamily: "monospace",
 								fontSize: "13px",
-								color: clientUUID ? undefined : "var(--mantine-color-dimmed)",
-								cursor: "default",
-								backgroundColor: "var(--mantine-color-dark-6)",
-							},
-						}}
-					/>
+								color: clientUUID
+									? "var(--mantine-color-dimmed)"
+									: "var(--mantine-color-gray-6)",
+								fontStyle: clientUUID ? "normal" : "italic",
+								margin: 0,
+								marginTop: 4,
+							}}
+						>
+							{clientUUID ?? "Not assigned yet"}
+						</p>
+					</div>
+					{clientUUID && (
+						<Button
+							onClick={handleCopyUUID}
+							size="sm"
+							variant="light"
+							color={uuidCopied ? "green" : "gray"}
+							leftSection={
+								uuidCopied ? <Check size={14} /> : <Copy size={14} />
+							}
+						>
+							{uuidCopied ? "Copied" : "Copy"}
+						</Button>
+					)}
 				</div>
 			</div>
 		</div>
