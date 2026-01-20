@@ -67,6 +67,17 @@ MDNS_CANDIDATE_PATTERN: Final[re.Pattern[str]] = re.compile(
     re.MULTILINE | re.IGNORECASE,
 )
 
+# Set to hold background tasks to prevent garbage collection before completion
+_background_tasks: set[asyncio.Task[Any]] = set()
+
+
+def create_background_task(coro: Any) -> asyncio.Task[Any]:
+    """Create a background task that won't be garbage collected before completion."""
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
+
 
 def filter_mdns_candidates_from_sdp(sdp: str) -> str:
     """Remove mDNS ICE candidates from SDP to prevent aioice resolution issues.
@@ -447,7 +458,8 @@ async def webrtc_offer(
         )
 
     # Disconnect existing connection with same UUID (one client = one connection)
-    await services.client_manager.disconnect_existing(client_uuid)
+    # Run in background - no need to wait for cleanup before proceeding
+    create_background_task(services.client_manager.disconnect_existing(client_uuid))
     logger.info(f"Client connecting with UUID: {client_uuid}")
 
     # Filter mDNS candidates from SDP to prevent aioice resolution issues.
