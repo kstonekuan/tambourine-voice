@@ -36,6 +36,10 @@ export function ConnectionSettings() {
 		const setup = async () => {
 			unlisten = await tauriAPI.onConnectionStateChanged((newState) => {
 				setState(newState);
+				// Reload UUID when connection becomes idle (may have re-registered)
+				if (newState === "idle") {
+					tauriAPI.getClientUUID().then(setClientUUID);
+				}
 			});
 		};
 
