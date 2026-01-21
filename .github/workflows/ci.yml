@@ -7,6 +7,9 @@ name: CI
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   app-checks:
     runs-on: ubuntu-latest
