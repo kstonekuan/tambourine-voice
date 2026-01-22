@@ -10,6 +10,7 @@ mod audio;
 mod audio_mute;
 mod commands;
 mod config_sync;
+pub mod events;
 mod history;
 mod mic_capture;
 mod settings;

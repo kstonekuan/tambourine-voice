@@ -1,4 +1,5 @@
 use crate::config_sync::ConfigSync;
+use crate::events::{config_settings, names, ConfigResponse};
 use tauri::{AppHandle, Emitter};
 
 /// Notify Rust that we've connected to the server
@@ -24,23 +25,15 @@ pub async fn set_server_connected(
         match sync.sync_prompt_sections(sections).await {
             Ok(()) => {
                 let _ = app.emit(
-                    "config-response",
-                    serde_json::json!({
-                        "type": "config-updated",
-                        "setting": "prompt-sections",
-                        "value": sections
-                    }),
+                    names::CONFIG_RESPONSE,
+                    ConfigResponse::updated(config_settings::PROMPT_SECTIONS, sections),
                 );
             }
             Err(e) => {
                 log::warn!("Failed to sync prompt sections on connect: {}", e);
                 let _ = app.emit(
-                    "config-response",
-                    serde_json::json!({
-                        "type": "config-error",
-                        "setting": "prompt-sections",
-                        "error": e
-                    }),
+                    names::CONFIG_RESPONSE,
+                    ConfigResponse::<()>::error(config_settings::PROMPT_SECTIONS, e),
                 );
             }
         }
@@ -50,23 +43,15 @@ pub async fn set_server_connected(
         match sync.sync_stt_timeout(timeout).await {
             Ok(()) => {
                 let _ = app.emit(
-                    "config-response",
-                    serde_json::json!({
-                        "type": "config-updated",
-                        "setting": "stt-timeout",
-                        "value": timeout
-                    }),
+                    names::CONFIG_RESPONSE,
+                    ConfigResponse::updated(config_settings::STT_TIMEOUT, timeout),
                 );
             }
             Err(e) => {
                 log::warn!("Failed to sync STT timeout on connect: {}", e);
                 let _ = app.emit(
-                    "config-response",
-                    serde_json::json!({
-                        "type": "config-error",
-                        "setting": "stt-timeout",
-                        "error": e
-                    }),
+                    names::CONFIG_RESPONSE,
+                    ConfigResponse::<()>::error(config_settings::STT_TIMEOUT, e),
                 );
             }
         }

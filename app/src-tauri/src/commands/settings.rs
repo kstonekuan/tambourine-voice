@@ -224,6 +224,7 @@ pub async fn update_cleanup_prompt_sections(
     sections: Option<CleanupPromptSections>,
     config_sync: tauri::State<'_, crate::config_sync::ConfigSync>,
 ) -> Result<(), String> {
+    use crate::events::{config_settings, names, ConfigResponse};
     use tauri::Emitter;
 
     // Save locally
@@ -235,23 +236,15 @@ pub async fn update_cleanup_prompt_sections(
         match config_sync.read().await.sync_prompt_sections(s).await {
             Ok(()) => {
                 let _ = app.emit(
-                    "config-response",
-                    serde_json::json!({
-                        "type": "config-updated",
-                        "setting": "prompt-sections",
-                        "value": s
-                    }),
+                    names::CONFIG_RESPONSE,
+                    ConfigResponse::updated(config_settings::PROMPT_SECTIONS, s),
                 );
             }
             Err(e) => {
                 log::warn!("Failed to sync prompt sections to server: {}", e);
                 let _ = app.emit(
-                    "config-response",
-                    serde_json::json!({
-                        "type": "config-error",
-                        "setting": "prompt-sections",
-                        "error": e
-                    }),
+                    names::CONFIG_RESPONSE,
+                    ConfigResponse::<()>::error(config_settings::PROMPT_SECTIONS, e),
                 );
             }
         }
@@ -322,6 +315,7 @@ pub async fn update_stt_timeout(
     timeout_seconds: Option<f64>,
     config_sync: tauri::State<'_, crate::config_sync::ConfigSync>,
 ) -> Result<(), String> {
+    use crate::events::{config_settings, names, ConfigResponse};
     use tauri::Emitter;
 
     // Save locally
@@ -333,23 +327,15 @@ pub async fn update_stt_timeout(
         match config_sync.read().await.sync_stt_timeout(timeout).await {
             Ok(()) => {
                 let _ = app.emit(
-                    "config-response",
-                    serde_json::json!({
-                        "type": "config-updated",
-                        "setting": "stt-timeout",
-                        "value": timeout
-                    }),
+                    names::CONFIG_RESPONSE,
+                    ConfigResponse::updated(config_settings::STT_TIMEOUT, timeout),
                 );
             }
             Err(e) => {
                 log::warn!("Failed to sync STT timeout to server: {}", e);
                 let _ = app.emit(
-                    "config-response",
-                    serde_json::json!({
-                        "type": "config-error",
-                        "setting": "stt-timeout",
-                        "error": e
-                    }),
+                    names::CONFIG_RESPONSE,
+                    ConfigResponse::<()>::error(config_settings::STT_TIMEOUT, e),
                 );
             }
         }
