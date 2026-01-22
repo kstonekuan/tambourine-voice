@@ -31,7 +31,13 @@ import {
 	matchSendResult,
 	safeSendClientMessage,
 } from "./lib/safeSendClientMessage";
-import { tauriAPI } from "./lib/tauri";
+import {
+	type LLMProviderSelection,
+	type STTProviderSelection,
+	tauriAPI,
+	toLLMProviderSelection,
+	toSTTProviderSelection,
+} from "./lib/tauri";
 import "./overlay-global.css";
 
 const SERVER_RESPONSE_TIMEOUT_MS = 10_000;
@@ -63,8 +69,8 @@ type NonEmptyArray<T> = [T, ...T[]];
 // Only provider switching uses RTVI (requires frame injection into pipeline)
 // Prompt sections and STT timeout now use HTTP API
 type ConfigMessage =
-	| { type: "set-stt-provider"; data: { provider: string } }
-	| { type: "set-llm-provider"; data: { provider: string } };
+	| { type: "set-stt-provider"; data: { provider: STTProviderSelection } }
+	| { type: "set-llm-provider"; data: { provider: LLMProviderSelection } };
 
 function sendConfigMessages(
 	client: PipecatClient,
@@ -492,16 +498,20 @@ function RecordingControl() {
 				return current !== prev;
 			};
 
-			if (hasChanged("stt_provider")) {
+			if (hasChanged("stt_provider") && currentSettings?.stt_provider) {
 				messages.push({
 					type: "set-stt-provider",
-					data: { provider: currentSettings?.stt_provider as string },
+					data: {
+						provider: toSTTProviderSelection(currentSettings.stt_provider),
+					},
 				});
 			}
-			if (hasChanged("llm_provider")) {
+			if (hasChanged("llm_provider") && currentSettings?.llm_provider) {
 				messages.push({
 					type: "set-llm-provider",
-					data: { provider: currentSettings?.llm_provider as string },
+					data: {
+						provider: toLLMProviderSelection(currentSettings.llm_provider),
+					},
 				});
 			}
 

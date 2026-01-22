@@ -54,6 +54,81 @@ export type STTProviderId = KnownSTTProviderId | (string & {});
  */
 export type LLMProviderId = KnownLLMProviderId | (string & {});
 
+// =============================================================================
+// Provider Selection Discriminated Unions
+// =============================================================================
+
+/** Auto mode: use server's configured default provider */
+type AutoProviderSelection = { mode: "auto" };
+
+/** Known STT provider from the type-safe list */
+type KnownSTTProviderSelection = {
+	mode: "known";
+	providerId: Exclude<KnownSTTProviderId, "auto">;
+};
+
+/** Unknown STT provider (forward compatibility) */
+type OtherSTTProviderSelection = { mode: "other"; providerId: string };
+
+/** Known LLM provider from the type-safe list */
+type KnownLLMProviderSelection = {
+	mode: "known";
+	providerId: Exclude<KnownLLMProviderId, "auto">;
+};
+
+/** Unknown LLM provider (forward compatibility) */
+type OtherLLMProviderSelection = { mode: "other"; providerId: string };
+
+/** Discriminated union for STT provider selection */
+export type STTProviderSelection =
+	| AutoProviderSelection
+	| KnownSTTProviderSelection
+	| OtherSTTProviderSelection;
+
+/** Discriminated union for LLM provider selection */
+export type LLMProviderSelection =
+	| AutoProviderSelection
+	| KnownLLMProviderSelection
+	| OtherLLMProviderSelection;
+
+/**
+ * Convert a stored STT provider ID to a selection object for RTVI messages.
+ * Handles "auto", known providers, and unknown providers (forward compatibility).
+ */
+export function toSTTProviderSelection(
+	id: STTProviderId,
+): STTProviderSelection {
+	if (id === "auto") return { mode: "auto" };
+	// Check if it's a known provider (excluding "auto" which is already handled)
+	const knownIds = STT_PROVIDER_IDS.filter((p) => p !== "auto");
+	if (knownIds.includes(id as Exclude<KnownSTTProviderId, "auto">)) {
+		return {
+			mode: "known",
+			providerId: id as Exclude<KnownSTTProviderId, "auto">,
+		};
+	}
+	return { mode: "other", providerId: id };
+}
+
+/**
+ * Convert a stored LLM provider ID to a selection object for RTVI messages.
+ * Handles "auto", known providers, and unknown providers (forward compatibility).
+ */
+export function toLLMProviderSelection(
+	id: LLMProviderId,
+): LLMProviderSelection {
+	if (id === "auto") return { mode: "auto" };
+	// Check if it's a known provider (excluding "auto" which is already handled)
+	const knownIds = LLM_PROVIDER_IDS.filter((p) => p !== "auto");
+	if (knownIds.includes(id as Exclude<KnownLLMProviderId, "auto">)) {
+		return {
+			mode: "known",
+			providerId: id as Exclude<KnownLLMProviderId, "auto">,
+		};
+	}
+	return { mode: "other", providerId: id };
+}
+
 // Type guards (isKnownSTTProvider, isKnownLLMProvider) can be added here if needed
 // to detect unknown providers from newer servers and show visual indicators in the UI.
 

@@ -13,6 +13,7 @@ import asyncio
 import re
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from types.messages import ClientMessageType
 from typing import Annotated, Any, Final, cast
 
 import typer
@@ -210,14 +211,13 @@ async def run_pipeline(
         if not msg_type:
             return
 
-        if msg_type == "start-recording":
-            await turn_controller.start_recording()
-            return
-        if msg_type == "stop-recording":
-            await turn_controller.stop_recording()
-            return
-
-        await config_handler.handle_client_message(msg_type, data)
+        match msg_type:
+            case ClientMessageType.START_RECORDING:
+                await turn_controller.start_recording()
+            case ClientMessageType.STOP_RECORDING:
+                await turn_controller.stop_recording()
+            case _:
+                await config_handler.handle_client_message(msg_type, data)
 
     # Build pipeline - RTVIProcessor at the start handles RTVI protocol
     # The aggregator pair from context_manager collects transcriptions and LLM responses
