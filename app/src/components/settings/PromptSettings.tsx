@@ -232,7 +232,7 @@ export function PromptSettings() {
 						<PromptSectionEditor
 							sectionKey="advanced-prompt"
 							title="Advanced Features"
-							description='Backtrack corrections ("scratch that") and list formatting'
+							description='E.g. backtrack corrections ("scratch that") and list formatting'
 							enabled={localSections.advanced.enabled}
 							initialContent={localSections.advanced.content}
 							defaultContent={defaultSections?.advanced ?? ""}
