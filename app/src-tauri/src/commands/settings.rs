@@ -222,9 +222,34 @@ pub async fn update_sound_enabled(_app: AppHandle, _enabled: bool) -> Result<(),
 pub async fn update_cleanup_prompt_sections(
     app: AppHandle,
     sections: Option<CleanupPromptSections>,
+    config_sync: tauri::State<'_, crate::config_sync::ConfigSync>,
 ) -> Result<(), String> {
+    use crate::events::{config_settings, names, ConfigResponse};
+    use tauri::Emitter;
+
+    // Save locally
     crate::save_setting_to_store(&app, "cleanup_prompt_sections", &sections)?;
     log::info!("Updated cleanup prompt sections");
+
+    // Sync to server and emit notification
+    if let Some(ref s) = sections {
+        match config_sync.read().await.sync_prompt_sections(s).await {
+            Ok(()) => {
+                let _ = app.emit(
+                    names::CONFIG_RESPONSE,
+                    ConfigResponse::updated(config_settings::PROMPT_SECTIONS, s),
+                );
+            }
+            Err(e) => {
+                log::warn!("Failed to sync prompt sections to server: {}", e);
+                let _ = app.emit(
+                    names::CONFIG_RESPONSE,
+                    ConfigResponse::<()>::error(config_settings::PROMPT_SECTIONS, e),
+                );
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -287,10 +312,35 @@ pub async fn update_auto_mute_audio(_app: AppHandle, _enabled: bool) -> Result<(
 #[tauri::command]
 pub async fn update_stt_timeout(
     app: AppHandle,
-    timeout_seconds: Option<u32>,
+    timeout_seconds: Option<f64>,
+    config_sync: tauri::State<'_, crate::config_sync::ConfigSync>,
 ) -> Result<(), String> {
+    use crate::events::{config_settings, names, ConfigResponse};
+    use tauri::Emitter;
+
+    // Save locally
     crate::save_setting_to_store(&app, "stt_timeout_seconds", &timeout_seconds)?;
     log::info!("Updated STT timeout: {:?}", timeout_seconds);
+
+    // Sync to server and emit notification
+    if let Some(timeout) = timeout_seconds {
+        match config_sync.read().await.sync_stt_timeout(timeout).await {
+            Ok(()) => {
+                let _ = app.emit(
+                    names::CONFIG_RESPONSE,
+                    ConfigResponse::updated(config_settings::STT_TIMEOUT, timeout),
+                );
+            }
+            Err(e) => {
+                log::warn!("Failed to sync STT timeout to server: {}", e);
+                let _ = app.emit(
+                    names::CONFIG_RESPONSE,
+                    ConfigResponse::<()>::error(config_settings::STT_TIMEOUT, e),
+                );
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -298,7 +348,7 @@ pub async fn update_stt_timeout(
 #[tauri::command]
 pub async fn update_stt_timeout(
     _app: AppHandle,
-    _timeout_seconds: Option<u32>,
+    _timeout_seconds: Option<f64>,
 ) -> Result<(), String> {
     Ok(())
 }

@@ -31,24 +31,18 @@ import {
 	matchSendResult,
 	safeSendClientMessage,
 } from "./lib/safeSendClientMessage";
-import { type CleanupPromptSections, tauriAPI } from "./lib/tauri";
+import { tauriAPI } from "./lib/tauri";
 import "./overlay-global.css";
 
 const SERVER_RESPONSE_TIMEOUT_MS = 10_000;
 
 // Server message schemas as a discriminated union for single-parse handling
-const ProviderSchema = z.object({
-	value: z.string(),
-	label: z.string(),
-	is_local: z.boolean(),
-	model: z.string().nullable(),
-});
-
 const ServerMessageSchema = z.discriminatedUnion("type", [
 	z.object({
 		type: z.literal("recording-complete"),
 		hasContent: z.boolean().optional(),
 	}),
+	// Provider switching still uses RTVI (requires frame injection)
 	z.object({
 		type: z.literal("config-updated"),
 		setting: z.string(),
@@ -60,22 +54,17 @@ const ServerMessageSchema = z.discriminatedUnion("type", [
 		setting: z.string(),
 		error: z.string(),
 	}),
-	z.object({
-		type: z.literal("available-providers"),
-		stt: z.array(ProviderSchema),
-		llm: z.array(ProviderSchema),
-	}),
 ]);
 
 // Non-empty array type for type-safe batched sends
 type NonEmptyArray<T> = [T, ...T[]];
 
 // Discriminated union for type-safe config messages
+// Only provider switching uses RTVI (requires frame injection into pipeline)
+// Prompt sections and STT timeout now use HTTP API
 type ConfigMessage =
-	| { type: "set-prompt-sections"; data: { sections: CleanupPromptSections } }
 	| { type: "set-stt-provider"; data: { provider: string } }
-	| { type: "set-llm-provider"; data: { provider: string } }
-	| { type: "set-stt-timeout"; data: { timeout_seconds: number } };
+	| { type: "set-llm-provider"; data: { provider: string } };
 
 function sendConfigMessages(
 	client: PipecatClient,
@@ -487,6 +476,7 @@ function RecordingControl() {
 	}, [client]);
 
 	// Build config messages from current settings (used for initial sync and change detection)
+	// Only provider switching uses RTVI - prompt sections and STT timeout use HTTP API
 	const buildConfigMessages = useCallback(
 		(
 			currentSettings: typeof settings,
@@ -494,28 +484,14 @@ function RecordingControl() {
 		): ConfigMessage[] => {
 			const messages: ConfigMessage[] = [];
 
-			const hasChanged = (
-				key: keyof NonNullable<typeof settings>,
-				useJsonCompare = false,
-			) => {
+			const hasChanged = (key: keyof NonNullable<typeof settings>) => {
 				const current = currentSettings?.[key];
 				const prev = prevSettings?.[key];
 				if (current == null) return false;
 				if (prevSettings === undefined) return true; // Initial sync
-				return useJsonCompare
-					? JSON.stringify(current) !== JSON.stringify(prev)
-					: current !== prev;
+				return current !== prev;
 			};
 
-			if (hasChanged("cleanup_prompt_sections", true)) {
-				messages.push({
-					type: "set-prompt-sections",
-					data: {
-						sections:
-							currentSettings?.cleanup_prompt_sections as CleanupPromptSections,
-					},
-				});
-			}
 			if (hasChanged("stt_provider")) {
 				messages.push({
 					type: "set-stt-provider",
@@ -528,14 +504,6 @@ function RecordingControl() {
 					data: { provider: currentSettings?.llm_provider as string },
 				});
 			}
-			if (hasChanged("stt_timeout_seconds")) {
-				messages.push({
-					type: "set-stt-timeout",
-					data: {
-						timeout_seconds: currentSettings?.stt_timeout_seconds as number,
-					},
-				});
-			}
 
 			return messages;
 		},
@@ -545,43 +513,49 @@ function RecordingControl() {
 	// Track if initial settings sync has been done for this connection
 	const hasInitialSyncRef = useRef(false);
 
-	// Sync settings when they change OR on initial connection (state transitions to 'idle')
+	// Sync provider settings when they change OR on initial connection (state transitions to 'idle')
+	// Provider switching uses RTVI (requires frame injection into pipeline)
 	useEffect(() => {
 		const prevSettings = prevSettingsRef.current;
 		prevSettingsRef.current = settings;
 
 		// Only sync if connected (idle state)
 		if (!client || displayState !== "idle") {
-			// Reset initial sync flag when actually disconnected (not during recording/processing)
+			// Reset initial sync flag and notify Rust when disconnected
 			if (
 				displayState === "disconnected" ||
 				displayState === "connecting" ||
 				displayState === "reconnecting"
 			) {
-				hasInitialSyncRef.current = false;
+				if (hasInitialSyncRef.current) {
+					hasInitialSyncRef.current = false;
+					tauriAPI.setServerDisconnected();
+				}
 			}
 			return;
 		}
 
-		// Initial sync after connection - send all settings and request providers
+		// Initial sync after connection
 		// Now that we properly wait for "ready" state before transitioning to idle,
 		// we can send messages immediately without waiting
 		if (!hasInitialSyncRef.current) {
 			hasInitialSyncRef.current = true;
 
+			// Notify Rust of connection so it can sync settings via HTTP
+			const notifyRust = async () => {
+				const serverUrl = await tauriAPI.getServerUrl();
+				const clientUUID = await tauriAPI.getClientUUID();
+				if (serverUrl && clientUUID) {
+					await tauriAPI.setServerConnected(serverUrl, clientUUID);
+				}
+			};
+			notifyRust();
+
 			// Error handler for communication failures during sync
 			const handleCommunicationError = (error: string) =>
 				send({ type: "COMMUNICATION_ERROR", error });
 
-			// Request available providers (for settings UI in main window)
-			safeSendClientMessage(
-				client,
-				"get-available-providers",
-				{},
-				handleCommunicationError,
-			);
-
-			// Send all current settings
+			// Send provider settings via RTVI (requires frame injection)
 			const messages = buildConfigMessages(settings);
 			if (messages.length > 0) {
 				sendConfigMessages(
@@ -596,6 +570,7 @@ function RecordingControl() {
 		// Runtime settings change - only send if settings actually changed
 		if (prevSettings === settings) return;
 
+		// Provider changes via RTVI (only provider switching uses RTVI now)
 		const messages = buildConfigMessages(settings, prevSettings);
 		if (messages.length > 0) {
 			sendConfigMessages(
@@ -657,6 +632,7 @@ function RecordingControl() {
 						send({ type: "RESPONSE_RECEIVED" });
 					})
 					.with({ type: "config-updated" }, ({ setting, value }) => {
+						// Only provider switching responses come via RTVI now
 						tauriAPI.emitConfigResponse({
 							type: "config-updated",
 							setting,
@@ -664,14 +640,12 @@ function RecordingControl() {
 						});
 					})
 					.with({ type: "config-error" }, ({ setting, error }) => {
+						// Only provider switching errors come via RTVI now
 						tauriAPI.emitConfigResponse({
 							type: "config-error",
 							setting,
 							error,
 						});
-					})
-					.with({ type: "available-providers" }, ({ stt, llm }) => {
-						tauriAPI.emitAvailableProviders({ stt, llm });
 					})
 					.exhaustive();
 			},

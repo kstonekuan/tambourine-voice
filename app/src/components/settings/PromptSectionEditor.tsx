@@ -1,4 +1,11 @@
-import { Accordion, Button, Switch, Text, Textarea } from "@mantine/core";
+import {
+	Accordion,
+	Button,
+	SegmentedControl,
+	Switch,
+	Text,
+	Textarea,
+} from "@mantine/core";
 import { useEffect, useState } from "react";
 
 export interface PromptSectionEditorProps {
@@ -15,6 +22,12 @@ export interface PromptSectionEditorProps {
 	minRows?: number;
 	maxRows?: number;
 	hideToggle?: boolean;
+	/** Whether auto mode is enabled (use default prompt) */
+	auto?: boolean;
+	/** Callback when auto mode is toggled */
+	onAutoToggle?: (auto: boolean) => void;
+	/** Whether to show the Auto/Manual toggle (default: false) */
+	showAutoToggle?: boolean;
 	onToggle: (enabled: boolean) => void;
 	onSave: (content: string) => void;
 	onReset: () => void;
@@ -35,6 +48,9 @@ export function PromptSectionEditor({
 	minRows = 6,
 	maxRows = 15,
 	hideToggle = false,
+	auto = false,
+	onAutoToggle,
+	showAutoToggle = false,
 	onToggle,
 	onSave,
 	onReset,
@@ -96,54 +112,79 @@ export function PromptSectionEditor({
 				</div>
 			</Accordion.Control>
 			<Accordion.Panel>
-				{helpText && (
-					<Text size="xs" c="dimmed" mb="sm">
-						{helpText}
-					</Text>
+				{showAutoToggle && (
+					<SegmentedControl
+						value={auto ? "auto" : "manual"}
+						onChange={(value) => onAutoToggle?.(value === "auto")}
+						data={[
+							{ label: "Auto", value: "auto" },
+							{ label: "Manual", value: "manual" },
+						]}
+						size="xs"
+						mb="md"
+						styles={{
+							root: {
+								backgroundColor: "var(--bg-elevated)",
+							},
+						}}
+					/>
 				)}
-				<Textarea
-					value={content}
-					onChange={(e) => handleContentChange(e.currentTarget.value)}
-					placeholder={placeholder}
-					minRows={minRows}
-					maxRows={maxRows}
-					autosize
-					disabled={!enabled}
-					styles={{
-						input: {
-							backgroundColor: "var(--bg-elevated)",
-							borderColor: "var(--border-default)",
-							color: "var(--text-primary)",
-							fontFamily: "monospace",
-							fontSize: "13px",
-						},
-					}}
-				/>
-				<div
-					style={{
-						display: "flex",
-						gap: 12,
-						marginTop: 16,
-						justifyContent: "flex-end",
-					}}
-				>
-					<Button
-						variant="subtle"
-						color="gray"
-						onClick={handleReset}
-						disabled={!enabled || !hasCustom}
-					>
-						{resetLabel}
-					</Button>
-					<Button
-						color="gray"
-						onClick={handleSave}
-						disabled={!hasChanges}
-						loading={isSaving}
-					>
-						Save
-					</Button>
-				</div>
+				{auto ? (
+					<Text size="sm" c="dimmed">
+						The prompt is being optimized for you
+					</Text>
+				) : (
+					<>
+						{helpText && (
+							<Text size="xs" c="dimmed" mb="sm">
+								{helpText}
+							</Text>
+						)}
+						<Textarea
+							value={content}
+							onChange={(e) => handleContentChange(e.currentTarget.value)}
+							placeholder={placeholder}
+							minRows={minRows}
+							maxRows={maxRows}
+							autosize
+							disabled={!enabled}
+							styles={{
+								input: {
+									backgroundColor: "var(--bg-elevated)",
+									borderColor: "var(--border-default)",
+									color: "var(--text-primary)",
+									fontFamily: "monospace",
+									fontSize: "13px",
+								},
+							}}
+						/>
+						<div
+							style={{
+								display: "flex",
+								gap: 12,
+								marginTop: 16,
+								justifyContent: "flex-end",
+							}}
+						>
+							<Button
+								variant="subtle"
+								color="gray"
+								onClick={handleReset}
+								disabled={!enabled || !hasCustom}
+							>
+								{resetLabel}
+							</Button>
+							<Button
+								color="gray"
+								onClick={handleSave}
+								disabled={!hasChanges}
+								loading={isSaving}
+							>
+								Save
+							</Button>
+						</div>
+					</>
+				)}
 			</Accordion.Panel>
 		</Accordion.Item>
 	);

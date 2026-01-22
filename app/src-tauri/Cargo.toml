@@ -14,6 +14,7 @@ name = "tambourine_voice_lib"
 tauri-build = { version = "2.5.3", features = [] }
 
 [dependencies]
+# Tauri core and plugins
 tauri = { version = "2.9.5", features = [
     "tray-icon",
     "macos-private-api",
@@ -23,9 +24,15 @@ tauri = { version = "2.9.5", features = [
 tauri-utils = "2.8.1"
 tauri-plugin-opener = "2.5.3"
 tauri-plugin-store = "2.4.2"
+tauri-plugin-http = { version = "2.5.6", features = ["json"] }
+
+# Serialization
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
+
+# Logging
 log = "0.4.29"
+env_logger = "0.11.8"
 
 # Keyboard automation
 enigo = "0.6.1"
@@ -43,7 +50,6 @@ rodio = { version = "0.21.1", default-features = false, features = [
     "mp3",
     "playback",
 ] }
-env_logger = "0.11.8"
 
 # Native audio capture (cross-platform: CoreAudio on macOS, WASAPI on Windows)
 cpal = "0.17.1"

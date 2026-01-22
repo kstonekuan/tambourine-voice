@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Store } from "@tauri-apps/plugin-store";
 import ky from "ky";
@@ -57,21 +57,16 @@ export type LLMProviderId = KnownLLMProviderId | (string & {});
 // Type guards (isKnownSTTProvider, isKnownLLMProvider) can be added here if needed
 // to detect unknown providers from newer servers and show visual indicators in the UI.
 
-export type ConnectionState =
-	| "disconnected"
-	| "connecting"
-	| "reconnecting"
-	| "idle"
-	| "recording"
-	| "processing";
+// Re-export event types for consumers that import from tauri.ts
+export type { ConfigResponse, ConnectionState } from "./events";
 
-/**
- * Discriminated union for config responses.
- * Each variant has only its relevant fields, enabling exhaustive pattern matching.
- */
-export type ConfigResponse =
-	| { type: "config-updated"; setting: string; value: unknown }
-	| { type: "config-error"; setting: string; error: string };
+import {
+	AppEvents,
+	type ConfigResponse,
+	type ConnectionState,
+	emitEvent,
+	listenEvent,
+} from "./events";
 
 interface TypeTextResult {
 	success: boolean;
@@ -105,10 +100,14 @@ interface HistoryEntry {
 	text: string;
 }
 
-export interface PromptSection {
-	enabled: boolean;
-	content: string | null;
-}
+/**
+ * Discriminated union for prompt section configuration.
+ * - Auto mode: server uses built-in default prompt
+ * - Manual mode: server uses user-provided content
+ */
+export type PromptSection =
+	| { enabled: boolean; mode: "auto" }
+	| { enabled: boolean; mode: "manual"; content: string };
 
 export interface CleanupPromptSections {
 	main: PromptSection;
@@ -220,15 +219,15 @@ export const tauriAPI = {
 	},
 
 	async onStartRecording(callback: () => void): Promise<UnlistenFn> {
-		return listen("recording-start", callback);
+		return listenEvent(AppEvents.recordingStart, callback);
 	},
 
 	async onStopRecording(callback: () => void): Promise<UnlistenFn> {
-		return listen("recording-stop", callback);
+		return listenEvent(AppEvents.recordingStop, callback);
 	},
 
 	async onPrepareRecording(callback: () => void): Promise<UnlistenFn> {
-		return listen("prepare-recording", callback);
+		return listenEvent(AppEvents.prepareRecording, callback);
 	},
 
 	// Settings API - uses Rust commands for single source of truth
@@ -342,103 +341,84 @@ export const tauriAPI = {
 
 	// Connection state sync between windows
 	async emitConnectionState(state: ConnectionState): Promise<void> {
-		return emit("connection-state-changed", { state });
+		return emitEvent(AppEvents.connectionState, { state });
 	},
 
 	async onConnectionStateChanged(
 		callback: (state: ConnectionState) => void,
 	): Promise<UnlistenFn> {
-		return listen<{ state: ConnectionState }>(
-			"connection-state-changed",
-			(event) => {
-				callback(event.payload.state);
-			},
-		);
+		return listenEvent(AppEvents.connectionState, (payload) => {
+			callback(payload.state);
+		});
 	},
 
 	// History sync between windows
 	async emitHistoryChanged(): Promise<void> {
-		return emit("history-changed", {});
+		return emitEvent(AppEvents.historyChanged);
 	},
 
 	async onHistoryChanged(callback: () => void): Promise<UnlistenFn> {
-		return listen("history-changed", () => {
-			callback();
-		});
+		return listenEvent(AppEvents.historyChanged, callback);
 	},
 
 	// Settings sync between windows (main -> overlay)
 	async emitSettingsChanged(): Promise<void> {
-		return emit("settings-changed", {});
+		return emitEvent(AppEvents.settingsChanged);
 	},
 
 	async onSettingsChanged(callback: () => void): Promise<UnlistenFn> {
-		return listen("settings-changed", () => {
-			callback();
-		});
+		return listenEvent(AppEvents.settingsChanged, callback);
 	},
 
 	// Reconnect request (main -> overlay)
 	async emitReconnect(): Promise<void> {
-		return emit("request-reconnect", {});
+		return emitEvent(AppEvents.reconnectRequest);
 	},
 
 	async onReconnect(callback: () => void): Promise<UnlistenFn> {
-		return listen("request-reconnect", () => {
-			callback();
-		});
+		return listenEvent(AppEvents.reconnectRequest, callback);
 	},
 
 	// Reconnection status (overlay -> main)
 	async emitReconnectStarted(): Promise<void> {
-		return emit("reconnect-started", {});
+		return emitEvent(AppEvents.reconnectStarted);
 	},
 
 	async onReconnectStarted(callback: () => void): Promise<UnlistenFn> {
-		return listen("reconnect-started", () => {
-			callback();
-		});
+		return listenEvent(AppEvents.reconnectStarted, callback);
 	},
 
 	async emitReconnectResult(success: boolean, error?: string): Promise<void> {
-		return emit("reconnect-result", { success, error });
+		return emitEvent(AppEvents.reconnectResult, { success, error });
 	},
 
 	async onReconnectResult(
 		callback: (result: { success: boolean; error?: string }) => void,
 	): Promise<UnlistenFn> {
-		return listen<{ success: boolean; error?: string }>(
-			"reconnect-result",
-			(event) => {
-				callback(event.payload);
-			},
-		);
+		return listenEvent(AppEvents.reconnectResult, callback);
 	},
 
-	// Config response sync between windows (overlay -> main)
+	// Config response notifications (from Rust or overlay)
 	async emitConfigResponse(response: ConfigResponse): Promise<void> {
-		return emit("config-response", response);
+		return emitEvent(AppEvents.configResponse, response);
 	},
 
 	async onConfigResponse(
 		callback: (response: ConfigResponse) => void,
 	): Promise<UnlistenFn> {
-		return listen<ConfigResponse>("config-response", (event) => {
-			callback(event.payload);
-		});
+		return listenEvent(AppEvents.configResponse, callback);
 	},
 
-	// Available providers sync between windows (overlay -> main)
-	async emitAvailableProviders(data: AvailableProvidersData): Promise<void> {
-		return emit("available-providers", data);
+	// Server connection state management (for Rust-side config syncing)
+	async setServerConnected(
+		serverUrl: string,
+		clientUuid: string,
+	): Promise<void> {
+		return invoke("set_server_connected", { serverUrl, clientUuid });
 	},
 
-	async onAvailableProviders(
-		callback: (data: AvailableProvidersData) => void,
-	): Promise<UnlistenFn> {
-		return listen<AvailableProvidersData>("available-providers", (event) => {
-			callback(event.payload);
-		});
+	async setServerDisconnected(): Promise<void> {
+		return invoke("set_server_disconnected");
 	},
 };
 
@@ -473,7 +453,11 @@ function createApiClient(serverUrl: string) {
 }
 
 export const configAPI = {
-	// Static prompt defaults (runtime config goes via data channel)
+	// =========================================================================
+	// Static endpoints (no client UUID needed)
+	// =========================================================================
+
+	// Static prompt defaults
 	getDefaultSections: async (serverUrl: string) => {
 		const api = createApiClient(serverUrl);
 		return api
@@ -500,5 +484,13 @@ export const configAPI = {
 			.get(`api/client/verify/${clientUUID}`)
 			.json<{ registered: boolean }>();
 		return response.registered;
+	},
+
+	// Get available providers (global, no UUID required)
+	getAvailableProviders: async (
+		serverUrl: string,
+	): Promise<AvailableProvidersData> => {
+		const api = createApiClient(serverUrl);
+		return api.get("api/providers").json<AvailableProvidersData>();
 	},
 };

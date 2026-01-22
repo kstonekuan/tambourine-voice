@@ -282,42 +282,30 @@ export function useDefaultSections() {
 	});
 }
 
-// Provider queries - data comes from RTVI message via Tauri event
+// Provider queries - fetches from HTTP API
 
 /**
- * Hook to set up the available providers event listener.
- * Call this from a component that stays mounted (like App.tsx) to ensure
- * the listener is always active and data is cached properly.
- */
-export function useAvailableProvidersListener() {
-	const queryClient = useQueryClient();
-
-	// Listen for provider data from overlay window (relayed from server via RTVI)
-	useEffect(() => {
-		const unlistenPromise = tauriAPI.onAvailableProviders((data) => {
-			queryClient.setQueryData<AvailableProvidersData>(
-				["availableProviders"],
-				data,
-			);
-		});
-
-		return () => {
-			unlistenPromise.then((unlisten) => unlisten());
-		};
-	}, [queryClient]);
-}
-
-/**
- * Hook to read available providers from the cache.
- * The data is populated by useAvailableProvidersListener which should be
- * called from a parent component that stays mounted.
+ * Hook to fetch available providers from the HTTP API.
+ * This is global endpoint (not per-client) since available providers
+ * are determined by server configuration (API keys).
  */
 export function useAvailableProviders() {
+	const { data: serverUrl } = useServerUrl();
+
 	return useQuery<AvailableProvidersData | null>({
-		queryKey: ["availableProviders"],
-		queryFn: () => Promise.resolve(null), // No initial fetch, data comes from event
-		staleTime: Number.POSITIVE_INFINITY,
-		enabled: false, // Don't auto-fetch
+		queryKey: ["availableProviders", serverUrl],
+		queryFn: async () => {
+			if (!serverUrl) return null;
+			try {
+				return await configAPI.getAvailableProviders(serverUrl);
+			} catch {
+				// Return null if server not available (will retry on connection)
+				return null;
+			}
+		},
+		staleTime: 30_000, // Consider stale after 30 seconds
+		retry: false, // Don't retry, connection handling will refetch
+		enabled: !!serverUrl,
 	});
 }
 
@@ -343,7 +331,7 @@ export function useUpdateLLMProvider() {
 	});
 }
 
-// STT Timeout mutation (local settings)
+// STT Timeout mutation (Rust syncs to server)
 export function useUpdateSTTTimeout() {
 	const queryClient = useQueryClient();
 	return useMutation({

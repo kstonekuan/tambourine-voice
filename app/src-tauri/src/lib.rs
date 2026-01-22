@@ -9,6 +9,8 @@ use tauri_utils::config::BackgroundThrottlingPolicy;
 mod audio;
 mod audio_mute;
 mod commands;
+mod config_sync;
+pub mod events;
 mod history;
 mod mic_capture;
 mod settings;
@@ -356,7 +358,9 @@ pub fn run() {
     builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_http::init())
         .manage(AppState::default())
+        .manage(config_sync::new_config_sync())
         .invoke_handler(tauri::generate_handler![
             commands::text::type_text,
             commands::text::get_server_url,
@@ -381,6 +385,8 @@ pub fn run() {
             commands::history::delete_history_entry,
             commands::history::clear_history,
             commands::overlay::resize_overlay,
+            commands::config_sync::set_server_connected,
+            commands::config_sync::set_server_disconnected,
             start_native_mic,
             stop_native_mic,
             pause_native_mic,
