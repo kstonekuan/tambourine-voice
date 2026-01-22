@@ -143,14 +143,17 @@ impl HotkeyConfig {
 // PROMPT SECTION TYPES
 // ============================================================================
 
-/// Configuration for a single prompt section
+/// Configuration for a single prompt section.
+/// Discriminated union using `mode` as the tag.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct PromptSection {
-    pub enabled: bool,
-    pub content: Option<String>,
-    /// When true, use the built-in default prompt instead of custom content
-    #[serde(default)]
-    pub auto: bool,
+#[serde(tag = "mode")]
+pub enum PromptSection {
+    /// Auto mode: use the server's built-in default prompt
+    #[serde(rename = "auto")]
+    Auto { enabled: bool },
+    /// Manual mode: use custom content provided by the user
+    #[serde(rename = "manual")]
+    Manual { enabled: bool, content: String },
 }
 
 /// Configuration for all cleanup prompt sections

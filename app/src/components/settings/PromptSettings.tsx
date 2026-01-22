@@ -1,17 +1,22 @@
-import { Accordion, Loader } from "@mantine/core";
+import { Accordion, Loader, Text } from "@mantine/core";
 import { useCallback, useEffect, useState } from "react";
+import { match } from "ts-pattern";
 import {
 	useDefaultSections,
 	useSettings,
 	useUpdateCleanupPromptSections,
 } from "../../lib/queries";
-import { type CleanupPromptSections, tauriAPI } from "../../lib/tauri";
+import {
+	type CleanupPromptSections,
+	type PromptSection,
+	tauriAPI,
+} from "../../lib/tauri";
 import { PromptSectionEditor } from "./PromptSectionEditor";
 
 const DEFAULT_SECTIONS: CleanupPromptSections = {
-	main: { enabled: true, content: null, auto: true },
-	advanced: { enabled: true, content: null, auto: true },
-	dictionary: { enabled: false, content: null, auto: false },
+	main: { enabled: true, mode: "auto" },
+	advanced: { enabled: true, mode: "auto" },
+	dictionary: { enabled: false, mode: "manual", content: "" },
 };
 
 type SectionKey = "main" | "advanced" | "dictionary";
@@ -41,11 +46,26 @@ export function PromptSettings() {
 		dictionary: { enabled: false, content: "", auto: false },
 	});
 
-	// Track if each section has custom content (non-null, non-empty string)
-	const mainContent = settings?.cleanup_prompt_sections?.main?.content;
-	const advancedContent = settings?.cleanup_prompt_sections?.advanced?.content;
-	const dictionaryContent =
-		settings?.cleanup_prompt_sections?.dictionary?.content;
+	// Track if each section has custom content (manual mode with non-empty content)
+	const getSectionContent = (
+		section: PromptSection | undefined,
+	): string | null => {
+		if (!section) return null;
+		return match(section)
+			.with({ mode: "auto" }, () => null)
+			.with({ mode: "manual" }, (s) => s.content)
+			.exhaustive();
+	};
+
+	const mainContent = getSectionContent(
+		settings?.cleanup_prompt_sections?.main,
+	);
+	const advancedContent = getSectionContent(
+		settings?.cleanup_prompt_sections?.advanced,
+	);
+	const dictionaryContent = getSectionContent(
+		settings?.cleanup_prompt_sections?.dictionary,
+	);
 
 	const hasCustomContent = {
 		main: mainContent != null && mainContent !== "",
@@ -58,20 +78,33 @@ export function PromptSettings() {
 		if (settings !== undefined && defaultSections !== undefined) {
 			const sections = settings.cleanup_prompt_sections ?? DEFAULT_SECTIONS;
 
+			// Helper to extract content from discriminated union
+			const extractContent = (
+				section: PromptSection,
+				defaultContent: string,
+			): string =>
+				match(section)
+					.with({ mode: "auto" }, () => defaultContent)
+					.with({ mode: "manual" }, (s) => s.content || defaultContent)
+					.exhaustive();
+
 			setLocalSections({
 				main: {
 					enabled: sections.main.enabled,
-					content: sections.main.content ?? defaultSections.main,
-					auto: sections.main.auto ?? true,
+					content: extractContent(sections.main, defaultSections.main),
+					auto: sections.main.mode === "auto",
 				},
 				advanced: {
 					enabled: sections.advanced.enabled,
-					content: sections.advanced.content ?? defaultSections.advanced,
-					auto: sections.advanced.auto ?? true,
+					content: extractContent(sections.advanced, defaultSections.advanced),
+					auto: sections.advanced.mode === "auto",
 				},
 				dictionary: {
 					enabled: sections.dictionary.enabled,
-					content: sections.dictionary.content ?? defaultSections.dictionary,
+					content: extractContent(
+						sections.dictionary,
+						defaultSections.dictionary,
+					),
 					auto: false, // Dictionary never has auto mode
 				},
 			});
@@ -86,21 +119,6 @@ export function PromptSettings() {
 			content?: string | null;
 			auto?: boolean;
 		}): CleanupPromptSections => {
-			const getContent = (key: SectionKey): string | null => {
-				// Content is preserved regardless of auto state
-				// The auto flag determines runtime behavior (server decides whether to use default or custom)
-				const content =
-					overrides?.key === key && overrides.content !== undefined
-						? overrides.content
-						: localSections[key].content;
-
-				// Return null if content matches default (to use server default)
-				if (content === defaultSections?.[key]) {
-					return null;
-				}
-				return content || null;
-			};
-
 			const getEnabled = (key: SectionKey): boolean => {
 				return overrides?.key === key && overrides.enabled !== undefined
 					? overrides.enabled
@@ -113,25 +131,34 @@ export function PromptSettings() {
 					: localSections[key].auto;
 			};
 
+			const getContent = (key: SectionKey): string => {
+				const content =
+					overrides?.key === key && overrides.content !== undefined
+						? overrides.content
+						: localSections[key].content;
+				return content || "";
+			};
+
+			// Build discriminated union based on mode
+			const buildSection = (
+				key: SectionKey,
+			): CleanupPromptSections[SectionKey] => {
+				const enabled = getEnabled(key);
+				const isAuto = getAuto(key);
+
+				if (isAuto) {
+					return { enabled, mode: "auto" };
+				}
+				return { enabled, mode: "manual", content: getContent(key) };
+			};
+
 			return {
-				main: {
-					enabled: getEnabled("main"),
-					content: getContent("main"),
-					auto: getAuto("main"),
-				},
-				advanced: {
-					enabled: getEnabled("advanced"),
-					content: getContent("advanced"),
-					auto: getAuto("advanced"),
-				},
-				dictionary: {
-					enabled: getEnabled("dictionary"),
-					content: getContent("dictionary"),
-					auto: false, // Dictionary never has auto mode
-				},
+				main: buildSection("main"),
+				advanced: buildSection("advanced"),
+				dictionary: buildSection("dictionary"), // Dictionary is always manual
 			};
 		},
-		[localSections, defaultSections],
+		[localSections],
 	);
 
 	// Save all sections to Tauri and notify overlay window to sync to server
@@ -198,6 +225,10 @@ export function PromptSettings() {
 	return (
 		<div className="settings-section animate-in animate-in-delay-4">
 			<h3 className="settings-section-title">LLM Formatting Prompt</h3>
+			<Text size="xs" c="dimmed" mb="sm">
+				Custom prompts are stored locally. Consider backing up your
+				customizations externally.
+			</Text>
 			<div className="settings-card">
 				{isLoadingDefaultSections ? (
 					<div

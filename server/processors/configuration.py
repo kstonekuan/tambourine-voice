@@ -7,14 +7,49 @@ RTVIProcessor's on_client_message event handler.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from loguru import logger
 from pipecat.frames.frames import ManuallySwitchServiceFrame
 from pipecat.processors.frame_processor import FrameDirection
 from pipecat.processors.frameworks.rtvi import RTVIProcessor, RTVIServerMessageFrame
+from pydantic import BaseModel, Field
 
 from services.provider_registry import LLMProviderId, STTProviderId
+
+# =============================================================================
+# Pydantic models for prompt section configuration
+# =============================================================================
+
+
+class PromptSectionAuto(BaseModel):
+    """Auto mode: use server's built-in default prompt."""
+
+    enabled: bool
+    mode: Literal["auto"]
+
+
+class PromptSectionManual(BaseModel):
+    """Manual mode: use user-provided content."""
+
+    enabled: bool
+    mode: Literal["manual"]
+    content: str
+
+
+PromptSection = Annotated[
+    PromptSectionAuto | PromptSectionManual,
+    Field(discriminator="mode"),
+]
+
+
+class CleanupPromptSections(BaseModel):
+    """Configuration for all cleanup prompt sections."""
+
+    main: PromptSection
+    advanced: PromptSection
+    dictionary: PromptSection
+
 
 if TYPE_CHECKING:
     from pipecat.pipeline.llm_switcher import LLMSwitcher
@@ -183,12 +218,22 @@ class ConfigurationHandler:
             return
 
         try:
+            parsed = CleanupPromptSections.model_validate(sections)
+
+            # Extract content from discriminated union (None for auto mode)
+            def get_content(section: PromptSectionAuto | PromptSectionManual) -> str | None:
+                match section:
+                    case PromptSectionAuto():
+                        return None
+                    case PromptSectionManual(content=content):
+                        return content
+
             self._context_manager.set_prompt_sections(
-                main_custom=sections.get("main", {}).get("content"),
-                advanced_enabled=sections.get("advanced", {}).get("enabled", True),
-                advanced_custom=sections.get("advanced", {}).get("content"),
-                dictionary_enabled=sections.get("dictionary", {}).get("enabled", False),
-                dictionary_custom=sections.get("dictionary", {}).get("content"),
+                main_custom=get_content(parsed.main),
+                advanced_enabled=parsed.advanced.enabled,
+                advanced_custom=get_content(parsed.advanced),
+                dictionary_enabled=parsed.dictionary.enabled,
+                dictionary_custom=get_content(parsed.dictionary),
             )
             await self._send_config_success("prompt-sections", "custom")
         except Exception as e:

@@ -105,12 +105,14 @@ interface HistoryEntry {
 	text: string;
 }
 
-export interface PromptSection {
-	enabled: boolean;
-	content: string | null;
-	/** When true, use the built-in default prompt instead of custom content */
-	auto: boolean;
-}
+/**
+ * Discriminated union for prompt section configuration.
+ * - Auto mode: server uses built-in default prompt
+ * - Manual mode: server uses user-provided content
+ */
+export type PromptSection =
+	| { enabled: boolean; mode: "auto" }
+	| { enabled: boolean; mode: "manual"; content: string };
 
 export interface CleanupPromptSections {
 	main: PromptSection;
