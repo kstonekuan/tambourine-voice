@@ -6,11 +6,7 @@ import {
 	useSettings,
 	useUpdateCleanupPromptSections,
 } from "../../lib/queries";
-import {
-	type CleanupPromptSections,
-	type PromptSection,
-	tauriAPI,
-} from "../../lib/tauri";
+import type { CleanupPromptSections, PromptSection } from "../../lib/tauri";
 import { PromptSectionEditor } from "./PromptSectionEditor";
 
 const DEFAULT_SECTIONS: CleanupPromptSections = {
@@ -161,14 +157,10 @@ export function PromptSettings() {
 		[localSections],
 	);
 
-	// Save all sections to Tauri and notify overlay window to sync to server
+	// Save all sections to Tauri, which syncs to server
 	const saveAllSections = useCallback(
 		(sections: CleanupPromptSections) => {
-			updateCleanupPromptSections.mutate(sections, {
-				onSuccess: () => {
-					tauriAPI.emitSettingsChanged();
-				},
-			});
+			updateCleanupPromptSections.mutate(sections);
 		},
 		[updateCleanupPromptSections],
 	);

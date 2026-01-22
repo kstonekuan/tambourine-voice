@@ -25,7 +25,7 @@ export function ProvidersSettings() {
 	const handleSTTProviderChange = useCallback(
 		(value: string | null) => {
 			if (!value) return;
-			// Save to local settings (Tauri) then notify overlay window to sync to server
+			// Save to Tauri, then notify overlay to sync via RTVI
 			updateSTTProvider.mutate(value, {
 				onSuccess: () => {
 					tauriAPI.emitSettingsChanged();
@@ -38,7 +38,7 @@ export function ProvidersSettings() {
 	const handleLLMProviderChange = useCallback(
 		(value: string | null) => {
 			if (!value) return;
-			// Save to local settings (Tauri) then notify overlay window to sync to server
+			// Save to Tauri, then notify overlay to sync via RTVI
 			updateLLMProvider.mutate(value, {
 				onSuccess: () => {
 					tauriAPI.emitSettingsChanged();
@@ -50,12 +50,8 @@ export function ProvidersSettings() {
 
 	const handleSTTTimeoutChange = useCallback(
 		(value: number) => {
-			// Save to local settings (Tauri) then notify overlay window to sync to server
-			updateSTTTimeout.mutate(value, {
-				onSuccess: () => {
-					tauriAPI.emitSettingsChanged();
-				},
-			});
+			// Save to Tauri, which syncs to server
+			updateSTTTimeout.mutate(value);
 		},
 		[updateSTTTimeout],
 	);

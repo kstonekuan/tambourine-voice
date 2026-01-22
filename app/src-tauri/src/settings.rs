@@ -180,7 +180,7 @@ pub struct AppSettings {
     pub stt_provider: String,
     pub llm_provider: String,
     pub auto_mute_audio: bool,
-    pub stt_timeout_seconds: Option<u32>,
+    pub stt_timeout_seconds: Option<f64>,
     pub server_url: String,
 }
 

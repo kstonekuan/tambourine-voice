@@ -432,17 +432,16 @@ export const tauriAPI = {
 		});
 	},
 
-	// Available providers sync between windows (overlay -> main)
-	async emitAvailableProviders(data: AvailableProvidersData): Promise<void> {
-		return emit("available-providers", data);
+	// Server connection state management (for Rust-side config syncing)
+	async setServerConnected(
+		serverUrl: string,
+		clientUuid: string,
+	): Promise<void> {
+		return invoke("set_server_connected", { serverUrl, clientUuid });
 	},
 
-	async onAvailableProviders(
-		callback: (data: AvailableProvidersData) => void,
-	): Promise<UnlistenFn> {
-		return listen<AvailableProvidersData>("available-providers", (event) => {
-			callback(event.payload);
-		});
+	async setServerDisconnected(): Promise<void> {
+		return invoke("set_server_disconnected");
 	},
 };
 
@@ -474,51 +473,6 @@ function createApiClient(serverUrl: string) {
 			methods: ["get", "post"],
 		},
 	});
-}
-
-export interface ConfigSuccessResponse {
-	success: true;
-	setting: string;
-	value?: unknown;
-}
-
-// =============================================================================
-// Configured client for per-connection config API calls
-// Initialized after connection is established with X-Client-UUID header
-// =============================================================================
-
-let configClient: ReturnType<typeof ky.create> | null = null;
-
-/**
- * Initialize the config API client after connection is established.
- * This sets up a ky instance with the X-Client-UUID header pre-configured.
- */
-export function initConfigClient(serverUrl: string, clientUUID: string): void {
-	configClient = ky.create({
-		prefixUrl: serverUrl,
-		timeout: 10000,
-		headers: {
-			"X-Client-UUID": clientUUID,
-		},
-		retry: {
-			limit: 1,
-			methods: ["put"],
-		},
-	});
-}
-
-/**
- * Clear the config client (e.g., on disconnect).
- */
-export function clearConfigClient(): void {
-	configClient = null;
-}
-
-/**
- * Check if config client is initialized (i.e., connected to server).
- */
-export function isConfigClientReady(): boolean {
-	return configClient !== null;
 }
 
 export const configAPI = {
@@ -561,39 +515,5 @@ export const configAPI = {
 	): Promise<AvailableProvidersData> => {
 		const api = createApiClient(serverUrl);
 		return api.get("api/providers").json<AvailableProvidersData>();
-	},
-
-	// =========================================================================
-	// Per-client endpoints (use pre-configured client with X-Client-UUID header)
-	// =========================================================================
-
-	// Update prompt sections for the connected client
-	updatePromptSections: async (
-		sections: CleanupPromptSections,
-	): Promise<ConfigSuccessResponse> => {
-		if (!configClient) {
-			throw new Error(
-				"Config client not initialized - not connected to server",
-			);
-		}
-		return configClient
-			.put("api/config/prompts", { json: sections })
-			.json<ConfigSuccessResponse>();
-	},
-
-	// Update STT timeout for the connected client
-	updateSTTTimeout: async (
-		timeoutSeconds: number,
-	): Promise<ConfigSuccessResponse> => {
-		if (!configClient) {
-			throw new Error(
-				"Config client not initialized - not connected to server",
-			);
-		}
-		return configClient
-			.put("api/config/stt-timeout", {
-				json: { timeout_seconds: timeoutSeconds },
-			})
-			.json<ConfigSuccessResponse>();
 	},
 };

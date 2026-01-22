@@ -31,12 +31,7 @@ import {
 	matchSendResult,
 	safeSendClientMessage,
 } from "./lib/safeSendClientMessage";
-import {
-	clearConfigClient,
-	configAPI,
-	initConfigClient,
-	tauriAPI,
-} from "./lib/tauri";
+import { tauriAPI } from "./lib/tauri";
 import "./overlay-global.css";
 
 const SERVER_RESPONSE_TIMEOUT_MS = 10_000;
@@ -518,61 +513,27 @@ function RecordingControl() {
 	// Track if initial settings sync has been done for this connection
 	const hasInitialSyncRef = useRef(false);
 
-	// Sync settings when they change OR on initial connection (state transitions to 'idle')
+	// Sync provider settings when they change OR on initial connection (state transitions to 'idle')
+	// Provider switching uses RTVI (requires frame injection into pipeline)
 	useEffect(() => {
 		const prevSettings = prevSettingsRef.current;
 		prevSettingsRef.current = settings;
 
 		// Only sync if connected (idle state)
 		if (!client || displayState !== "idle") {
-			// Reset initial sync flag and clear config client when actually disconnected
+			// Reset initial sync flag and notify Rust when disconnected
 			if (
 				displayState === "disconnected" ||
 				displayState === "connecting" ||
 				displayState === "reconnecting"
 			) {
-				hasInitialSyncRef.current = false;
-				clearConfigClient();
+				if (hasInitialSyncRef.current) {
+					hasInitialSyncRef.current = false;
+					tauriAPI.setServerDisconnected();
+				}
 			}
 			return;
 		}
-
-		// Helper to sync state-only settings via HTTP API
-		// Uses the pre-configured configClient (initialized on connection)
-		const syncHttpSettings = async (
-			currentSettings: NonNullable<typeof settings>,
-			prevSettingsToCompare?: typeof settings,
-		) => {
-			const shouldSyncPrompts =
-				!prevSettingsToCompare ||
-				JSON.stringify(currentSettings.cleanup_prompt_sections) !==
-					JSON.stringify(prevSettingsToCompare?.cleanup_prompt_sections);
-
-			const shouldSyncTimeout =
-				!prevSettingsToCompare ||
-				currentSettings.stt_timeout_seconds !==
-					prevSettingsToCompare?.stt_timeout_seconds;
-
-			// Sync prompt sections if changed or initial sync
-			if (shouldSyncPrompts && currentSettings.cleanup_prompt_sections) {
-				try {
-					await configAPI.updatePromptSections(
-						currentSettings.cleanup_prompt_sections,
-					);
-				} catch {
-					console.warn("Failed to sync prompt sections via HTTP API");
-				}
-			}
-
-			// Sync STT timeout if changed or initial sync
-			if (shouldSyncTimeout && currentSettings.stt_timeout_seconds != null) {
-				try {
-					await configAPI.updateSTTTimeout(currentSettings.stt_timeout_seconds);
-				} catch {
-					console.warn("Failed to sync STT timeout via HTTP API");
-				}
-			}
-		};
 
 		// Initial sync after connection
 		// Now that we properly wait for "ready" state before transitioning to idle,
@@ -580,15 +541,15 @@ function RecordingControl() {
 		if (!hasInitialSyncRef.current) {
 			hasInitialSyncRef.current = true;
 
-			// Initialize config client for HTTP API calls
-			const initClient = async () => {
+			// Notify Rust of connection so it can sync settings via HTTP
+			const notifyRust = async () => {
 				const serverUrl = await tauriAPI.getServerUrl();
 				const clientUUID = await tauriAPI.getClientUUID();
 				if (serverUrl && clientUUID) {
-					initConfigClient(serverUrl, clientUUID);
+					await tauriAPI.setServerConnected(serverUrl, clientUUID);
 				}
 			};
-			initClient();
+			notifyRust();
 
 			// Error handler for communication failures during sync
 			const handleCommunicationError = (error: string) =>
@@ -603,19 +564,13 @@ function RecordingControl() {
 					handleCommunicationError,
 				);
 			}
-
-			// Sync state-only settings via HTTP API (after client init)
-			if (settings) {
-				// Small delay to ensure config client is initialized
-				setTimeout(() => syncHttpSettings(settings), 0);
-			}
 			return;
 		}
 
 		// Runtime settings change - only send if settings actually changed
 		if (prevSettings === settings) return;
 
-		// Provider changes via RTVI
+		// Provider changes via RTVI (only provider switching uses RTVI now)
 		const messages = buildConfigMessages(settings, prevSettings);
 		if (messages.length > 0) {
 			sendConfigMessages(
@@ -623,11 +578,6 @@ function RecordingControl() {
 				messages as NonEmptyArray<ConfigMessage>,
 				(error) => send({ type: "COMMUNICATION_ERROR", error }),
 			);
-		}
-
-		// State-only settings via HTTP API
-		if (settings) {
-			syncHttpSettings(settings, prevSettings);
 		}
 	}, [client, displayState, settings, buildConfigMessages, send]);
 

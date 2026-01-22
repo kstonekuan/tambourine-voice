@@ -222,9 +222,19 @@ pub async fn update_sound_enabled(_app: AppHandle, _enabled: bool) -> Result<(),
 pub async fn update_cleanup_prompt_sections(
     app: AppHandle,
     sections: Option<CleanupPromptSections>,
+    config_sync: tauri::State<'_, crate::config_sync::ConfigSync>,
 ) -> Result<(), String> {
+    // Save locally
     crate::save_setting_to_store(&app, "cleanup_prompt_sections", &sections)?;
     log::info!("Updated cleanup prompt sections");
+
+    // Sync to server (best-effort)
+    if let Some(ref s) = sections {
+        if let Err(e) = config_sync.read().await.sync_prompt_sections(s).await {
+            log::warn!("Failed to sync prompt sections to server: {}", e);
+        }
+    }
+
     Ok(())
 }
 
@@ -287,10 +297,20 @@ pub async fn update_auto_mute_audio(_app: AppHandle, _enabled: bool) -> Result<(
 #[tauri::command]
 pub async fn update_stt_timeout(
     app: AppHandle,
-    timeout_seconds: Option<u32>,
+    timeout_seconds: Option<f64>,
+    config_sync: tauri::State<'_, crate::config_sync::ConfigSync>,
 ) -> Result<(), String> {
+    // Save locally
     crate::save_setting_to_store(&app, "stt_timeout_seconds", &timeout_seconds)?;
     log::info!("Updated STT timeout: {:?}", timeout_seconds);
+
+    // Sync to server (best-effort)
+    if let Some(timeout) = timeout_seconds {
+        if let Err(e) = config_sync.read().await.sync_stt_timeout(timeout).await {
+            log::warn!("Failed to sync STT timeout to server: {}", e);
+        }
+    }
+
     Ok(())
 }
 
@@ -298,7 +318,7 @@ pub async fn update_stt_timeout(
 #[tauri::command]
 pub async fn update_stt_timeout(
     _app: AppHandle,
-    _timeout_seconds: Option<u32>,
+    _timeout_seconds: Option<f64>,
 ) -> Result<(), String> {
     Ok(())
 }

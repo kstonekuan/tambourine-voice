@@ -331,7 +331,7 @@ export function useUpdateLLMProvider() {
 	});
 }
 
-// STT Timeout mutation (local settings, HTTP sync handled by overlay)
+// STT Timeout mutation (Rust syncs to server)
 export function useUpdateSTTTimeout() {
 	const queryClient = useQueryClient();
 	return useMutation({
