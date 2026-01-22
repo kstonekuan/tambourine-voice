@@ -101,6 +101,13 @@ RATE_LIMIT_ICE = "200/minute"
 # Static config endpoints: Moderate limit
 RATE_LIMIT_CONFIG = "60/minute"
 
+# Runtime config endpoints (prompts, stt-timeout): Moderate limit
+# These require valid client UUID so abuse is limited
+RATE_LIMIT_RUNTIME_CONFIG = "60/minute"
+
+# Providers endpoint: Moderate limit for read-only data
+RATE_LIMIT_PROVIDERS = "60/minute"
+
 
 def log_rate_limit_exceeded(request: Request, limit: str) -> None:
     """Log when a rate limit is exceeded for monitoring.

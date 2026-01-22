@@ -24,6 +24,12 @@ from services.provider_registry import (
     get_llm_provider_labels,
     get_stt_provider_labels,
 )
+from utils.rate_limiter import (
+    RATE_LIMIT_PROVIDERS,
+    RATE_LIMIT_RUNTIME_CONFIG,
+    get_ip_only,
+    limiter,
+)
 
 if TYPE_CHECKING:
     from processors.client_manager import ClientConnectionManager
@@ -155,6 +161,7 @@ def build_provider_list(
         422: {"model": ConfigErrorResponse, "description": "Validation failed"},
     },
 )
+@limiter.limit(RATE_LIMIT_RUNTIME_CONFIG, key_func=get_ip_only)
 async def update_prompt_sections(
     sections: CleanupPromptSections,
     request: Request,
@@ -216,6 +223,7 @@ async def update_prompt_sections(
         404: {"model": ConfigErrorResponse, "description": "Client not connected"},
     },
 )
+@limiter.limit(RATE_LIMIT_RUNTIME_CONFIG, key_func=get_ip_only)
 async def update_stt_timeout(
     body: STTTimeoutRequest,
     request: Request,
@@ -268,6 +276,7 @@ async def update_stt_timeout(
     "/providers",
     response_model=AvailableProvidersResponse,
 )
+@limiter.limit(RATE_LIMIT_PROVIDERS, key_func=get_ip_only)
 async def get_available_providers(request: Request) -> AvailableProvidersResponse:
     """Get available STT and LLM providers.
 
