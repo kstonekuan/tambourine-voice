@@ -87,15 +87,8 @@ export function PromptSettings() {
 			auto?: boolean;
 		}): CleanupPromptSections => {
 			const getContent = (key: SectionKey): string | null => {
-				// When auto is enabled, always return null to use server default
-				const isAuto =
-					overrides?.key === key && overrides.auto !== undefined
-						? overrides.auto
-						: localSections[key].auto;
-				if (isAuto) {
-					return null;
-				}
-
+				// Content is preserved regardless of auto state
+				// The auto flag determines runtime behavior (server decides whether to use default or custom)
 				const content =
 					overrides?.key === key && overrides.content !== undefined
 						? overrides.content

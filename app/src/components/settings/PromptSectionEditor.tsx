@@ -131,7 +131,7 @@ export function PromptSectionEditor({
 				)}
 				{auto ? (
 					<Text size="sm" c="dimmed">
-						Using default prompt
+						The prompt is being optimized for you
 					</Text>
 				) : (
 					<>
