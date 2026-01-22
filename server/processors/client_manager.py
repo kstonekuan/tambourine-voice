@@ -16,7 +16,13 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 if TYPE_CHECKING:
+    from pipecat.services.ai_services import STTService
+    from pipecat.services.llm_service import LLMService
     from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
+
+    from processors.context_manager import DictationContextManager
+    from processors.turn_controller import TurnController
+    from services.provider_registry import LLMProviderId, STTProviderId
 
 
 @dataclass
@@ -27,6 +33,11 @@ class ConnectionInfo:
     connection: "SmallWebRTCConnection"
     pipeline_task: asyncio.Task[None]
     connected_at: datetime = field(default_factory=datetime.now)
+    # Pipeline component references for HTTP API configuration
+    context_manager: "DictationContextManager | None" = None
+    turn_controller: "TurnController | None" = None
+    stt_services: "dict[STTProviderId, STTService] | None" = None
+    llm_services: "dict[LLMProviderId, LLMService] | None" = None
 
 
 class ClientConnectionManager:
@@ -69,6 +80,11 @@ class ClientConnectionManager:
         client_uuid: str,
         connection: "SmallWebRTCConnection",
         pipeline_task: asyncio.Task[None],
+        *,
+        context_manager: "DictationContextManager | None" = None,
+        turn_controller: "TurnController | None" = None,
+        stt_services: "dict[STTProviderId, STTService] | None" = None,
+        llm_services: "dict[LLMProviderId, LLMService] | None" = None,
     ) -> None:
         """Register an active connection for a client UUID.
 
@@ -76,11 +92,19 @@ class ClientConnectionManager:
             client_uuid: The client's UUID.
             connection: The WebRTC connection.
             pipeline_task: The pipeline task associated with this connection.
+            context_manager: The DictationContextManager for this connection.
+            turn_controller: The TurnController for this connection.
+            stt_services: Dictionary mapping STT provider IDs to services.
+            llm_services: Dictionary mapping LLM provider IDs to services.
         """
         self._connections[client_uuid] = ConnectionInfo(
             client_uuid=client_uuid,
             connection=connection,
             pipeline_task=pipeline_task,
+            context_manager=context_manager,
+            turn_controller=turn_controller,
+            stt_services=stt_services,
+            llm_services=llm_services,
         )
         logger.debug(f"Registered connection for client: {client_uuid}")
 
@@ -139,3 +163,14 @@ class ClientConnectionManager:
             The count of registered UUIDs.
         """
         return len(self._registered_uuids)
+
+    def get_connection(self, client_uuid: str) -> ConnectionInfo | None:
+        """Get the connection info for a client UUID.
+
+        Args:
+            client_uuid: The client's UUID.
+
+        Returns:
+            The ConnectionInfo if the client is connected, None otherwise.
+        """
+        return self._connections.get(client_uuid)

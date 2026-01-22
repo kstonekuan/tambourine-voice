@@ -39,6 +39,7 @@ from pipecat.transports.smallwebrtc.request_handler import (
 )
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
 
+from api.config_api import runtime_config_router
 from api.config_server import config_router
 from config.settings import Settings
 from processors.client_manager import ClientConnectionManager
@@ -138,20 +139,23 @@ class AppServices:
 async def run_pipeline(
     webrtc_connection: SmallWebRTCConnection,
     services: AppServices,
+    *,
+    stt_services: dict,
+    llm_services: dict,
+    context_manager: DictationContextManager,
+    turn_controller: TurnController,
 ) -> None:
     """Run the Pipecat pipeline for a single WebRTC connection.
 
     Args:
         webrtc_connection: The SmallWebRTCConnection instance for this client
         services: Application services container
+        stt_services: Pre-created STT services for this connection
+        llm_services: Pre-created LLM services for this connection
+        context_manager: Pre-created context manager for this connection
+        turn_controller: Pre-created turn controller for this connection
     """
     logger.info("Starting pipeline for new WebRTC connection")
-
-    # Create fresh service instances for this connection to ensure isolation
-    # between concurrent clients. Each client gets independent WebSocket
-    # connections to STT/LLM providers.
-    stt_services = create_all_available_stt_services(services.settings)
-    llm_services = create_all_available_llm_services(services.settings)
 
     # Create transport using the WebRTC connection
     # (client connects with enableMic: false, only enables when recording starts)
@@ -180,23 +184,15 @@ async def run_pipeline(
         strategy_type=ServiceSwitcherStrategyManual,
     )
 
-    # Initialize processors
-    # DictationContextManager wraps LLMContextAggregatorPair with dictation-specific features
-    context_manager = DictationContextManager()
-    turn_controller = TurnController()
-    # Wire up turn controller to context manager for context reset coordination
-    turn_controller.set_context_manager(context_manager)
-
     # RTVIProcessor handles the RTVI protocol (client messages, server responses)
     rtvi_processor = RTVIProcessor()
 
-    # ConfigurationHandler processes config messages from RTVI client messages
+    # ConfigurationHandler processes provider switching messages from RTVI client
+    # Note: State-only config (prompts, timeouts) is now handled via HTTP API
     config_handler = ConfigurationHandler(
         rtvi_processor=rtvi_processor,
         stt_switcher=stt_switcher,
         llm_switcher=llm_switcher,
-        context_manager=context_manager,
-        turn_controller=turn_controller,
         stt_services=stt_services,
         llm_services=llm_services,
         settings=services.settings,
@@ -366,6 +362,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 # Include config routes
 app.include_router(config_router)
+app.include_router(runtime_config_router)
 
 
 @app.get("/health")
@@ -478,12 +475,42 @@ async def webrtc_offer(
 
     async def connection_callback(connection: SmallWebRTCConnection) -> None:
         """Callback invoked when connection is ready - spawns the pipeline."""
-        task = asyncio.create_task(run_pipeline(connection, services))
+        # Create fresh service instances for this connection to ensure isolation
+        # between concurrent clients. Each client gets independent WebSocket
+        # connections to STT/LLM providers.
+        stt_services = create_all_available_stt_services(services.settings)
+        llm_services = create_all_available_llm_services(services.settings)
+
+        # Create pipeline processors
+        # DictationContextManager wraps LLMContextAggregatorPair with dictation-specific features
+        context_manager = DictationContextManager()
+        turn_controller = TurnController()
+        # Wire up turn controller to context manager for context reset coordination
+        turn_controller.set_context_manager(context_manager)
+
+        task = asyncio.create_task(
+            run_pipeline(
+                connection,
+                services,
+                stt_services=stt_services,
+                llm_services=llm_services,
+                context_manager=context_manager,
+                turn_controller=turn_controller,
+            )
+        )
         services.active_pipeline_tasks.add(task)
         task.add_done_callback(services.active_pipeline_tasks.discard)
 
-        # Track connection by UUID for supersession handling
-        services.client_manager.register_connection(client_uuid, connection, task)
+        # Track connection by UUID with component references for HTTP API access
+        services.client_manager.register_connection(
+            client_uuid,
+            connection,
+            task,
+            context_manager=context_manager,
+            turn_controller=turn_controller,
+            stt_services=stt_services,
+            llm_services=llm_services,
+        )
 
     answer = await services.webrtc_handler.handle_web_request(
         request=webrtc_request,

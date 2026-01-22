@@ -17,7 +17,6 @@ import {
 	DEFAULT_TOGGLE_HOTKEY,
 } from "./lib/hotkeyDefaults";
 import {
-	useAvailableProvidersListener,
 	useRefreshServerQueriesOnConnect,
 	useSettings,
 	useShortcutErrors,
@@ -270,9 +269,6 @@ export default function App() {
 	const connectionState = useRecordingStore((s) => s.state);
 	const hasShownConflictNotification = useRef(false);
 	const queryClient = useQueryClient();
-
-	// Listen for available providers from overlay window (must stay mounted)
-	useAvailableProvidersListener();
 
 	// Refresh server-side queries when connection is established
 	useRefreshServerQueriesOnConnect(connectionState);
