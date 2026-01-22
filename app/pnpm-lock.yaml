@@ -1867,8 +1867,8 @@ packages:
   lines-and-columns@1.2.4:
     resolution: {integrity: sha512-7ylylesZQ/PV29jhEDl3Ufjo6ZX7gCqJr5F7PKrqc93v7fzSymt1BpwEU8nAUXs8qzzvqhbjhK5QZg6Mt/HkBg==}
 
-  lodash@4.17.21:
-    resolution: {integrity: sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg==}
+  lodash@4.17.23:
+    resolution: {integrity: sha512-LgVTMpQtIopCi79SJeDiP0TfWi5CNEc/L/aRdTh3yIvmZXTnheWpKjSZhnvMl8iXbC1tFg9gdHHDMLoV7CnG+w==}
 
   loose-envify@1.4.0:
     resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
@@ -2777,7 +2777,7 @@ snapshots:
       '@daily-co/daily-js': 0.83.1
       '@pipecat-ai/client-js': 1.5.0
       dequal: 2.0.3
-      lodash: 4.17.21
+      lodash: 4.17.23
 
   '@pipecat-ai/voice-ui-kit@0.6.0(@daily-co/daily-js@0.85.0)(@pipecat-ai/client-js@1.5.0)(@pipecat-ai/client-react@1.1.0(@babel/core@7.28.5)(@babel/template@7.27.2)(@pipecat-ai/client-js@1.5.0)(@types/react@19.2.9)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@pipecat-ai/small-webrtc-transport@1.8.1(@pipecat-ai/client-js@1.5.0))(@types/react-dom@19.2.3(@types/react@19.2.9))(@types/react@19.2.9)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(use-sync-external-store@1.6.0(react@19.2.3))':
     dependencies:
@@ -3905,7 +3905,7 @@ snapshots:
 
   lines-and-columns@1.2.4: {}
 
-  lodash@4.17.21: {}
+  lodash@4.17.23: {}
 
   loose-envify@1.4.0:
     dependencies:
