@@ -57,7 +57,7 @@ export type LLMProviderId = KnownLLMProviderId | (string & {});
 // Type guards (isKnownSTTProvider, isKnownLLMProvider) can be added here if needed
 // to detect unknown providers from newer servers and show visual indicators in the UI.
 
-// Re-export event types from events.ts for backwards compatibility
+// Re-export event types for consumers that import from tauri.ts
 export type { ConfigResponse, ConnectionState } from "./events";
 
 import {
