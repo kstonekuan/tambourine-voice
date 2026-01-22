@@ -62,6 +62,16 @@ const ServerMessageSchema = z.discriminatedUnion("type", [
 	}),
 ]);
 
+// Schema for validating RTVI error payloads
+const RTVIErrorSchema = z.object({
+	data: z
+		.object({
+			message: z.string().optional(),
+			fatal: z.boolean().optional(),
+		})
+		.optional(),
+});
+
 // Non-empty array type for type-safe batched sends
 type NonEmptyArray<T> = [T, ...T[]];
 
@@ -669,17 +679,15 @@ function RecordingControl() {
 			(error: unknown) => {
 				console.error("[Pipecat] Error:", error);
 
-				// Check if this is a fatal error that requires reconnection
-				const errorData = error as {
-					data?: { message?: string; fatal?: boolean };
-				};
-				if (errorData?.data?.fatal) {
+				// Safely parse error payload to check for fatal errors
+				const parsed = RTVIErrorSchema.safeParse(error);
+				if (parsed.success && parsed.data.data?.fatal) {
 					console.warn(
 						"[Pipecat] Fatal error detected, triggering reconnection",
 					);
 					send({
 						type: "COMMUNICATION_ERROR",
-						error: errorData.data.message ?? "Fatal error",
+						error: parsed.data.data.message ?? "Fatal error",
 					});
 				}
 			},

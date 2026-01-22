@@ -1,12 +1,12 @@
-"""HTTP API for runtime pipeline configuration.
+"""HTTP API for configuration endpoints.
 
-This module provides REST endpoints for configuring pipeline settings via HTTP,
-using X-Client-UUID header to identify the client's pipeline:
-- PUT /api/config/prompts - Update prompt sections
-- PUT /api/config/stt-timeout - Update STT timeout
-- GET /api/providers - Get available providers (global, no UUID required)
+This module provides REST endpoints for:
+- GET /api/prompt/sections/default - Get default prompt sections (static)
+- PUT /api/config/prompts - Update prompt sections (per-client)
+- PUT /api/config/stt-timeout - Update STT timeout (per-client)
+- GET /api/providers - Get available providers (global)
 
-These endpoints replace the RTVI data channel configuration for state-only updates.
+Per-client endpoints use X-Client-UUID header to identify the client's pipeline.
 Provider switching still uses RTVI since it requires frame injection into the pipeline.
 """
 
@@ -18,6 +18,11 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from processors.llm import (
+    ADVANCED_PROMPT_DEFAULT,
+    DICTIONARY_PROMPT_DEFAULT,
+    MAIN_PROMPT_DEFAULT,
+)
 from services.provider_registry import (
     LLMProviderId,
     STTProviderId,
@@ -28,7 +33,7 @@ from services.provider_registry import (
 if TYPE_CHECKING:
     from processors.client_manager import ClientConnectionManager
 
-runtime_config_router = APIRouter(prefix="/api", tags=["runtime-config"])
+config_router = APIRouter(prefix="/api", tags=["config"])
 
 
 # =============================================================================
@@ -103,6 +108,14 @@ class AvailableProvidersResponse(BaseModel):
     llm: list[ProviderInfo]
 
 
+class DefaultSectionsResponse(BaseModel):
+    """Response with default prompts for each section."""
+
+    main: str
+    advanced: str
+    dictionary: str
+
+
 # =============================================================================
 # Helper functions
 # =============================================================================
@@ -147,7 +160,17 @@ def build_provider_list(
 # =============================================================================
 
 
-@runtime_config_router.put(
+@config_router.get("/prompt/sections/default", response_model=DefaultSectionsResponse)
+async def get_default_sections() -> DefaultSectionsResponse:
+    """Get default prompts for each section."""
+    return DefaultSectionsResponse(
+        main=MAIN_PROMPT_DEFAULT,
+        advanced=ADVANCED_PROMPT_DEFAULT,
+        dictionary=DICTIONARY_PROMPT_DEFAULT,
+    )
+
+
+@config_router.put(
     "/config/prompts",
     response_model=ConfigSuccessResponse,
     responses={
@@ -208,7 +231,7 @@ async def update_prompt_sections(
     return ConfigSuccessResponse(setting="prompt-sections", value="custom")
 
 
-@runtime_config_router.put(
+@config_router.put(
     "/config/stt-timeout",
     response_model=ConfigSuccessResponse,
     responses={
@@ -264,7 +287,7 @@ async def update_stt_timeout(
     return ConfigSuccessResponse(setting="stt-timeout", value=body.timeout_seconds)
 
 
-@runtime_config_router.get(
+@config_router.get(
     "/providers",
     response_model=AvailableProvidersResponse,
 )

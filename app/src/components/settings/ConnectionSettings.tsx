@@ -2,11 +2,24 @@ import { Button, Loader, TextInput } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { Check, Copy, RefreshCw, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { match } from "ts-pattern";
 import { useSettings, useUpdateServerUrl } from "../../lib/queries";
-import { DEFAULT_SERVER_URL, tauriAPI } from "../../lib/tauri";
+import {
+	type ConnectionState,
+	DEFAULT_SERVER_URL,
+	tauriAPI,
+} from "../../lib/tauri";
 import { useRecordingStore } from "../../stores/recordingStore";
 
 type PingStatus = "idle" | "loading" | "success" | "error";
+
+// Type-safe color mapping for ping status
+const PING_STATUS_COLORS = {
+	idle: "gray",
+	loading: "gray",
+	success: "green",
+	error: "red",
+} as const satisfies Record<PingStatus, "green" | "red" | "gray">;
 
 export function ConnectionSettings() {
 	const { data: settings, isLoading } = useSettings();
@@ -138,38 +151,35 @@ export function ConnectionSettings() {
 	const isReconnecting = connectionState === "reconnecting";
 	const isButtonDisabled = isConnecting || isReconnecting;
 
-	const getStateDisplay = () => {
-		switch (connectionState) {
-			case "disconnected":
-				return { text: "Disconnected", color: "var(--mantine-color-red-6)" };
-			case "connecting":
-				return {
-					text: "Connecting...",
-					color: "var(--mantine-color-yellow-6)",
-				};
-			case "reconnecting":
-				return {
-					text: "Reconnecting...",
-					color: "var(--mantine-color-yellow-6)",
-				};
-			case "idle":
-				return { text: "Connected", color: "var(--mantine-color-green-6)" };
-			case "recording":
-				return {
-					text: "Connected (Recording)",
-					color: "var(--mantine-color-green-6)",
-				};
-			case "processing":
-				return {
-					text: "Connected (Processing)",
-					color: "var(--mantine-color-green-6)",
-				};
-			default:
-				return { text: "Unknown", color: "var(--mantine-color-gray-6)" };
-		}
-	};
+	const getStateDisplay = (state: ConnectionState) =>
+		match(state)
+			.with("disconnected", () => ({
+				text: "Disconnected",
+				color: "var(--mantine-color-red-6)",
+			}))
+			.with("connecting", () => ({
+				text: "Connecting...",
+				color: "var(--mantine-color-yellow-6)",
+			}))
+			.with("reconnecting", () => ({
+				text: "Reconnecting...",
+				color: "var(--mantine-color-yellow-6)",
+			}))
+			.with("idle", () => ({
+				text: "Connected",
+				color: "var(--mantine-color-green-6)",
+			}))
+			.with("recording", () => ({
+				text: "Connected (Recording)",
+				color: "var(--mantine-color-green-6)",
+			}))
+			.with("processing", () => ({
+				text: "Connected (Processing)",
+				color: "var(--mantine-color-green-6)",
+			}))
+			.exhaustive();
 
-	const stateDisplay = getStateDisplay();
+	const stateDisplay = getStateDisplay(connectionState);
 
 	return (
 		<div className="settings-section animate-in animate-in-delay-4">
@@ -257,13 +267,7 @@ export function ConnectionSettings() {
 							loading={pingStatus === "loading"}
 							size="sm"
 							variant="light"
-							color={
-								pingStatus === "success"
-									? "green"
-									: pingStatus === "error"
-										? "red"
-										: "gray"
-							}
+							color={PING_STATUS_COLORS[pingStatus]}
 							leftSection={
 								pingStatus === "success" ? (
 									<Check size={14} />

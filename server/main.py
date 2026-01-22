@@ -13,7 +13,12 @@ import asyncio
 import re
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from types.messages import ClientMessageType
+from types.messages import (
+    ClientMessage,
+    ConfigMessage,
+    StartRecordingMessage,
+    StopRecordingMessage,
+)
 from typing import Annotated, Any, Final, cast
 
 import typer
@@ -39,9 +44,9 @@ from pipecat.transports.smallwebrtc.request_handler import (
     SmallWebRTCRequestHandler,
 )
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
+from pydantic import ValidationError
 
-from api.config_api import runtime_config_router
-from api.config_server import config_router
+from api.config_api import config_router
 from config.settings import Settings
 from processors.client_manager import ClientConnectionManager
 from processors.configuration import ConfigurationHandler
@@ -205,19 +210,29 @@ async def run_pipeline(
         """Handle RTVI client messages for configuration and recording control."""
         _ = processor  # Unused, required by event handler signature
 
-        # Extract message type and data from RTVI client message
-        msg_type = message.type if hasattr(message, "type") else None
-        data = message.data if hasattr(message, "data") else {}
-        if not msg_type:
+        # Parse the raw RTVI message into a typed Pydantic model
+        # This converts the message.type + message.data structure into a discriminated union
+        try:
+            raw_data = {
+                "type": message.type if hasattr(message, "type") else None,
+                "data": message.data if hasattr(message, "data") else {},
+            }
+            if raw_data["type"] is None:
+                return
+
+            parsed = ClientMessage.model_validate(raw_data)
+        except ValidationError as e:
+            logger.warning(f"Invalid client message: {e}")
             return
 
-        match msg_type:
-            case ClientMessageType.START_RECORDING:
+        # Handle the typed message with exhaustive pattern matching
+        match parsed:
+            case StartRecordingMessage():
                 await turn_controller.start_recording()
-            case ClientMessageType.STOP_RECORDING:
+            case StopRecordingMessage():
                 await turn_controller.stop_recording()
-            case _:
-                await config_handler.handle_client_message(msg_type, data)
+            case ConfigMessage():
+                await config_handler.handle_config_message(parsed)
 
     # Build pipeline - RTVIProcessor at the start handles RTVI protocol
     # The aggregator pair from context_manager collects transcriptions and LLM responses
@@ -362,7 +377,6 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 # Include config routes
 app.include_router(config_router)
-app.include_router(runtime_config_router)
 
 
 @app.get("/health")

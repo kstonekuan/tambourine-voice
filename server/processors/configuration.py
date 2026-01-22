@@ -10,7 +10,14 @@ in api/config_api.py.
 
 from __future__ import annotations
 
-from types.messages import ClientMessageType, ServerMessageType
+from types.messages import (
+    ConfigErrorMessage,
+    ConfigMessage,
+    ConfigUpdatedMessage,
+    SetLLMProviderMessage,
+    SetSTTProviderMessage,
+    SettingName,
+)
 from types.providers import (
     AutoProvider,
     KnownLLMProvider,
@@ -19,10 +26,8 @@ from types.providers import (
     OtherLLMProvider,
     OtherSTTProvider,
     STTProviderSelection,
-    parse_llm_provider_selection,
-    parse_stt_provider_selection,
 )
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from pipecat.frames.frames import ManuallySwitchServiceFrame
@@ -82,53 +87,39 @@ class ConfigurationHandler:
         self._llm_services = llm_services
         self._settings = settings
 
-    async def handle_client_message(self, msg_type: str, data: dict[str, Any]) -> bool:
-        """Handle a client message from RTVIProcessor.
+    async def handle_config_message(self, message: ConfigMessage) -> None:
+        """Handle a typed configuration message.
 
         Args:
-            msg_type: The message type (e.g., "set-stt-provider")
-            data: The message data payload
-
-        Returns:
-            True if the message was handled as a config message
+            message: The parsed configuration message (SetSTTProviderMessage or SetLLMProviderMessage)
         """
-        match msg_type:
-            case ClientMessageType.SET_STT_PROVIDER:
-                logger.debug(f"Received config message: type={msg_type}")
-                selection = parse_stt_provider_selection(data.get("provider"))
-                await self._switch_stt_provider(selection)
-                return True
-            case ClientMessageType.SET_LLM_PROVIDER:
-                logger.debug(f"Received config message: type={msg_type}")
-                selection = parse_llm_provider_selection(data.get("provider"))
-                await self._switch_llm_provider(selection)
-                return True
-            case _:
-                return False
+        match message:
+            case SetSTTProviderMessage(data=data):
+                logger.debug(f"Received config message: type={message.type}")
+                await self._switch_stt_provider(data.provider)
+            case SetLLMProviderMessage(data=data):
+                logger.debug(f"Received config message: type={message.type}")
+                await self._switch_llm_provider(data.provider)
 
-    async def _switch_stt_provider(self, selection: STTProviderSelection | None) -> None:
+    async def _switch_stt_provider(self, selection: STTProviderSelection) -> None:
         """Switch to a different STT provider.
 
         Args:
-            selection: The parsed provider selection (auto, known, or other)
+            selection: The provider selection (auto, known, or other)
         """
-        setting_name = "stt-provider"
-
-        if selection is None:
-            await self._send_config_error(setting_name, "Provider value is required")
-            return
+        setting = SettingName.STT_PROVIDER
 
         match selection:
             case AutoProvider():
                 if self._settings.auto_stt_provider is None:
                     logger.warning("No auto STT provider configured, no-op")
-                    await self._send_config_success(setting_name, "auto")
+                    await self._send_config_success(setting, "auto")
                     return
                 try:
                     provider_id = STTProviderId(self._settings.auto_stt_provider)
                 except ValueError:
                     await self._send_config_error(
-                        setting_name,
+                        setting,
                         f"Invalid auto STT provider configured: {self._settings.auto_stt_provider}",
                     )
                     return
@@ -139,12 +130,12 @@ class ConfigurationHandler:
                 try:
                     provider_id = STTProviderId(raw_id)
                 except ValueError:
-                    await self._send_config_error(setting_name, f"Unknown provider: {raw_id}")
+                    await self._send_config_error(setting, f"Unknown provider: {raw_id}")
                     return
 
         if provider_id not in self._stt_services:
             await self._send_config_error(
-                setting_name,
+                setting,
                 f"Provider '{provider_id.value}' not available (no API key configured)",
             )
             return
@@ -156,31 +147,27 @@ class ConfigurationHandler:
         )
 
         logger.success(f"Switched STT provider to: {provider_id.value}")
-        await self._send_config_success(setting_name, provider_id.value)
+        await self._send_config_success(setting, provider_id.value)
 
-    async def _switch_llm_provider(self, selection: LLMProviderSelection | None) -> None:
+    async def _switch_llm_provider(self, selection: LLMProviderSelection) -> None:
         """Switch to a different LLM provider.
 
         Args:
-            selection: The parsed provider selection (auto, known, or other)
+            selection: The provider selection (auto, known, or other)
         """
-        setting_name = "llm-provider"
-
-        if selection is None:
-            await self._send_config_error(setting_name, "Provider value is required")
-            return
+        setting = SettingName.LLM_PROVIDER
 
         match selection:
             case AutoProvider():
                 if self._settings.auto_llm_provider is None:
                     logger.warning("No auto LLM provider configured, no-op")
-                    await self._send_config_success(setting_name, "auto")
+                    await self._send_config_success(setting, "auto")
                     return
                 try:
                     provider_id = LLMProviderId(self._settings.auto_llm_provider)
                 except ValueError:
                     await self._send_config_error(
-                        setting_name,
+                        setting,
                         f"Invalid auto LLM provider configured: {self._settings.auto_llm_provider}",
                     )
                     return
@@ -191,12 +178,12 @@ class ConfigurationHandler:
                 try:
                     provider_id = LLMProviderId(raw_id)
                 except ValueError:
-                    await self._send_config_error(setting_name, f"Unknown provider: {raw_id}")
+                    await self._send_config_error(setting, f"Unknown provider: {raw_id}")
                     return
 
         if provider_id not in self._llm_services:
             await self._send_config_error(
-                setting_name,
+                setting,
                 f"Provider '{provider_id.value}' not available (no API key configured)",
             )
             return
@@ -208,28 +195,17 @@ class ConfigurationHandler:
         )
 
         logger.success(f"Switched LLM provider to: {provider_id.value}")
-        await self._send_config_success(setting_name, provider_id.value)
+        await self._send_config_success(setting, provider_id.value)
 
-    async def _send_config_success(self, setting: str, value: Any) -> None:
+    async def _send_config_success(self, setting: SettingName, value: str) -> None:
         """Send a configuration success message to the client."""
-        frame = RTVIServerMessageFrame(
-            data={
-                "type": ServerMessageType.CONFIG_UPDATED,
-                "setting": setting,
-                "value": value,
-                "success": True,
-            }
-        )
+        message = ConfigUpdatedMessage(setting=setting, value=value)
+        frame = RTVIServerMessageFrame(data=message.model_dump())
         await self._rtvi.push_frame(frame)
 
-    async def _send_config_error(self, setting: str, error: str) -> None:
+    async def _send_config_error(self, setting: SettingName, error: str) -> None:
         """Send a configuration error message to the client."""
-        frame = RTVIServerMessageFrame(
-            data={
-                "type": ServerMessageType.CONFIG_ERROR,
-                "setting": setting,
-                "error": error,
-            }
-        )
+        message = ConfigErrorMessage(setting=setting, error=error)
+        frame = RTVIServerMessageFrame(data=message.model_dump())
         await self._rtvi.push_frame(frame)
         logger.warning(f"Config error for {setting}: {error}")
