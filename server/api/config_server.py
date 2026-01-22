@@ -10,7 +10,7 @@ static configuration data that doesn't require pipeline access.
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from processors.llm import (
@@ -18,6 +18,7 @@ from processors.llm import (
     DICTIONARY_PROMPT_DEFAULT,
     MAIN_PROMPT_DEFAULT,
 )
+from utils.rate_limiter import RATE_LIMIT_CONFIG, get_ip_only, limiter
 
 config_router = APIRouter()
 
@@ -36,8 +37,13 @@ class DefaultSectionsResponse(BaseModel):
 
 
 @config_router.get("/api/prompt/sections/default", response_model=DefaultSectionsResponse)
-async def get_default_sections() -> DefaultSectionsResponse:
-    """Get default prompts for each section."""
+@limiter.limit(RATE_LIMIT_CONFIG, key_func=get_ip_only)
+async def get_default_sections(request: Request) -> DefaultSectionsResponse:
+    """Get default prompts for each section.
+
+    Rate limited to prevent abuse, though this endpoint serves static data.
+    """
+    _ = request  # Required for rate limiter but unused in handler
     return DefaultSectionsResponse(
         main=MAIN_PROMPT_DEFAULT,
         advanced=ADVANCED_PROMPT_DEFAULT,

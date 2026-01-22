@@ -38,6 +38,8 @@ from pipecat.transports.smallwebrtc.request_handler import (
     SmallWebRTCRequestHandler,
 )
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from api.config_server import config_router
 from config.settings import Settings
@@ -53,6 +55,14 @@ from services.providers import (
 )
 from utils.logger import configure_logging
 from utils.observers import PipelineLogObserver
+from utils.rate_limiter import (
+    RATE_LIMIT_ICE,
+    RATE_LIMIT_OFFER,
+    RATE_LIMIT_REGISTRATION,
+    RATE_LIMIT_VERIFY,
+    get_ip_only,
+    limiter,
+)
 
 # ICE servers for WebRTC NAT traversal
 ICE_SERVERS: Final[list[IceServer]] = [
@@ -338,6 +348,10 @@ async def lifespan(fastapi_app: FastAPI):  # noqa: ANN201
 # Create FastAPI app
 app = FastAPI(title="Tambourine Server", lifespan=lifespan)
 
+# Add rate limiter to app state
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+
 app.add_middleware(
     CORSMiddleware,  # type: ignore[invalid-argument-type]
     allow_origins=["*"],
@@ -380,11 +394,14 @@ async def health_check() -> dict[str, str]:
 
 
 @app.post("/api/client/register")
+@limiter.limit(RATE_LIMIT_REGISTRATION, key_func=get_ip_only)
 async def register_client(request: Request) -> dict[str, str]:
     """Generate, register, and return a new client UUID.
 
     This endpoint is called by clients on first connection or when their
     stored UUID is rejected (e.g., after server restart).
+
+    Rate limited by IP to prevent mass UUID registration attacks.
 
     Returns:
         A dictionary containing the newly generated UUID.
@@ -396,11 +413,14 @@ async def register_client(request: Request) -> dict[str, str]:
 
 
 @app.get("/api/client/verify/{client_uuid}")
+@limiter.limit(RATE_LIMIT_VERIFY, key_func=get_ip_only)
 async def verify_client(client_uuid: str, request: Request) -> dict[str, bool]:
     """Verify if a client UUID is registered with the server.
 
     This endpoint allows clients to check if their stored UUID is still valid
     (e.g., after server restart where in-memory registrations are lost).
+
+    Rate limited by IP to prevent UUID enumeration attacks.
 
     Returns:
         A dictionary with 'registered' boolean indicating if UUID is valid.
@@ -416,6 +436,7 @@ async def verify_client(client_uuid: str, request: Request) -> dict[str, bool]:
 
 
 @app.post("/api/offer")
+@limiter.limit(RATE_LIMIT_OFFER, key_func=get_ip_only)
 async def webrtc_offer(
     request: Request,
 ) -> dict[str, str] | None:
@@ -428,6 +449,9 @@ async def webrtc_offer(
     4. Creates or reuses a SmallWebRTCConnection via the handler
     5. Returns SDP answer to client
     6. Spawns the Pipecat pipeline as a background task
+
+    Rate limited by IP. Normal client usage (reconnecting occasionally) won't
+    hit the limit, but attackers spamming connection attempts will be blocked.
     """
     services: AppServices = request.app.state.services
 
@@ -494,6 +518,7 @@ async def webrtc_offer(
 
 
 @app.patch("/api/offer")
+@limiter.limit(RATE_LIMIT_ICE, key_func=get_ip_only)
 async def webrtc_ice_candidate(
     patch_request: SmallWebRTCPatchRequest,
     request: Request,
@@ -503,6 +528,9 @@ async def webrtc_ice_candidate(
     Filters mDNS ICE candidates sent via ICE trickle to prevent aioice
     resolution issues. mDNS candidates (.local addresses) are sent
     for privacy, but these cause state accumulation issues in aioice.
+
+    Rate limited with a high threshold as ICE candidates come in rapid
+    bursts during WebRTC connection setup.
     """
     services: AppServices = request.app.state.services
 
