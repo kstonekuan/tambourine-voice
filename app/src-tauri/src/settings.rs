@@ -148,6 +148,9 @@ impl HotkeyConfig {
 pub struct PromptSection {
     pub enabled: bool,
     pub content: Option<String>,
+    /// When true, use the built-in default prompt instead of custom content
+    #[serde(default)]
+    pub auto: bool,
 }
 
 /// Configuration for all cleanup prompt sections

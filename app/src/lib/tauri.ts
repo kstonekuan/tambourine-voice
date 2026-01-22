@@ -108,6 +108,8 @@ interface HistoryEntry {
 export interface PromptSection {
 	enabled: boolean;
 	content: string | null;
+	/** When true, use the built-in default prompt instead of custom content */
+	auto: boolean;
 }
 
 export interface CleanupPromptSections {

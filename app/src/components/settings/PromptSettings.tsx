@@ -9,9 +9,9 @@ import { type CleanupPromptSections, tauriAPI } from "../../lib/tauri";
 import { PromptSectionEditor } from "./PromptSectionEditor";
 
 const DEFAULT_SECTIONS: CleanupPromptSections = {
-	main: { enabled: true, content: null },
-	advanced: { enabled: true, content: null },
-	dictionary: { enabled: false, content: null },
+	main: { enabled: true, content: null, auto: true },
+	advanced: { enabled: true, content: null, auto: true },
+	dictionary: { enabled: false, content: null, auto: false },
 };
 
 type SectionKey = "main" | "advanced" | "dictionary";
@@ -19,6 +19,7 @@ type SectionKey = "main" | "advanced" | "dictionary";
 interface LocalSectionState {
 	enabled: boolean;
 	content: string;
+	auto: boolean;
 }
 
 interface LocalSections {
@@ -35,9 +36,9 @@ export function PromptSettings() {
 
 	// Consolidated local state for all sections
 	const [localSections, setLocalSections] = useState<LocalSections>({
-		main: { enabled: true, content: "" },
-		advanced: { enabled: true, content: "" },
-		dictionary: { enabled: false, content: "" },
+		main: { enabled: true, content: "", auto: true },
+		advanced: { enabled: true, content: "", auto: true },
+		dictionary: { enabled: false, content: "", auto: false },
 	});
 
 	// Track if each section has custom content (non-null, non-empty string)
@@ -61,14 +62,17 @@ export function PromptSettings() {
 				main: {
 					enabled: sections.main.enabled,
 					content: sections.main.content ?? defaultSections.main,
+					auto: sections.main.auto ?? true,
 				},
 				advanced: {
 					enabled: sections.advanced.enabled,
 					content: sections.advanced.content ?? defaultSections.advanced,
+					auto: sections.advanced.auto ?? true,
 				},
 				dictionary: {
 					enabled: sections.dictionary.enabled,
 					content: sections.dictionary.content ?? defaultSections.dictionary,
+					auto: false, // Dictionary never has auto mode
 				},
 			});
 		}
@@ -80,8 +84,18 @@ export function PromptSettings() {
 			key: SectionKey;
 			enabled?: boolean;
 			content?: string | null;
+			auto?: boolean;
 		}): CleanupPromptSections => {
 			const getContent = (key: SectionKey): string | null => {
+				// When auto is enabled, always return null to use server default
+				const isAuto =
+					overrides?.key === key && overrides.auto !== undefined
+						? overrides.auto
+						: localSections[key].auto;
+				if (isAuto) {
+					return null;
+				}
+
 				const content =
 					overrides?.key === key && overrides.content !== undefined
 						? overrides.content
@@ -100,15 +114,27 @@ export function PromptSettings() {
 					: localSections[key].enabled;
 			};
 
+			const getAuto = (key: SectionKey): boolean => {
+				return overrides?.key === key && overrides.auto !== undefined
+					? overrides.auto
+					: localSections[key].auto;
+			};
+
 			return {
-				main: { enabled: getEnabled("main"), content: getContent("main") },
+				main: {
+					enabled: getEnabled("main"),
+					content: getContent("main"),
+					auto: getAuto("main"),
+				},
 				advanced: {
 					enabled: getEnabled("advanced"),
 					content: getContent("advanced"),
+					auto: getAuto("advanced"),
 				},
 				dictionary: {
 					enabled: getEnabled("dictionary"),
 					content: getContent("dictionary"),
+					auto: false, // Dictionary never has auto mode
 				},
 			};
 		},
@@ -164,6 +190,18 @@ export function PromptSettings() {
 		[defaultSections, buildSections, saveAllSections],
 	);
 
+	// Auto toggle handler - when switching to auto, content is sent as null (use server default)
+	const handleAutoToggle = useCallback(
+		(key: SectionKey, auto: boolean) => {
+			setLocalSections((prev) => ({
+				...prev,
+				[key]: { ...prev[key], auto },
+			}));
+			saveAllSections(buildSections({ key, auto }));
+		},
+		[buildSections, saveAllSections],
+	);
+
 	return (
 		<div className="settings-section animate-in animate-in-delay-4">
 			<h3 className="settings-section-title">LLM Formatting Prompt</h3>
@@ -189,6 +227,9 @@ export function PromptSettings() {
 							initialContent={localSections.main.content}
 							defaultContent={defaultSections?.main ?? ""}
 							hasCustom={hasCustomContent.main}
+							auto={localSections.main.auto}
+							onAutoToggle={(auto) => handleAutoToggle("main", auto)}
+							showAutoToggle={true}
 							onToggle={() => {}}
 							onSave={(content) => handleSave("main", content)}
 							onReset={() => handleReset("main")}
@@ -203,6 +244,9 @@ export function PromptSettings() {
 							initialContent={localSections.advanced.content}
 							defaultContent={defaultSections?.advanced ?? ""}
 							hasCustom={hasCustomContent.advanced}
+							auto={localSections.advanced.auto}
+							onAutoToggle={(auto) => handleAutoToggle("advanced", auto)}
+							showAutoToggle={true}
 							onToggle={(checked) => handleToggle("advanced", checked)}
 							onSave={(content) => handleSave("advanced", content)}
 							onReset={() => handleReset("advanced")}
@@ -217,6 +261,7 @@ export function PromptSettings() {
 							initialContent={localSections.dictionary.content}
 							defaultContent={defaultSections?.dictionary ?? ""}
 							hasCustom={hasCustomContent.dictionary}
+							showAutoToggle={false}
 							onToggle={(checked) => handleToggle("dictionary", checked)}
 							onSave={(content) => handleSave("dictionary", content)}
 							onReset={() => handleReset("dictionary")}
