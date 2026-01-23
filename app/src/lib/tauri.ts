@@ -144,25 +144,6 @@ export const KNOWN_SETTINGS = [
 	"stt-timeout",
 ] as const;
 
-/**
- * Type-safe setting name for known settings.
- */
-export type KnownSettingName = (typeof KNOWN_SETTINGS)[number];
-
-/**
- * Forward-compatible setting name that accepts unknown settings from newer servers.
- * The `(string & {})` trick preserves autocomplete for known values while accepting any string.
- */
-export type SettingName = KnownSettingName | (string & {});
-
-/**
- * Type guard to check if a setting name is known to this client version.
- * Unknown settings from newer servers can be gracefully ignored.
- */
-export function isKnownSetting(setting: string): setting is KnownSettingName {
-	return KNOWN_SETTINGS.includes(setting as KnownSettingName);
-}
-
 export type { ConfigResponse, ConnectionState } from "./events";
 
 import {

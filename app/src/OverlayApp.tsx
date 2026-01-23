@@ -32,7 +32,7 @@ import {
 	safeSendClientMessage,
 } from "./lib/safeSendClientMessage";
 import {
-	isKnownSetting,
+	KNOWN_SETTINGS,
 	type LLMProviderSelection,
 	type STTProviderSelection,
 	tauriAPI,
@@ -49,16 +49,17 @@ const KnownServerMessageSchema = z.discriminatedUnion("type", [
 		type: z.literal("recording-complete"),
 		hasContent: z.boolean().optional(),
 	}),
-	// Provider switching still uses RTVI (requires frame injection)
+	// Provider switching uses RTVI (requires frame injection into pipeline)
+	// z.enum() validates known settings; unknown settings become UnknownServerMessage
 	z.object({
 		type: z.literal("config-updated"),
-		setting: z.string(),
+		setting: z.enum(KNOWN_SETTINGS),
 		value: z.unknown(),
 		success: z.literal(true),
 	}),
 	z.object({
 		type: z.literal("config-error"),
-		setting: z.string(),
+		setting: z.enum(KNOWN_SETTINGS),
 		error: z.string(),
 	}),
 ]);
@@ -684,12 +685,6 @@ function RecordingControl() {
 						send({ type: "RESPONSE_RECEIVED" });
 					})
 					.with({ type: "config-updated" }, ({ setting, value }) => {
-						// Check if setting is known to this client version
-						if (!isKnownSetting(setting)) {
-							console.debug("Unknown setting from server:", setting);
-							return;
-						}
-						// Only provider switching responses come via RTVI now
 						tauriAPI.emitConfigResponse({
 							type: "config-updated",
 							setting,
@@ -697,12 +692,6 @@ function RecordingControl() {
 						});
 					})
 					.with({ type: "config-error" }, ({ setting, error }) => {
-						// Check if setting is known to this client version
-						if (!isKnownSetting(setting)) {
-							console.debug("Unknown setting error from server:", setting);
-							return;
-						}
-						// Only provider switching errors come via RTVI now
 						tauriAPI.emitConfigResponse({
 							type: "config-error",
 							setting,
