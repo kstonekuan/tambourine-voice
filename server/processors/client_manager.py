@@ -118,35 +118,43 @@ class ClientConnectionManager:
             del self._connections[client_uuid]
             logger.debug(f"Unregistered connection for client: {client_uuid}")
 
-    async def disconnect_existing(self, client_uuid: str) -> None:
-        """Disconnect any existing connection with the same UUID.
+    def take_existing_connection(self, client_uuid: str) -> ConnectionInfo | None:
+        """Remove and return any existing connection for a client UUID.
 
-        This ensures one client = one connection. When a client reconnects,
-        the old connection is terminated.
+        This atomically removes the connection from tracking, freeing the UUID
+        slot immediately so a new connection can be registered. The returned
+        ConnectionInfo can then be cleaned up in the background.
 
         Args:
-            client_uuid: The client's UUID whose existing connection should be closed.
-        """
-        if client_uuid not in self._connections:
-            return
+            client_uuid: The client's UUID.
 
-        existing = self._connections[client_uuid]
-        logger.info(f"Disconnecting existing connection for client: {client_uuid}")
+        Returns:
+            The ConnectionInfo if one existed, None otherwise.
+        """
+        return self._connections.pop(client_uuid, None)
+
+    async def cleanup_connection(self, connection_info: ConnectionInfo) -> None:
+        """Clean up a disconnected connection (cancel task, close WebRTC).
+
+        This operates on a specific ConnectionInfo object, not a UUID lookup,
+        so it's safe to run in the background after take_existing_connection().
+
+        Args:
+            connection_info: The connection to clean up.
+        """
+        logger.info(f"Cleaning up old connection for client: {connection_info.client_uuid}")
 
         # Cancel the pipeline task - this will trigger cleanup
-        if not existing.pipeline_task.done():
+        if not connection_info.pipeline_task.done():
+            connection_info.pipeline_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
-                await existing.pipeline_task
-                pass
+                await connection_info.pipeline_task
 
         # Close the WebRTC connection
         try:
-            await existing.connection.disconnect()
+            await connection_info.connection.disconnect()
         except Exception as error:
-            logger.warning(f"Error closing existing connection: {error}")
-
-        # Remove from our tracking
-        self.unregister_connection(client_uuid)
+            logger.warning(f"Error closing old connection: {error}")
 
     def get_active_connection_count(self) -> int:
         """Get the number of active connections.

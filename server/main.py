@@ -41,13 +41,20 @@ from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from api.config_api import runtime_config_router
-from api.config_server import config_router
+from api.config_api import config_router
 from config.settings import Settings
 from processors.client_manager import ClientConnectionManager
 from processors.configuration import ConfigurationHandler
 from processors.context_manager import DictationContextManager
 from processors.turn_controller import TurnController
+from protocol.messages import (
+    SetLLMProviderMessage,
+    SetSTTProviderMessage,
+    StartRecordingMessage,
+    StopRecordingMessage,
+    UnknownClientMessage,
+    parse_client_message,
+)
 from services.providers import (
     create_all_available_llm_services,
     create_all_available_stt_services,
@@ -214,20 +221,28 @@ async def run_pipeline(
         """Handle RTVI client messages for configuration and recording control."""
         _ = processor  # Unused, required by event handler signature
 
-        # Extract message type and data from RTVI client message
-        msg_type = message.type if hasattr(message, "type") else None
-        data = message.data if hasattr(message, "data") else {}
-        if not msg_type:
+        # Parse the raw RTVI message into a typed Pydantic model
+        # This converts the message.type + message.data structure into a discriminated union
+        raw_data = {
+            "type": message.type if hasattr(message, "type") else None,
+            "data": message.data if hasattr(message, "data") else {},
+        }
+        if raw_data["type"] is None:
             return
 
-        if msg_type == "start-recording":
-            await turn_controller.start_recording()
-            return
-        if msg_type == "stop-recording":
-            await turn_controller.stop_recording()
-            return
+        # Use forward-compatible parser (never returns None)
+        parsed = parse_client_message(raw_data)
 
-        await config_handler.handle_client_message(msg_type, data)
+        # Handle the typed message with exhaustive pattern matching
+        match parsed:
+            case StartRecordingMessage():
+                await turn_controller.start_recording()
+            case StopRecordingMessage():
+                await turn_controller.stop_recording()
+            case SetSTTProviderMessage() | SetLLMProviderMessage():
+                await config_handler.handle_config_message(parsed)
+            case UnknownClientMessage():
+                pass  # Already logged at debug level in parse_client_message
 
     # Build pipeline - RTVIProcessor at the start handles RTVI protocol
     # The aggregator pair from context_manager collects transcriptions and LLM responses
@@ -376,7 +391,6 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 # Include config routes
 app.include_router(config_router)
-app.include_router(runtime_config_router)
 
 
 @app.get("/health")
@@ -405,7 +419,7 @@ async def register_client(request: Request) -> dict[str, str]:
     """
     services: AppServices = request.app.state.services
     client_uuid = services.client_manager.generate_and_register_uuid()
-    logger.info(f"Registered new client: {client_uuid}")
+    logger.success(f"Registered new client: {client_uuid}")
     return {"uuid": client_uuid}
 
 
@@ -479,9 +493,13 @@ async def webrtc_offer(
             detail="Unregistered client UUID. Please register first.",
         )
 
-    # Disconnect existing connection with same UUID (one client = one connection)
-    # Run in background - no need to wait for cleanup before proceeding
-    create_background_task(services.client_manager.disconnect_existing(client_uuid))
+    # Handle existing connection with same UUID (one client = one connection)
+    # 1. Synchronously remove old connection from tracking (frees UUID slot immediately)
+    # 2. Clean up old connection in background (non-blocking)
+    # This avoids the race condition where background cleanup accidentally kills new connection
+    old_connection = services.client_manager.take_existing_connection(client_uuid)
+    if old_connection:
+        create_background_task(services.client_manager.cleanup_connection(old_connection))
     logger.info(f"Client connecting with UUID: {client_uuid}")
 
     # Filter mDNS candidates from SDP to prevent aioice resolution issues.
@@ -610,7 +628,7 @@ def main(
     configure_logging(log_level)
 
     if verbose:
-        logger.info("Verbose logging enabled")
+        logger.debug("Verbose logging enabled")
 
     # Initialize services and store on app.state
     services = initialize_services(settings)

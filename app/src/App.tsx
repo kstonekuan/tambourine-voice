@@ -254,14 +254,25 @@ function SettingsView() {
 	);
 }
 
+// Type-safe setting name mapping
+type SettingKey =
+	| "stt-provider"
+	| "llm-provider"
+	| "prompt-sections"
+	| "stt-timeout";
+
+const SETTING_DISPLAY_NAMES: Record<SettingKey, string> = {
+	"stt-provider": "STT provider",
+	"llm-provider": "LLM provider",
+	"prompt-sections": "Formatting prompt",
+	"stt-timeout": "STT timeout",
+};
+
 function formatSettingName(setting: string): string {
-	const names: Record<string, string> = {
-		"stt-provider": "STT provider",
-		"llm-provider": "LLM provider",
-		"prompt-sections": "Formatting prompt",
-		"stt-timeout": "STT timeout",
-	};
-	return names[setting] ?? setting;
+	if (setting in SETTING_DISPLAY_NAMES) {
+		return SETTING_DISPLAY_NAMES[setting as SettingKey];
+	}
+	return setting;
 }
 
 export default function App() {

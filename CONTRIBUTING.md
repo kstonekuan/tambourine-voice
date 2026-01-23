@@ -90,6 +90,28 @@ Use descriptive commit messages with a type prefix:
 
 Example: `Feat: add support for Azure Speech provider`
 
+## Code Style & Philosophy
+
+### Typing & Pattern Matching
+
+- Prefer **explicit types** over raw dicts—make invalid states unrepresentable where practical
+- Use **exhaustive pattern matching** (`match` in Python, `ts-pattern` in TypeScript) so the type checker can verify all cases are handled
+- Structure types to enable exhaustive matching when handling variants (e.g., message types)
+
+### Forward Compatibility
+
+Client and server should evolve independently:
+
+- **Unknown messages**: Parse to an explicit `Unknown*` variant (never `None`), log at debug level, preserve raw data
+- **Unknown enum values**: Use a fallback variant (e.g., `Unknown`) that preserves the raw value
+- **Unknown settings**: Use type guards to gracefully ignore unrecognized values from newer versions
+
+### Self-Documenting Code
+
+- **Verbose naming**: `_handle_start_recording()` over `start()`—names should read like documentation
+- **Strategic comments**: Only for non-obvious logic or architectural decisions; avoid restating what code shows
+- **Module docstrings**: Explain *why* the module exists, not just what it does
+
 ## Pull Request Process
 
 1. Fork the repository and create a feature branch from `main`

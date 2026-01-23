@@ -31,30 +31,81 @@ import {
 	matchSendResult,
 	safeSendClientMessage,
 } from "./lib/safeSendClientMessage";
-import { tauriAPI } from "./lib/tauri";
+import {
+	KNOWN_SETTINGS,
+	type LLMProviderSelection,
+	type STTProviderSelection,
+	tauriAPI,
+	toLLMProviderSelection,
+	toSTTProviderSelection,
+} from "./lib/tauri";
 import "./overlay-global.css";
 
 const SERVER_RESPONSE_TIMEOUT_MS = 10_000;
 
 // Server message schemas as a discriminated union for single-parse handling
-const ServerMessageSchema = z.discriminatedUnion("type", [
+const KnownServerMessageSchema = z.discriminatedUnion("type", [
 	z.object({
 		type: z.literal("recording-complete"),
 		hasContent: z.boolean().optional(),
 	}),
-	// Provider switching still uses RTVI (requires frame injection)
+	// Provider switching uses RTVI (requires frame injection into pipeline)
+	// z.enum() validates known settings; unknown settings become UnknownServerMessage
 	z.object({
 		type: z.literal("config-updated"),
-		setting: z.string(),
+		setting: z.enum(KNOWN_SETTINGS),
 		value: z.unknown(),
 		success: z.literal(true),
 	}),
 	z.object({
 		type: z.literal("config-error"),
-		setting: z.string(),
+		setting: z.enum(KNOWN_SETTINGS),
 		error: z.string(),
 	}),
 ]);
+
+type KnownServerMessage = z.infer<typeof KnownServerMessageSchema>;
+
+/**
+ * Unknown server message type (forward compatibility).
+ *
+ * Preserves the raw message data for debugging, similar to
+ * UnknownClientMessage pattern on the server side.
+ */
+type UnknownServerMessage = {
+	type: "unknown";
+	originalType: string;
+	raw: unknown;
+};
+
+type ServerMessage = KnownServerMessage | UnknownServerMessage;
+
+/**
+ * Parse server message with forward compatibility.
+ *
+ * Returns UnknownServerMessage for unknown types (never null).
+ * This allows exhaustive pattern matching while preserving raw data
+ * for debugging purposes.
+ */
+function parseServerMessage(raw: unknown): ServerMessage {
+	const result = KnownServerMessageSchema.safeParse(raw);
+	if (!result.success) {
+		const originalType = (raw as { type?: string })?.type ?? "";
+		console.debug("Unknown server message type:", originalType);
+		return { type: "unknown", originalType, raw };
+	}
+	return result.data;
+}
+
+// Schema for validating RTVI error payloads
+const RTVIErrorSchema = z.object({
+	data: z
+		.object({
+			message: z.string().optional(),
+			fatal: z.boolean().optional(),
+		})
+		.optional(),
+});
 
 // Non-empty array type for type-safe batched sends
 type NonEmptyArray<T> = [T, ...T[]];
@@ -63,8 +114,8 @@ type NonEmptyArray<T> = [T, ...T[]];
 // Only provider switching uses RTVI (requires frame injection into pipeline)
 // Prompt sections and STT timeout now use HTTP API
 type ConfigMessage =
-	| { type: "set-stt-provider"; data: { provider: string } }
-	| { type: "set-llm-provider"; data: { provider: string } };
+	| { type: "set-stt-provider"; data: { provider: STTProviderSelection } }
+	| { type: "set-llm-provider"; data: { provider: LLMProviderSelection } };
 
 function sendConfigMessages(
 	client: PipecatClient,
@@ -154,8 +205,6 @@ function RecordingControl() {
 	const queryClient = useQueryClient();
 	const connectionState = useConnectionState();
 	const send = useConnectionSend();
-
-	// Convert XState state to display state
 	const displayState = getDisplayState(connectionState);
 
 	// Use Mantine's useResizeObserver hook
@@ -492,16 +541,20 @@ function RecordingControl() {
 				return current !== prev;
 			};
 
-			if (hasChanged("stt_provider")) {
+			if (hasChanged("stt_provider") && currentSettings?.stt_provider) {
 				messages.push({
 					type: "set-stt-provider",
-					data: { provider: currentSettings?.stt_provider as string },
+					data: {
+						provider: toSTTProviderSelection(currentSettings.stt_provider),
+					},
 				});
 			}
-			if (hasChanged("llm_provider")) {
+			if (hasChanged("llm_provider") && currentSettings?.llm_provider) {
 				messages.push({
 					type: "set-llm-provider",
-					data: { provider: currentSettings?.llm_provider as string },
+					data: {
+						provider: toLLMProviderSelection(currentSettings.llm_provider),
+					},
 				});
 			}
 
@@ -623,16 +676,15 @@ function RecordingControl() {
 		RTVIEvent.ServerMessage,
 		useCallback(
 			(message: unknown) => {
-				const result = ServerMessageSchema.safeParse(message);
-				if (!result.success) return;
+				// Use forward-compatible parser (never returns null)
+				const parsed = parseServerMessage(message);
 
-				match(result.data)
+				match(parsed)
 					.with({ type: "recording-complete" }, () => {
 						clearResponseTimeout();
 						send({ type: "RESPONSE_RECEIVED" });
 					})
 					.with({ type: "config-updated" }, ({ setting, value }) => {
-						// Only provider switching responses come via RTVI now
 						tauriAPI.emitConfigResponse({
 							type: "config-updated",
 							setting,
@@ -640,12 +692,14 @@ function RecordingControl() {
 						});
 					})
 					.with({ type: "config-error" }, ({ setting, error }) => {
-						// Only provider switching errors come via RTVI now
 						tauriAPI.emitConfigResponse({
 							type: "config-error",
 							setting,
 							error,
 						});
+					})
+					.with({ type: "unknown" }, () => {
+						// Already logged at debug level in parseServerMessage
 					})
 					.exhaustive();
 			},
@@ -659,17 +713,15 @@ function RecordingControl() {
 			(error: unknown) => {
 				console.error("[Pipecat] Error:", error);
 
-				// Check if this is a fatal error that requires reconnection
-				const errorData = error as {
-					data?: { message?: string; fatal?: boolean };
-				};
-				if (errorData?.data?.fatal) {
+				// Safely parse error payload to check for fatal errors
+				const parsed = RTVIErrorSchema.safeParse(error);
+				if (parsed.success && parsed.data.data?.fatal) {
 					console.warn(
 						"[Pipecat] Fatal error detected, triggering reconnection",
 					);
 					send({
 						type: "COMMUNICATION_ERROR",
-						error: errorData.data.message ?? "Fatal error",
+						error: parsed.data.data.message ?? "Fatal error",
 					});
 				}
 			},
