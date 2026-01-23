@@ -132,6 +132,40 @@ export function toLLMProviderSelection(
 // Type guards (isKnownSTTProvider, isKnownLLMProvider) can be added here if needed
 // to detect unknown providers from newer servers and show visual indicators in the UI.
 
+// =============================================================================
+// Setting Names (Forward-Compatible)
+// =============================================================================
+
+/**
+ * Known setting names matching server's SettingName enum.
+ * Used for type-safe handling of config responses.
+ */
+export const KNOWN_SETTINGS = [
+	"stt-provider",
+	"llm-provider",
+	"prompt-sections",
+	"stt-timeout",
+] as const;
+
+/**
+ * Type-safe setting name for known settings.
+ */
+export type KnownSettingName = (typeof KNOWN_SETTINGS)[number];
+
+/**
+ * Forward-compatible setting name that accepts unknown settings from newer servers.
+ * The `(string & {})` trick preserves autocomplete for known values while accepting any string.
+ */
+export type SettingName = KnownSettingName | (string & {});
+
+/**
+ * Type guard to check if a setting name is known to this client version.
+ * Unknown settings from newer servers can be gracefully ignored.
+ */
+export function isKnownSetting(setting: string): setting is KnownSettingName {
+	return KNOWN_SETTINGS.includes(setting as KnownSettingName);
+}
+
 // Re-export event types for consumers that import from tauri.ts
 export type { ConfigResponse, ConnectionState } from "./events";
 

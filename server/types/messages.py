@@ -14,7 +14,8 @@ from enum import StrEnum
 from types.providers import LLMProviderSelection, STTProviderSelection
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from loguru import logger
+from pydantic import BaseModel, Field, ValidationError
 
 # =============================================================================
 # Setting Names (used in config-updated and config-error responses)
@@ -99,6 +100,20 @@ ClientMessage = Annotated[
     StartRecordingMessage | StopRecordingMessage | SetSTTProviderMessage | SetLLMProviderMessage,
     Field(discriminator="type"),
 ]
+
+
+def parse_client_message(raw: dict[str, Any]) -> ClientMessage | None:
+    """Parse client message with forward compatibility.
+
+    Returns None for unknown message types (logs at debug level).
+    This allows the server to gracefully ignore messages from newer clients
+    that use message types not yet supported by this server version.
+    """
+    try:
+        return ClientMessage.model_validate(raw)
+    except ValidationError:
+        logger.debug(f"Unknown client message type: {raw.get('type')}")
+        return None
 
 
 # =============================================================================

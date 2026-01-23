@@ -32,6 +32,7 @@ import {
 	safeSendClientMessage,
 } from "./lib/safeSendClientMessage";
 import {
+	isKnownSetting,
 	type LLMProviderSelection,
 	type STTProviderSelection,
 	tauriAPI,
@@ -61,6 +62,25 @@ const ServerMessageSchema = z.discriminatedUnion("type", [
 		error: z.string(),
 	}),
 ]);
+
+type ServerMessage = z.infer<typeof ServerMessageSchema>;
+
+/**
+ * Parse server message with forward compatibility.
+ * Returns null for unknown message types (logs at debug level).
+ * This allows the client to gracefully ignore messages from newer servers.
+ */
+function parseServerMessage(raw: unknown): ServerMessage | null {
+	const result = ServerMessageSchema.safeParse(raw);
+	if (!result.success) {
+		console.debug(
+			"Unknown server message type:",
+			(raw as { type?: string })?.type,
+		);
+		return null;
+	}
+	return result.data;
+}
 
 // Schema for validating RTVI error payloads
 const RTVIErrorSchema = z.object({
@@ -643,15 +663,21 @@ function RecordingControl() {
 		RTVIEvent.ServerMessage,
 		useCallback(
 			(message: unknown) => {
-				const result = ServerMessageSchema.safeParse(message);
-				if (!result.success) return;
+				// Use forward-compatible parser that returns null for unknown types
+				const parsed = parseServerMessage(message);
+				if (parsed === null) return;
 
-				match(result.data)
+				match(parsed)
 					.with({ type: "recording-complete" }, () => {
 						clearResponseTimeout();
 						send({ type: "RESPONSE_RECEIVED" });
 					})
 					.with({ type: "config-updated" }, ({ setting, value }) => {
+						// Check if setting is known to this client version
+						if (!isKnownSetting(setting)) {
+							console.debug("Unknown setting from server:", setting);
+							return;
+						}
 						// Only provider switching responses come via RTVI now
 						tauriAPI.emitConfigResponse({
 							type: "config-updated",
@@ -660,6 +686,11 @@ function RecordingControl() {
 						});
 					})
 					.with({ type: "config-error" }, ({ setting, error }) => {
+						// Check if setting is known to this client version
+						if (!isKnownSetting(setting)) {
+							console.debug("Unknown setting error from server:", setting);
+							return;
+						}
 						// Only provider switching errors come via RTVI now
 						tauriAPI.emitConfigResponse({
 							type: "config-error",

@@ -14,10 +14,11 @@ import re
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from types.messages import (
-    ClientMessage,
-    ConfigMessage,
+    SetLLMProviderMessage,
+    SetSTTProviderMessage,
     StartRecordingMessage,
     StopRecordingMessage,
+    parse_client_message,
 )
 from typing import Annotated, Any, Final, cast
 
@@ -44,7 +45,6 @@ from pipecat.transports.smallwebrtc.request_handler import (
     SmallWebRTCRequestHandler,
 )
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
-from pydantic import ValidationError
 
 from api.config_api import config_router
 from config.settings import Settings
@@ -212,18 +212,17 @@ async def run_pipeline(
 
         # Parse the raw RTVI message into a typed Pydantic model
         # This converts the message.type + message.data structure into a discriminated union
-        try:
-            raw_data = {
-                "type": message.type if hasattr(message, "type") else None,
-                "data": message.data if hasattr(message, "data") else {},
-            }
-            if raw_data["type"] is None:
-                return
-
-            parsed = ClientMessage.model_validate(raw_data)
-        except ValidationError as e:
-            logger.warning(f"Invalid client message: {e}")
+        raw_data = {
+            "type": message.type if hasattr(message, "type") else None,
+            "data": message.data if hasattr(message, "data") else {},
+        }
+        if raw_data["type"] is None:
             return
+
+        # Use forward-compatible parser that returns None for unknown types
+        parsed = parse_client_message(raw_data)
+        if parsed is None:
+            return  # Unknown message type, already logged at debug level
 
         # Handle the typed message with exhaustive pattern matching
         match parsed:
@@ -231,7 +230,7 @@ async def run_pipeline(
                 await turn_controller.start_recording()
             case StopRecordingMessage():
                 await turn_controller.stop_recording()
-            case ConfigMessage():
+            case SetSTTProviderMessage() | SetLLMProviderMessage():
                 await config_handler.handle_config_message(parsed)
 
     # Build pipeline - RTVIProcessor at the start handles RTVI protocol
