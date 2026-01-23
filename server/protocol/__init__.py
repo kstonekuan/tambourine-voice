@@ -1,15 +1,13 @@
 """Type definitions for the server module."""
 
-from types.messages import (
+from protocol.messages import (
     ClientMessage,
-    ClientMessageType,
     ConfigErrorMessage,
     ConfigMessage,
     ConfigUpdatedMessage,
     RecordingCompleteMessage,
     RecordingMessage,
     ServerMessage,
-    ServerMessageType,
     SetLLMProviderData,
     SetLLMProviderMessage,
     SetSTTProviderData,
@@ -17,8 +15,9 @@ from types.messages import (
     SettingName,
     StartRecordingMessage,
     StopRecordingMessage,
+    UnknownClientMessage,
 )
-from types.providers import (
+from protocol.providers import (
     AutoProvider,
     KnownLLMProvider,
     KnownSTTProvider,
@@ -33,7 +32,6 @@ __all__ = [
     "AutoProvider",
     # Message types
     "ClientMessage",
-    "ClientMessageType",
     "ConfigErrorMessage",
     "ConfigMessage",
     "ConfigUpdatedMessage",
@@ -46,7 +44,6 @@ __all__ = [
     "RecordingMessage",
     "STTProviderSelection",
     "ServerMessage",
-    "ServerMessageType",
     "SetLLMProviderData",
     "SetLLMProviderMessage",
     "SetSTTProviderData",
@@ -54,4 +51,5 @@ __all__ = [
     "SettingName",
     "StartRecordingMessage",
     "StopRecordingMessage",
+    "UnknownClientMessage",
 ]

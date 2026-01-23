@@ -13,13 +13,6 @@ import asyncio
 import re
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from types.messages import (
-    SetLLMProviderMessage,
-    SetSTTProviderMessage,
-    StartRecordingMessage,
-    StopRecordingMessage,
-    parse_client_message,
-)
 from typing import Annotated, Any, Final, cast
 
 import typer
@@ -52,6 +45,14 @@ from processors.client_manager import ClientConnectionManager
 from processors.configuration import ConfigurationHandler
 from processors.context_manager import DictationContextManager
 from processors.turn_controller import TurnController
+from protocol.messages import (
+    SetLLMProviderMessage,
+    SetSTTProviderMessage,
+    StartRecordingMessage,
+    StopRecordingMessage,
+    UnknownClientMessage,
+    parse_client_message,
+)
 from services.providers import (
     create_all_available_llm_services,
     create_all_available_stt_services,
@@ -219,10 +220,8 @@ async def run_pipeline(
         if raw_data["type"] is None:
             return
 
-        # Use forward-compatible parser that returns None for unknown types
+        # Use forward-compatible parser (never returns None)
         parsed = parse_client_message(raw_data)
-        if parsed is None:
-            return  # Unknown message type, already logged at debug level
 
         # Handle the typed message with exhaustive pattern matching
         match parsed:
@@ -232,6 +231,8 @@ async def run_pipeline(
                 await turn_controller.stop_recording()
             case SetSTTProviderMessage() | SetLLMProviderMessage():
                 await config_handler.handle_config_message(parsed)
+            case UnknownClientMessage():
+                pass  # Already logged at debug level in parse_client_message
 
     # Build pipeline - RTVIProcessor at the start handles RTVI protocol
     # The aggregator pair from context_manager collects transcriptions and LLM responses
@@ -401,7 +402,7 @@ async def register_client(request: Request) -> dict[str, str]:
     """
     services: AppServices = request.app.state.services
     client_uuid = services.client_manager.generate_and_register_uuid()
-    logger.info(f"Registered new client: {client_uuid}")
+    logger.success(f"Registered new client: {client_uuid}")
     return {"uuid": client_uuid}
 
 
@@ -595,7 +596,7 @@ def main(
     configure_logging(log_level)
 
     if verbose:
-        logger.info("Verbose logging enabled")
+        logger.debug("Verbose logging enabled")
 
     # Initialize services and store on app.state
     services = initialize_services(settings)

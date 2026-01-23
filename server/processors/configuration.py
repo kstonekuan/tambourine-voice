@@ -10,7 +10,14 @@ in api/config_api.py.
 
 from __future__ import annotations
 
-from types.messages import (
+from typing import TYPE_CHECKING
+
+from loguru import logger
+from pipecat.frames.frames import ManuallySwitchServiceFrame
+from pipecat.processors.frame_processor import FrameDirection
+from pipecat.processors.frameworks.rtvi import RTVIProcessor, RTVIServerMessageFrame
+
+from protocol.messages import (
     ConfigErrorMessage,
     ConfigMessage,
     ConfigUpdatedMessage,
@@ -18,7 +25,7 @@ from types.messages import (
     SetSTTProviderMessage,
     SettingName,
 )
-from types.providers import (
+from protocol.providers import (
     AutoProvider,
     KnownLLMProvider,
     KnownSTTProvider,
@@ -27,13 +34,6 @@ from types.providers import (
     OtherSTTProvider,
     STTProviderSelection,
 )
-from typing import TYPE_CHECKING
-
-from loguru import logger
-from pipecat.frames.frames import ManuallySwitchServiceFrame
-from pipecat.processors.frame_processor import FrameDirection
-from pipecat.processors.frameworks.rtvi import RTVIProcessor, RTVIServerMessageFrame
-
 from services.provider_registry import LLMProviderId, STTProviderId
 
 if TYPE_CHECKING:

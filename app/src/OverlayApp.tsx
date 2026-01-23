@@ -44,7 +44,7 @@ import "./overlay-global.css";
 const SERVER_RESPONSE_TIMEOUT_MS = 10_000;
 
 // Server message schemas as a discriminated union for single-parse handling
-const ServerMessageSchema = z.discriminatedUnion("type", [
+const KnownServerMessageSchema = z.discriminatedUnion("type", [
 	z.object({
 		type: z.literal("recording-complete"),
 		hasContent: z.boolean().optional(),
@@ -63,21 +63,35 @@ const ServerMessageSchema = z.discriminatedUnion("type", [
 	}),
 ]);
 
-type ServerMessage = z.infer<typeof ServerMessageSchema>;
+type KnownServerMessage = z.infer<typeof KnownServerMessageSchema>;
+
+/**
+ * Unknown server message type (forward compatibility).
+ *
+ * Preserves the raw message data for debugging, similar to
+ * UnknownClientMessage pattern on the server side.
+ */
+type UnknownServerMessage = {
+	type: "unknown";
+	originalType: string;
+	raw: unknown;
+};
+
+type ServerMessage = KnownServerMessage | UnknownServerMessage;
 
 /**
  * Parse server message with forward compatibility.
- * Returns null for unknown message types (logs at debug level).
- * This allows the client to gracefully ignore messages from newer servers.
+ *
+ * Returns UnknownServerMessage for unknown types (never null).
+ * This allows exhaustive pattern matching while preserving raw data
+ * for debugging purposes.
  */
-function parseServerMessage(raw: unknown): ServerMessage | null {
-	const result = ServerMessageSchema.safeParse(raw);
+function parseServerMessage(raw: unknown): ServerMessage {
+	const result = KnownServerMessageSchema.safeParse(raw);
 	if (!result.success) {
-		console.debug(
-			"Unknown server message type:",
-			(raw as { type?: string })?.type,
-		);
-		return null;
+		const originalType = (raw as { type?: string })?.type ?? "";
+		console.debug("Unknown server message type:", originalType);
+		return { type: "unknown", originalType, raw };
 	}
 	return result.data;
 }
@@ -663,9 +677,8 @@ function RecordingControl() {
 		RTVIEvent.ServerMessage,
 		useCallback(
 			(message: unknown) => {
-				// Use forward-compatible parser that returns null for unknown types
+				// Use forward-compatible parser (never returns null)
 				const parsed = parseServerMessage(message);
-				if (parsed === null) return;
 
 				match(parsed)
 					.with({ type: "recording-complete" }, () => {
@@ -697,6 +710,9 @@ function RecordingControl() {
 							setting,
 							error,
 						});
+					})
+					.with({ type: "unknown" }, () => {
+						// Already logged at debug level in parseServerMessage
 					})
 					.exhaustive();
 			},

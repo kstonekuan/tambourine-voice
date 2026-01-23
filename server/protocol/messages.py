@@ -11,11 +11,12 @@ Message flow:
 """
 
 from enum import StrEnum
-from types.providers import LLMProviderSelection, STTProviderSelection
 from typing import Annotated, Any, Literal
 
 from loguru import logger
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, RootModel, ValidationError
+
+from protocol.providers import LLMProviderSelection, STTProviderSelection
 
 # =============================================================================
 # Setting Names (used in config-updated and config-error responses)
@@ -96,24 +97,46 @@ ConfigMessage = Annotated[
 # =============================================================================
 
 
-ClientMessage = Annotated[
-    StartRecordingMessage | StopRecordingMessage | SetSTTProviderMessage | SetLLMProviderMessage,
-    Field(discriminator="type"),
-]
+# Type alias for all known client message types
+_ClientMessageUnion = (
+    StartRecordingMessage | StopRecordingMessage | SetSTTProviderMessage | SetLLMProviderMessage
+)
 
 
-def parse_client_message(raw: dict[str, Any]) -> ClientMessage | None:
+class ClientMessage(RootModel[Annotated[_ClientMessageUnion, Field(discriminator="type")]]):
+    """Discriminated union wrapper for all client messages.
+
+    This is a proper Pydantic model that supports model_validate().
+    Access the underlying typed message via the .root attribute.
+    """
+
+    pass
+
+
+class UnknownClientMessage(BaseModel):
+    """Unknown client message type (forward compatibility).
+
+    Preserves the raw message data for debugging, similar to
+    OtherSTTProvider/OtherLLMProvider pattern in providers.py.
+    """
+
+    type: str  # The actual unknown type string
+    raw: dict[str, Any]  # Full original message for debugging
+
+
+def parse_client_message(raw: dict[str, Any]) -> _ClientMessageUnion | UnknownClientMessage:
     """Parse client message with forward compatibility.
 
-    Returns None for unknown message types (logs at debug level).
-    This allows the server to gracefully ignore messages from newer clients
-    that use message types not yet supported by this server version.
+    Returns UnknownClientMessage for unknown types (never None).
+    This allows exhaustive pattern matching while preserving raw data
+    for debugging purposes.
     """
     try:
-        return ClientMessage.model_validate(raw)
+        wrapper = ClientMessage.model_validate(raw)
+        return wrapper.root  # Return the actual message, not the wrapper
     except ValidationError:
         logger.debug(f"Unknown client message type: {raw.get('type')}")
-        return None
+        return UnknownClientMessage(type=raw.get("type", ""), raw=raw)
 
 
 # =============================================================================
@@ -149,31 +172,3 @@ ServerMessage = Annotated[
     RecordingCompleteMessage | ConfigUpdatedMessage | ConfigErrorMessage,
     Field(discriminator="type"),
 ]
-
-
-# =============================================================================
-# Legacy String Constants (for backward compatibility during migration)
-# =============================================================================
-
-
-class ClientMessageType(StrEnum):
-    """String constants for client message types.
-
-    Deprecated: Use the Pydantic message models directly instead.
-    """
-
-    START_RECORDING = "start-recording"
-    STOP_RECORDING = "stop-recording"
-    SET_STT_PROVIDER = "set-stt-provider"
-    SET_LLM_PROVIDER = "set-llm-provider"
-
-
-class ServerMessageType(StrEnum):
-    """String constants for server message types.
-
-    Deprecated: Use the Pydantic message models directly instead.
-    """
-
-    RECORDING_COMPLETE = "recording-complete"
-    CONFIG_UPDATED = "config-updated"
-    CONFIG_ERROR = "config-error"

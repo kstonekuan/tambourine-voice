@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from types.messages import ServerMessageType
 from typing import TYPE_CHECKING, Any, Final
 
 from pipecat.frames.frames import (
@@ -35,6 +34,7 @@ from pipecat.frames.frames import (
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.processors.frameworks.rtvi import RTVIServerMessageFrame
 
+from protocol.messages import RecordingCompleteMessage
 from utils.logger import logger
 
 if TYPE_CHECKING:
@@ -386,7 +386,5 @@ class TurnController(FrameProcessor):
 
     async def _emit_empty_response(self, direction: FrameDirection) -> None:
         """Send an empty response message to the client."""
-        frame = RTVIServerMessageFrame(
-            data={"type": ServerMessageType.RECORDING_COMPLETE, "hasContent": False}
-        )
+        frame = RTVIServerMessageFrame(data=RecordingCompleteMessage(hasContent=False).model_dump())
         await self.push_frame(frame, direction)
