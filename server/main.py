@@ -56,6 +56,8 @@ from protocol.messages import (
     parse_client_message,
 )
 from services.providers import (
+    LLMProviderId,
+    STTProviderId,
     create_all_available_llm_services,
     create_all_available_stt_services,
     get_available_llm_providers,
@@ -145,12 +147,17 @@ class AppServices:
     Note: STT and LLM services are created per-connection in run_pipeline()
     to ensure complete isolation between concurrent clients. Each client
     gets fresh service instances with independent WebSocket connections.
+
+    The available_stt_providers and available_llm_providers lists are
+    pre-computed at startup since Settings is immutable after initialization.
     """
 
     settings: Settings
     webrtc_handler: SmallWebRTCRequestHandler
     active_pipeline_tasks: set[asyncio.Task[None]]
     client_manager: ClientConnectionManager
+    available_stt_providers: list[STTProviderId]
+    available_llm_providers: list[LLMProviderId]
 
 
 async def run_pipeline(
@@ -323,6 +330,8 @@ def initialize_services(settings: Settings) -> AppServices | None:
         webrtc_handler=SmallWebRTCRequestHandler(ice_servers=ICE_SERVERS),
         active_pipeline_tasks=set(),
         client_manager=ClientConnectionManager(),
+        available_stt_providers=available_stt,
+        available_llm_providers=available_llm,
     )
 
 
@@ -520,8 +529,16 @@ async def webrtc_offer(
         # Create fresh service instances for this connection to ensure isolation
         # between concurrent clients. Each client gets independent WebSocket
         # connections to STT/LLM providers.
-        stt_services = create_all_available_stt_services(services.settings)
-        llm_services = create_all_available_llm_services(services.settings)
+        # Uses pre-computed provider lists from AppServices to avoid redundant
+        # iteration through all providers on every connection.
+        stt_services = create_all_available_stt_services(
+            services.settings,
+            services.available_stt_providers,
+        )
+        llm_services = create_all_available_llm_services(
+            services.settings,
+            services.available_llm_providers,
+        )
 
         # Create pipeline processors
         # DictationContextManager wraps LLMContextAggregatorPair with dictation-specific features

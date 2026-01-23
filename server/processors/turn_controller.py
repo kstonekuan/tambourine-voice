@@ -159,23 +159,21 @@ class TurnController(FrameProcessor):
         """
         await super().process_frame(frame, direction)
 
-        if isinstance(frame, VADUserStoppedSpeakingFrame):
-            await self._handle_speech_stopped(direction)
-            await self.push_frame(frame, direction)
-            return
+        match frame:
+            case VADUserStoppedSpeakingFrame():
+                await self._handle_speech_stopped(direction)
+                await self.push_frame(frame, direction)
 
-        # Handle transcription - track content flag AND pass through to aggregator
-        if isinstance(frame, TranscriptionFrame):
-            if frame.text:
+            case TranscriptionFrame(text=text) if text:
                 await self._handle_transcription(frame, direction)
                 # Pass transcriptions through to aggregator during recording states
                 match self._state:
                     case RecordingState() | WaitingForSTTState() | DrainingState():
                         await self.push_frame(frame, direction)
-            return
 
-        # Pass through all other frames unchanged
-        await self.push_frame(frame, direction)
+            case _:
+                # Pass through all other frames unchanged
+                await self.push_frame(frame, direction)
 
     # =========================================================================
     # Public API for RTVI Event Handler

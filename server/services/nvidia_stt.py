@@ -156,44 +156,46 @@ class NVidiaWebSocketSTTService(WebsocketSTTService):
             frame: The frame to process.
             direction: The direction of frame processing.
         """
-        # Handle UserStartedSpeakingFrame - reset pending frame state
-        if isinstance(frame, UserStartedSpeakingFrame):
-            await self._cancel_pending_frame_timeout()
-            self._pending_user_stopped_frame = None
-            self._waiting_for_final = False
-            self._vad_stopped_time = None
-            await super().process_frame(frame, direction)
-            return
+        match frame:
+            # Handle UserStartedSpeakingFrame - reset pending frame state
+            case UserStartedSpeakingFrame():
+                await self._cancel_pending_frame_timeout()
+                self._pending_user_stopped_frame = None
+                self._waiting_for_final = False
+                self._vad_stopped_time = None
+                await super().process_frame(frame, direction)
 
-        # Handle UserStoppedSpeakingFrame - hold it and send hard reset
-        if isinstance(frame, UserStoppedSpeakingFrame):
-            if self._waiting_for_final:
+            # Handle UserStoppedSpeakingFrame when waiting for final - hold it and send hard reset
+            case UserStoppedSpeakingFrame() as f if self._waiting_for_final:
                 # Hold this frame until final transcript arrives from hard reset
-                self._pending_user_stopped_frame = frame
+                self._pending_user_stopped_frame = f
                 self._pending_frame_direction = direction
                 self._start_pending_frame_timeout()
                 self._vad_stopped_time = time.time()
                 await self._send_reset(finalize=True)
-                return  # Don't pass through yet
-            # If not waiting for final, pass through normally
-            await super().process_frame(frame, direction)
-            return
+                # Don't pass through yet
 
-        # All other frames pass through normally
-        await super().process_frame(frame, direction)
+            # Handle UserStoppedSpeakingFrame when not waiting - pass through normally
+            case UserStoppedSpeakingFrame():
+                await super().process_frame(frame, direction)
 
-        # Handle VADUserStoppedSpeakingFrame - the reset type depends on direction:
-        # - UPSTREAM (manual stop from TurnController): Hard reset to force finalization
-        # - DOWNSTREAM (natural VAD silence from transport): Soft reset for quick return
-        if isinstance(frame, VADUserStoppedSpeakingFrame):
-            self._waiting_for_final = True
-            if direction == FrameDirection.UPSTREAM:
-                # Manual stop - hard reset to capture trailing words
-                self._vad_stopped_time = time.time()
-                await self._send_reset(finalize=True)
-            else:
-                # Natural VAD silence - soft reset for quick response
-                await self._send_reset(finalize=False)
+            # Handle VADUserStoppedSpeakingFrame - reset type depends on direction:
+            # - UPSTREAM (manual stop from TurnController): Hard reset to force finalization
+            # - DOWNSTREAM (natural VAD silence from transport): Soft reset for quick return
+            case VADUserStoppedSpeakingFrame():
+                await super().process_frame(frame, direction)
+                self._waiting_for_final = True
+                if direction == FrameDirection.UPSTREAM:
+                    # Manual stop - hard reset to capture trailing words
+                    self._vad_stopped_time = time.time()
+                    await self._send_reset(finalize=True)
+                else:
+                    # Natural VAD silence - soft reset for quick response
+                    await self._send_reset(finalize=False)
+
+            # All other frames pass through normally
+            case _:
+                await super().process_frame(frame, direction)
 
     async def _send_reset(self, finalize: bool = True) -> None:
         """Send reset signal to trigger transcription.

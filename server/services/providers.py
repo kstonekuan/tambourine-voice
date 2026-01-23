@@ -178,18 +178,20 @@ def get_available_llm_providers(settings: "Settings") -> list[LLMProviderId]:
 
 def create_all_available_stt_services(
     settings: "Settings",
+    available_providers: list[STTProviderId],
 ) -> dict[STTProviderId, STTService]:
     """Create STT service instances for all available providers.
 
     Args:
         settings: Application settings
+        available_providers: Pre-computed list of available STT provider IDs
 
     Returns:
         Dictionary mapping provider ID to service instance
     """
     services: dict[STTProviderId, STTService] = {}
 
-    for provider_id in get_available_stt_providers(settings):
+    for provider_id in available_providers:
         try:
             services[provider_id] = create_stt_service(provider_id, settings)
         except Exception as e:
@@ -200,18 +202,20 @@ def create_all_available_stt_services(
 
 def create_all_available_llm_services(
     settings: "Settings",
+    available_providers: list[LLMProviderId],
 ) -> dict[LLMProviderId, LLMService]:
     """Create LLM service instances for all available providers.
 
     Args:
         settings: Application settings
+        available_providers: Pre-computed list of available LLM provider IDs
 
     Returns:
         Dictionary mapping provider ID to service instance
     """
     services: dict[LLMProviderId, LLMService] = {}
 
-    for provider_id in get_available_llm_providers(settings):
+    for provider_id in available_providers:
         try:
             services[provider_id] = create_llm_service(provider_id, settings)
         except Exception as e:

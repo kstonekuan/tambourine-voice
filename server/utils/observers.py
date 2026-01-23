@@ -58,55 +58,56 @@ class PipelineLogObserver(BaseObserver):
         src = data.source
         frame = data.frame
 
-        # Log pipeline start when it reaches the output transport (end of pipeline)
-        if isinstance(frame, StartFrame) and isinstance(src, BaseOutputTransport):
-            logger.success("Pipeline started")
+        match (frame, src):
+            # Log pipeline start when it reaches the output transport (end of pipeline)
+            case (StartFrame(), BaseOutputTransport()):
+                logger.success("Pipeline started")
 
-        # Log audio frames from input transport (first few and periodic)
-        elif isinstance(frame, InputAudioRawFrame) and isinstance(src, BaseInputTransport):
-            self._audio_frame_count += 1
-            if self._audio_frame_count % 500 == 0:
-                logger.info(
-                    f"Audio frame #{self._audio_frame_count}: "
-                    f"{len(frame.audio)} bytes, {frame.sample_rate}Hz, {frame.num_channels}ch"
-                )
+            # Log audio frames from input transport (periodic sampling)
+            case (InputAudioRawFrame() as f, BaseInputTransport()):
+                self._audio_frame_count += 1
+                if self._audio_frame_count % 500 == 0:
+                    logger.info(
+                        f"Audio frame #{self._audio_frame_count}: "
+                        f"{len(f.audio)} bytes, {f.sample_rate}Hz, {f.num_channels}ch"
+                    )
 
-        # Log transcription from STT service
-        elif isinstance(frame, TranscriptionFrame) and isinstance(src, STTService):
-            logger.info(f"TRANSCRIPTION: '{frame.text}'")
+            # Log transcription from STT service
+            case (TranscriptionFrame() as f, STTService()):
+                logger.info(f"TRANSCRIPTION: '{f.text}'")
 
-        # Log speech start/stop from input transport (where VAD runs)
-        # Use state tracking to deduplicate - same event may come from multiple sources
-        elif isinstance(frame, UserStartedSpeakingFrame) and isinstance(src, BaseInputTransport):
-            if not self._is_speaking:
+            # Log speech start from input transport (where VAD runs)
+            # Use state tracking to deduplicate - same event may come from multiple sources
+            case (UserStartedSpeakingFrame(), BaseInputTransport()) if not self._is_speaking:
                 self._is_speaking = True
                 logger.info("Speech started")
-        elif isinstance(frame, UserStoppedSpeakingFrame) and isinstance(src, BaseInputTransport):
-            if self._is_speaking:
+
+            # Log speech stop from input transport
+            case (UserStoppedSpeakingFrame(), BaseInputTransport()) if self._is_speaking:
                 self._is_speaking = False
                 logger.info("Speech stopped")
 
-        # Accumulate and log LLM response from LLM service
-        # Use LLMTextFrame (not TextFrame) - this is what LLM services output
-        elif isinstance(frame, LLMFullResponseStartFrame) and isinstance(src, LLMService):
-            self._llm_accumulator = ""
-            self._is_accumulating = True
-        elif (
-            isinstance(frame, LLMTextFrame)
-            and self._is_accumulating
-            and isinstance(src, LLMService)
-        ):
-            self._llm_accumulator += frame.text
-        elif isinstance(frame, LLMFullResponseEndFrame) and isinstance(src, LLMService):
-            self._is_accumulating = False
-            if self._llm_accumulator.strip():
-                logger.info(f"Cleaned text: '{self._llm_accumulator.strip()}'")
-            self._llm_accumulator = ""
+            # Accumulate and log LLM response from LLM service
+            # Use LLMTextFrame (not TextFrame) - this is what LLM services output
+            case (LLMFullResponseStartFrame(), LLMService()):
+                self._llm_accumulator = ""
+                self._is_accumulating = True
 
-        # Log RTVI server messages when sent from output transport
-        elif isinstance(frame, RTVIServerMessageFrame) and isinstance(src, BaseOutputTransport):
-            logger.info(f"Sending to client: {frame.data}")
+            case (LLMTextFrame() as f, LLMService()) if self._is_accumulating:
+                self._llm_accumulator += f.text
 
-        # Log other frames at debug level (skip noisy ones)
-        elif not isinstance(frame, (UserSpeakingFrame, MetricsFrame, TextFrame, LLMTextFrame)):
-            logger.debug(f"Frame: {type(frame).__name__}")
+            case (LLMFullResponseEndFrame(), LLMService()):
+                self._is_accumulating = False
+                if self._llm_accumulator.strip():
+                    logger.info(f"Cleaned text: '{self._llm_accumulator.strip()}'")
+                self._llm_accumulator = ""
+
+            # Log RTVI server messages when sent from output transport
+            case (RTVIServerMessageFrame() as f, BaseOutputTransport()):
+                logger.info(f"Sending to client: {f.data}")
+
+            # Log other frames at debug level (skip noisy ones)
+            case _ if not isinstance(
+                frame, UserSpeakingFrame | MetricsFrame | TextFrame | LLMTextFrame
+            ):
+                logger.debug(f"Frame: {type(frame).__name__}")

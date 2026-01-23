@@ -381,6 +381,19 @@ LLM_PROVIDERS: Final[dict[LLMProviderId, LLMProviderConfig]] = {
 
 
 # =============================================================================
+# Pre-computed Label Mappings (static after module load)
+# =============================================================================
+
+STT_PROVIDER_LABELS: Final[dict[STTProviderId, str]] = {
+    pid: config.display_name for pid, config in STT_PROVIDERS.items()
+}
+
+LLM_PROVIDER_LABELS: Final[dict[LLMProviderId, str]] = {
+    pid: config.display_name for pid, config in LLM_PROVIDERS.items()
+}
+
+
+# =============================================================================
 # Helper Functions
 # =============================================================================
 
@@ -411,9 +424,9 @@ def get_llm_provider_config(provider_id: LLMProviderId) -> LLMProviderConfig | N
 
 def get_stt_provider_labels() -> dict[STTProviderId, str]:
     """Get mapping of provider_id to display_name for STT providers."""
-    return {pid: config.display_name for pid, config in STT_PROVIDERS.items()}
+    return STT_PROVIDER_LABELS
 
 
 def get_llm_provider_labels() -> dict[LLMProviderId, str]:
     """Get mapping of provider_id to display_name for LLM providers."""
-    return {pid: config.display_name for pid, config in LLM_PROVIDERS.items()}
+    return LLM_PROVIDER_LABELS
