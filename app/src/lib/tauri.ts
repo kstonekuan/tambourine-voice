@@ -68,7 +68,7 @@ type KnownSTTProviderSelection = {
 };
 
 /** Unknown STT provider (forward compatibility) */
-type OtherSTTProviderSelection = { mode: "other"; providerId: string };
+type UnknownSTTProviderSelection = { mode: "other"; providerId: string };
 
 /** Known LLM provider from the type-safe list */
 type KnownLLMProviderSelection = {
@@ -77,19 +77,19 @@ type KnownLLMProviderSelection = {
 };
 
 /** Unknown LLM provider (forward compatibility) */
-type OtherLLMProviderSelection = { mode: "other"; providerId: string };
+type UnknownLLMProviderSelection = { mode: "other"; providerId: string };
 
 /** Discriminated union for STT provider selection */
 export type STTProviderSelection =
 	| AutoProviderSelection
 	| KnownSTTProviderSelection
-	| OtherSTTProviderSelection;
+	| UnknownSTTProviderSelection;
 
 /** Discriminated union for LLM provider selection */
 export type LLMProviderSelection =
 	| AutoProviderSelection
 	| KnownLLMProviderSelection
-	| OtherLLMProviderSelection;
+	| UnknownLLMProviderSelection;
 
 /**
  * Convert a stored STT provider ID to a selection object for RTVI messages.
@@ -129,9 +129,6 @@ export function toLLMProviderSelection(
 	return { mode: "other", providerId: id };
 }
 
-// Type guards (isKnownSTTProvider, isKnownLLMProvider) can be added here if needed
-// to detect unknown providers from newer servers and show visual indicators in the UI.
-
 // =============================================================================
 // Setting Names (Forward-Compatible)
 // =============================================================================
@@ -166,7 +163,6 @@ export function isKnownSetting(setting: string): setting is KnownSettingName {
 	return KNOWN_SETTINGS.includes(setting as KnownSettingName);
 }
 
-// Re-export event types for consumers that import from tauri.ts
 export type { ConfigResponse, ConnectionState } from "./events";
 
 import {
@@ -188,14 +184,12 @@ export interface HotkeyConfig {
 	enabled: boolean;
 }
 
-/// Tracks errors from shortcut registration attempts
 export interface ShortcutErrors {
 	toggle_error: string | null;
 	hold_error: string | null;
 	paste_last_error: string | null;
 }
 
-/// Result of shortcut registration attempt
 export interface ShortcutRegistrationResult {
 	toggle_registered: boolean;
 	hold_registered: boolean;
@@ -339,8 +333,6 @@ export const tauriAPI = {
 		return listenEvent(AppEvents.prepareRecording, callback);
 	},
 
-	// Settings API - uses Rust commands for single source of truth
-	// Rust applies defaults, TypeScript just passes through
 	async getSettings(): Promise<AppSettings> {
 		return invoke("get_settings");
 	},

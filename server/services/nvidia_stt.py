@@ -88,24 +88,13 @@ class NVidiaWebSocketSTTService(WebsocketSTTService):
         self._vad_stopped_time: float | None = None
 
     def can_generate_metrics(self) -> bool:
-        """Check if this service can generate processing metrics."""
         return True
 
     async def start(self, frame: StartFrame) -> None:
-        """Start the NVIDIA STT service.
-
-        Args:
-            frame: The start frame containing initialization parameters.
-        """
         await super().start(frame)
         await self._connect()
 
     async def stop(self, frame: EndFrame) -> None:
-        """Stop the NVIDIA STT service.
-
-        Args:
-            frame: The end frame.
-        """
         # Clean up pending frame state
         await self._cancel_pending_frame_timeout()
         if self._pending_user_stopped_frame:
@@ -117,11 +106,6 @@ class NVidiaWebSocketSTTService(WebsocketSTTService):
         await self._disconnect()
 
     async def cancel(self, frame: CancelFrame) -> None:
-        """Cancel the NVIDIA STT service.
-
-        Args:
-            frame: The cancel frame.
-        """
         # Clean up pending frame state (discard on cancel)
         await self._cancel_pending_frame_timeout()
         self._pending_user_stopped_frame = None

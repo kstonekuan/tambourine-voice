@@ -204,8 +204,6 @@ function RecordingControl() {
 	const queryClient = useQueryClient();
 	const connectionState = useConnectionState();
 	const send = useConnectionSend();
-
-	// Convert XState state to display state
 	const displayState = getDisplayState(connectionState);
 
 	// Use Mantine's useResizeObserver hook
