@@ -469,9 +469,13 @@ async def webrtc_offer(
             detail="Unregistered client UUID. Please register first.",
         )
 
-    # Disconnect existing connection with same UUID (one client = one connection)
-    # Run in background - no need to wait for cleanup before proceeding
-    create_background_task(services.client_manager.disconnect_existing(client_uuid))
+    # Handle existing connection with same UUID (one client = one connection)
+    # 1. Synchronously remove old connection from tracking (frees UUID slot immediately)
+    # 2. Clean up old connection in background (non-blocking)
+    # This avoids the race condition where background cleanup accidentally kills new connection
+    old_connection = services.client_manager.take_existing_connection(client_uuid)
+    if old_connection:
+        create_background_task(services.client_manager.cleanup_connection(old_connection))
     logger.info(f"Client connecting with UUID: {client_uuid}")
 
     # Filter mDNS candidates from SDP to prevent aioice resolution issues.
