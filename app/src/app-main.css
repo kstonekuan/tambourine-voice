@@ -296,6 +296,7 @@ body {
 	font-size: 14px;
 	color: var(--text-primary);
 	line-height: 1.5;
+	white-space: pre-wrap;
 }
 
 .history-raw-text {
@@ -303,6 +304,7 @@ body {
 	background: var(--bg-elevated);
 	border-radius: 8px;
 	border: 1px solid var(--border-subtle);
+	white-space: pre-wrap;
 }
 
 .history-actions {

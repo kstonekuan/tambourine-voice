@@ -64,14 +64,13 @@ const HistoryItem = memo(function HistoryItem({
 	isDeleting,
 }: HistoryItemProps) {
 	const [isExpanded, setIsExpanded] = useState(false);
-	const hasRawText = entry.raw_text && entry.raw_text.trim().length > 0;
 
 	return (
 		<div className="history-item">
 			<span className="history-time">{formatTime(entry.timestamp)}</span>
 			<div className="history-content">
 				<p className="history-text">{entry.text}</p>
-				{isExpanded && hasRawText && (
+				{isExpanded && (
 					<div className="history-raw-text">
 						<Text size="xs" c="dimmed" fw={500} mb={4}>
 							Raw transcription:
@@ -96,24 +95,20 @@ const HistoryItem = memo(function HistoryItem({
 						>
 							Copy
 						</Menu.Item>
-						{hasRawText && (
-							<Menu.Item
-								leftSection={<Copy size={14} />}
-								onClick={() => onCopy(entry.raw_text)}
-							>
-								Copy raw
-							</Menu.Item>
-						)}
-						{hasRawText && (
-							<Menu.Item
-								leftSection={
-									isExpanded ? <EyeOff size={14} /> : <Eye size={14} />
-								}
-								onClick={() => setIsExpanded(!isExpanded)}
-							>
-								{isExpanded ? "Hide" : "View"} raw transcript
-							</Menu.Item>
-						)}
+						<Menu.Item
+							leftSection={<Copy size={14} />}
+							onClick={() => onCopy(entry.raw_text)}
+						>
+							Copy raw
+						</Menu.Item>
+						<Menu.Item
+							leftSection={
+								isExpanded ? <EyeOff size={14} /> : <Eye size={14} />
+							}
+							onClick={() => setIsExpanded(!isExpanded)}
+						>
+							{isExpanded ? "Hide" : "View"} raw transcript
+						</Menu.Item>
 						<Menu.Divider />
 						<Menu.Item
 							color="red"
