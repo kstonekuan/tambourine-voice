@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tauri::{AppHandle, Manager};
 
+use crate::config_sync::ConfigSync;
 use crate::history::{HistoryEntry, HistoryImportResult, HistoryImportStrategy, HistoryStorage};
 use crate::settings::{AppSettings, CleanupPromptSections, PromptSection, StoreKey};
 
@@ -319,7 +320,11 @@ pub fn detect_export_file_type(content: String) -> DetectedFileType {
 /// Import settings from a JSON string
 #[cfg(desktop)]
 #[tauri::command]
-pub fn import_settings(app: AppHandle, content: String) -> Result<(), String> {
+pub async fn import_settings(
+    app: AppHandle,
+    content: String,
+    config_sync: tauri::State<'_, ConfigSync>,
+) -> Result<(), String> {
     // Parse the export file
     let export: SettingsExportFile = serde_json::from_str(&content)
         .map_err(|e| format!("Failed to parse settings file: {}", e))?;
@@ -397,12 +402,25 @@ pub fn import_settings(app: AppHandle, content: String) -> Result<(), String> {
 
     log::info!("Successfully imported settings from export file");
 
+    let sync = config_sync.read().await;
+    if sync.is_connected() {
+        if let Some(timeout) = settings.stt_timeout_seconds {
+            if let Err(e) = sync.sync_stt_timeout(timeout).await {
+                log::warn!("Failed to sync STT timeout after import: {}", e);
+            }
+        }
+    }
+
     Ok(())
 }
 
 #[cfg(not(desktop))]
 #[tauri::command]
-pub fn import_settings(_app: AppHandle, _content: String) -> Result<(), String> {
+pub async fn import_settings(
+    _app: AppHandle,
+    _content: String,
+    _config_sync: tauri::State<'_, ConfigSync>,
+) -> Result<(), String> {
     Err("Not supported on this platform".to_string())
 }
 
@@ -449,7 +467,10 @@ pub fn import_history(
 /// Factory reset: clears all settings and history
 #[cfg(desktop)]
 #[tauri::command]
-pub fn factory_reset(app: AppHandle) -> Result<(), String> {
+pub async fn factory_reset(
+    app: AppHandle,
+    _config_sync: tauri::State<'_, ConfigSync>,
+) -> Result<(), String> {
     // Clear the settings store completely
     let store = app
         .store("settings.json")
@@ -511,6 +532,9 @@ pub fn factory_reset(app: AppHandle) -> Result<(), String> {
 
 #[cfg(not(desktop))]
 #[tauri::command]
-pub fn factory_reset(_app: AppHandle) -> Result<(), String> {
+pub async fn factory_reset(
+    _app: AppHandle,
+    _config_sync: tauri::State<'_, ConfigSync>,
+) -> Result<(), String> {
     Err("Not supported on this platform".to_string())
 }

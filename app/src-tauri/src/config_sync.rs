@@ -49,6 +49,11 @@ impl ConfigSyncState {
         log::info!("Config sync disconnected");
     }
 
+    /// Check if connected to a server
+    pub fn is_connected(&self) -> bool {
+        self.server_url.is_some() && self.client_uuid.is_some()
+    }
+
     /// Sync prompt sections to server (best-effort, logs errors)
     pub async fn sync_prompt_sections(
         &self,

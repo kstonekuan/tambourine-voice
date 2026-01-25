@@ -674,14 +674,30 @@ export function useImportData() {
 
 /**
  * Hook to import settings from a parsed file content.
+ * Uses pessimistic sync for providers via overlay.
  */
 export function useImportSettings() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async (content: string) => {
 			await tauriAPI.importSettings(content);
-			// Re-register shortcuts after importing settings
 			await tauriAPI.registerShortcuts();
+
+			const settings = await tauriAPI.getSettings();
+
+			await executeProviderChange(
+				"stt",
+				"stt-provider",
+				parseSTTProviderSelection,
+				settings.stt_provider,
+			);
+
+			await executeProviderChange(
+				"llm",
+				"llm-provider",
+				parseLLMProviderSelection,
+				settings.llm_provider,
+			);
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["settings"] });
@@ -779,14 +795,30 @@ export function useImportPrompt() {
 
 /**
  * Hook to perform a factory reset.
+ * Uses pessimistic sync for default providers via overlay.
  */
 export function useFactoryReset() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async () => {
 			await tauriAPI.factoryReset();
-			// Re-register shortcuts with default settings
 			await tauriAPI.registerShortcuts();
+
+			const defaultProvider = "auto";
+
+			await executeProviderChange(
+				"stt",
+				"stt-provider",
+				parseSTTProviderSelection,
+				defaultProvider,
+			);
+
+			await executeProviderChange(
+				"llm",
+				"llm-provider",
+				parseLLMProviderSelection,
+				defaultProvider,
+			);
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["settings"] });
