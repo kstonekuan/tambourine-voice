@@ -95,23 +95,20 @@ Example: `Feat: add support for Azure Speech provider`
 ### Typing & Pattern Matching
 
 - Prefer **explicit types** over raw dicts—make invalid states unrepresentable where practical
-- Prefer **typed variants over string literals** when the set of valid values is known—use `enum` in Rust, `StrEnum` in Python, and union types in TypeScript (e.g., `"toggle" | "hold"`)
-- Use **exhaustive pattern matching** (`match` in Python, `ts-pattern` in TypeScript) so the type checker can verify all cases are handled
-- Structure types to enable exhaustive matching when handling variants (e.g., message types)
+- Prefer **typed variants over string literals** when the set of valid values is known.
+- Use **exhaustive pattern matching** (`match` in Python and Rust, `ts-pattern` in TypeScript) so the type checker can verify all cases are handled
+- Structure types to enable exhaustive matching when handling variants
 
 ### Forward Compatibility
 
 Client and server should evolve independently:
 
-- **Unknown messages**: Parse to an explicit `Unknown*` variant (never `None`), log at warn level, preserve raw data
-- **Unknown enum values**: Use a fallback variant (e.g., `Unknown`) that preserves the raw value
-- **Unknown settings**: Use type guards to gracefully ignore unrecognized values from newer versions
+- **Unknown values**: Parse to an explicit `Unknown*` variant (never `None`), log at warn level, preserve raw data, gracefully ignore instead of raising exception
 
 ### Self-Documenting Code
 
-- **Verbose naming**: `_handle_start_recording()` over `start()`—names should read like documentation
+- **Verbose naming**: Variable and function naming should read like documentation
 - **Strategic comments**: Only for non-obvious logic or architectural decisions; avoid restating what code shows
-- **Module docstrings**: Explain *why* the module exists, not just what it does
 
 ## Pull Request Process
 
