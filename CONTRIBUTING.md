@@ -95,6 +95,7 @@ Example: `Feat: add support for Azure Speech provider`
 ### Typing & Pattern Matching
 
 - Prefer **explicit types** over raw dicts—make invalid states unrepresentable where practical
+- Prefer **enums over string/constant literals** when the set of valid values is known (e.g., `StoreKey.ToggleHotkey` over `"toggle_hotkey"`)
 - Use **exhaustive pattern matching** (`match` in Python, `ts-pattern` in TypeScript) so the type checker can verify all cases are handled
 - Structure types to enable exhaustive matching when handling variants (e.g., message types)
 
