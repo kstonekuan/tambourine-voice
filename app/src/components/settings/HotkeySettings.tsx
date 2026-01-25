@@ -81,6 +81,7 @@ export function HotkeySettings() {
 					}
 					enabledLoading={setHotkeyEnabled.isPending}
 					registrationError={shortcutErrors?.toggle_error}
+					mutationStatus={updateToggleHotkey.status}
 				/>
 
 				<div style={{ marginTop: 20 }}>
@@ -99,6 +100,7 @@ export function HotkeySettings() {
 						}
 						enabledLoading={setHotkeyEnabled.isPending}
 						registrationError={shortcutErrors?.hold_error}
+						mutationStatus={updateHoldHotkey.status}
 					/>
 				</div>
 
@@ -118,6 +120,7 @@ export function HotkeySettings() {
 						}
 						enabledLoading={setHotkeyEnabled.isPending}
 						registrationError={shortcutErrors?.paste_last_error}
+						mutationStatus={updatePasteLastHotkey.status}
 					/>
 				</div>
 

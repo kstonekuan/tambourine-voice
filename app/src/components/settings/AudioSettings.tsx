@@ -6,6 +6,7 @@ import {
 	useUpdateSoundEnabled,
 } from "../../lib/queries";
 import { DeviceSelector } from "../DeviceSelector";
+import { StatusIndicator } from "./StatusIndicator";
 
 export function AudioSettings() {
 	const { data: settings, isLoading } = useSettings();
@@ -28,7 +29,12 @@ export function AudioSettings() {
 				<DeviceSelector />
 				<div className="settings-row" style={{ marginTop: 16 }}>
 					<div>
-						<p className="settings-label">Sound feedback</p>
+						<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+							<p className="settings-label" style={{ margin: 0 }}>
+								Sound feedback
+							</p>
+							<StatusIndicator status={updateSoundEnabled.status} />
+						</div>
 						<p className="settings-description">
 							Play sounds when recording starts and stops
 						</p>
@@ -43,7 +49,12 @@ export function AudioSettings() {
 				</div>
 				<div className="settings-row" style={{ marginTop: 16 }}>
 					<div>
-						<p className="settings-label">Mute audio during recording</p>
+						<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+							<p className="settings-label" style={{ margin: 0 }}>
+								Mute audio during recording
+							</p>
+							<StatusIndicator status={updateAutoMuteAudio.status} />
+						</div>
 						<p className="settings-description">
 							Automatically mute system audio while dictating
 						</p>

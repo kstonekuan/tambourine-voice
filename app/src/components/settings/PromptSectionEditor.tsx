@@ -7,6 +7,7 @@ import {
 	Textarea,
 } from "@mantine/core";
 import { useEffect, useState } from "react";
+import { type MutationStatus, StatusIndicator } from "./StatusIndicator";
 
 export interface PromptSectionEditorProps {
 	sectionKey: string;
@@ -32,6 +33,8 @@ export interface PromptSectionEditorProps {
 	onSave: (content: string) => void;
 	onReset: () => void;
 	isSaving: boolean;
+	/** Mutation status for showing success/error indicators */
+	mutationStatus?: MutationStatus;
 }
 
 export function PromptSectionEditor({
@@ -55,6 +58,7 @@ export function PromptSectionEditor({
 	onSave,
 	onReset,
 	isSaving,
+	mutationStatus = "idle",
 }: PromptSectionEditorProps) {
 	const [content, setContent] = useState(initialContent);
 	const [hasChanges, setHasChanges] = useState(false);
@@ -94,7 +98,10 @@ export function PromptSectionEditor({
 					}}
 				>
 					<div>
-						<p className="settings-label">{title}</p>
+						<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+							<p className="settings-label">{title}</p>
+							<StatusIndicator status={mutationStatus} />
+						</div>
 						<p className="settings-description">{description}</p>
 					</div>
 					{!hideToggle && (
@@ -164,6 +171,7 @@ export function PromptSectionEditor({
 								gap: 12,
 								marginTop: 16,
 								justifyContent: "flex-end",
+								alignItems: "center",
 							}}
 						>
 							<Button
@@ -177,7 +185,7 @@ export function PromptSectionEditor({
 							<Button
 								color="gray"
 								onClick={handleSave}
-								disabled={!hasChanges}
+								disabled={!hasChanges || isSaving}
 								loading={isSaving}
 							>
 								Save

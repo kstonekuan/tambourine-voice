@@ -10,6 +10,7 @@ import {
 	tauriAPI,
 } from "../../lib/tauri";
 import { useRecordingStore } from "../../stores/recordingStore";
+import { StatusIndicator } from "./StatusIndicator";
 
 type PingStatus = "idle" | "loading" | "success" | "error";
 
@@ -239,7 +240,12 @@ export function ConnectionSettings() {
 					style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}
 				>
 					<div>
-						<p className="settings-label">Server URL</p>
+						<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+							<p className="settings-label" style={{ margin: 0 }}>
+								Server URL
+							</p>
+							<StatusIndicator status={updateServerUrl.status} />
+						</div>
 						<p className="settings-description">
 							The URL of the Tambourine server to connect to
 						</p>

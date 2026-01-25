@@ -5,6 +5,7 @@ import {
 	listNativeAudioDevices,
 } from "../lib/nativeAudio";
 import { useSettings, useUpdateSelectedMic } from "../lib/queries";
+import { StatusIndicator } from "./settings/StatusIndicator";
 
 export function DeviceSelector() {
 	const { data: settings, isLoading: settingsLoading } = useSettings();
@@ -73,14 +74,20 @@ export function DeviceSelector() {
 	];
 
 	return (
-		<Select
-			label="Microphone"
-			description="Select which microphone to use for dictation"
-			data={selectData}
-			value={settings?.selected_mic_id ?? "default"}
-			onChange={handleChange}
-			allowDeselect={false}
-			className="device-selector"
-		/>
+		<div>
+			<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+				<span className="settings-label">Microphone</span>
+				<StatusIndicator status={updateSelectedMic.status} />
+			</div>
+			<Select
+				label={null}
+				description="Select which microphone to use for dictation"
+				data={selectData}
+				value={settings?.selected_mic_id ?? "default"}
+				onChange={handleChange}
+				allowDeselect={false}
+				className="device-selector"
+			/>
+		</div>
 	);
 }

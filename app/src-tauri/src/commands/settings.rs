@@ -239,29 +239,15 @@ pub async fn update_cleanup_prompt_sections(
     sections: Option<CleanupPromptSections>,
     config_sync: tauri::State<'_, crate::config_sync::ConfigSync>,
 ) -> Result<(), String> {
-    use crate::events::{ConfigResponse, ConfigSetting, EventName};
-    use tauri::Emitter;
-
     // Save locally
     crate::save_setting_to_store(&app, StoreKey::CleanupPromptSections, &sections)?;
     log::info!("Updated cleanup prompt sections");
 
-    // Sync to server and emit notification
+    // Sync to server
     if let Some(ref s) = sections {
-        match config_sync.read().await.sync_prompt_sections(s).await {
-            Ok(()) => {
-                let _ = app.emit(
-                    EventName::ConfigResponse.as_str(),
-                    ConfigResponse::updated(ConfigSetting::PromptSections, s),
-                );
-            }
-            Err(e) => {
-                log::warn!("Failed to sync prompt sections to server: {}", e);
-                let _ = app.emit(
-                    EventName::ConfigResponse.as_str(),
-                    ConfigResponse::<()>::error(ConfigSetting::PromptSections, e),
-                );
-            }
+        if let Err(e) = config_sync.read().await.sync_prompt_sections(s).await {
+            log::warn!("Failed to sync prompt sections to server: {}", e);
+            return Err(e);
         }
     }
 
@@ -330,29 +316,15 @@ pub async fn update_stt_timeout(
     timeout_seconds: Option<f64>,
     config_sync: tauri::State<'_, crate::config_sync::ConfigSync>,
 ) -> Result<(), String> {
-    use crate::events::{ConfigResponse, ConfigSetting, EventName};
-    use tauri::Emitter;
-
     // Save locally
     crate::save_setting_to_store(&app, StoreKey::SttTimeoutSeconds, &timeout_seconds)?;
     log::info!("Updated STT timeout: {:?}", timeout_seconds);
 
-    // Sync to server and emit notification
+    // Sync to server
     if let Some(timeout) = timeout_seconds {
-        match config_sync.read().await.sync_stt_timeout(timeout).await {
-            Ok(()) => {
-                let _ = app.emit(
-                    EventName::ConfigResponse.as_str(),
-                    ConfigResponse::updated(ConfigSetting::SttTimeout, timeout),
-                );
-            }
-            Err(e) => {
-                log::warn!("Failed to sync STT timeout to server: {}", e);
-                let _ = app.emit(
-                    EventName::ConfigResponse.as_str(),
-                    ConfigResponse::<()>::error(ConfigSetting::SttTimeout, e),
-                );
-            }
+        if let Err(e) = config_sync.read().await.sync_stt_timeout(timeout).await {
+            log::warn!("Failed to sync STT timeout to server: {}", e);
+            return Err(e);
         }
     }
 

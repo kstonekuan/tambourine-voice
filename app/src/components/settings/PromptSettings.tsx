@@ -8,6 +8,7 @@ import {
 } from "../../lib/queries";
 import type { CleanupPromptSections, PromptSection } from "../../lib/tauri";
 import { PromptSectionEditor } from "./PromptSectionEditor";
+import type { MutationStatus } from "./StatusIndicator";
 
 const DEFAULT_SECTIONS: CleanupPromptSections = {
 	main: { enabled: true, mode: "auto" },
@@ -41,6 +42,17 @@ export function PromptSettings() {
 		advanced: { enabled: true, content: "", auto: true },
 		dictionary: { enabled: false, content: "", auto: false },
 	});
+
+	// Track which section is currently saving to show per-section status
+	const [savingSectionKey, setSavingSectionKey] = useState<SectionKey | null>(
+		null,
+	);
+
+	// Compute per-section mutation status
+	const getSectionMutationStatus = (key: SectionKey): MutationStatus => {
+		if (savingSectionKey !== key) return "idle";
+		return updateCleanupPromptSections.status;
+	};
 
 	// Track if each section has custom content (manual mode with non-empty content)
 	const getSectionContent = (
@@ -159,7 +171,8 @@ export function PromptSettings() {
 
 	// Save all sections to Tauri, which syncs to server
 	const saveAllSections = useCallback(
-		(sections: CleanupPromptSections) => {
+		(key: SectionKey, sections: CleanupPromptSections) => {
+			setSavingSectionKey(key);
 			updateCleanupPromptSections.mutate(sections);
 		},
 		[updateCleanupPromptSections],
@@ -172,7 +185,7 @@ export function PromptSettings() {
 				...prev,
 				[key]: { ...prev[key], enabled: checked },
 			}));
-			saveAllSections(buildSections({ key, enabled: checked }));
+			saveAllSections(key, buildSections({ key, enabled: checked }));
 		},
 		[buildSections, saveAllSections],
 	);
@@ -184,7 +197,7 @@ export function PromptSettings() {
 				...prev,
 				[key]: { ...prev[key], content },
 			}));
-			saveAllSections(buildSections({ key, content }));
+			saveAllSections(key, buildSections({ key, content }));
 		},
 		[buildSections, saveAllSections],
 	);
@@ -197,7 +210,7 @@ export function PromptSettings() {
 				...prev,
 				[key]: { ...prev[key], content: defaultContent },
 			}));
-			saveAllSections(buildSections({ key, content: null }));
+			saveAllSections(key, buildSections({ key, content: null }));
 		},
 		[defaultSections, buildSections, saveAllSections],
 	);
@@ -209,7 +222,7 @@ export function PromptSettings() {
 				...prev,
 				[key]: { ...prev[key], auto },
 			}));
-			saveAllSections(buildSections({ key, auto }));
+			saveAllSections(key, buildSections({ key, auto }));
 		},
 		[buildSections, saveAllSections],
 	);
@@ -250,6 +263,7 @@ export function PromptSettings() {
 							onSave={(content) => handleSave("main", content)}
 							onReset={() => handleReset("main")}
 							isSaving={updateCleanupPromptSections.isPending}
+							mutationStatus={getSectionMutationStatus("main")}
 						/>
 
 						<PromptSectionEditor
@@ -267,6 +281,7 @@ export function PromptSettings() {
 							onSave={(content) => handleSave("advanced", content)}
 							onReset={() => handleReset("advanced")}
 							isSaving={updateCleanupPromptSections.isPending}
+							mutationStatus={getSectionMutationStatus("advanced")}
 						/>
 
 						<PromptSectionEditor
@@ -282,6 +297,7 @@ export function PromptSettings() {
 							onSave={(content) => handleSave("dictionary", content)}
 							onReset={() => handleReset("dictionary")}
 							isSaving={updateCleanupPromptSections.isPending}
+							mutationStatus={getSectionMutationStatus("dictionary")}
 						/>
 					</Accordion>
 				)}

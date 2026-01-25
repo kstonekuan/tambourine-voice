@@ -98,6 +98,7 @@ Example: `Feat: add support for Azure Speech provider`
 - Prefer **typed variants over string literals** when the set of valid values is known.
 - Use **exhaustive pattern matching** (`match` in Python and Rust, `ts-pattern` in TypeScript) so the type checker can verify all cases are handled
 - Structure types to enable exhaustive matching when handling variants
+- Prefer **shared internal functions over factory patterns** when extracting common logic from hooks or functions—keep each export explicitly defined for better IDE navigation and readability
 
 ### Forward Compatibility
 

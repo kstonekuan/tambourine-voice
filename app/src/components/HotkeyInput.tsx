@@ -3,6 +3,10 @@ import { AlertCircle } from "lucide-react";
 import { useEffect } from "react";
 import { useRecordHotkeys } from "react-hotkeys-hook";
 import type { HotkeyConfig } from "../lib/tauri";
+import {
+	type MutationStatus,
+	StatusIndicator,
+} from "./settings/StatusIndicator";
 
 interface HotkeyInputProps {
 	label: string;
@@ -20,6 +24,8 @@ interface HotkeyInputProps {
 	enabledLoading?: boolean;
 	// Registration error (if hotkey couldn't be registered)
 	registrationError?: string | null;
+	// Mutation status for visual feedback
+	mutationStatus?: MutationStatus;
 }
 
 // Known modifier keys (lowercase, as returned by react-hotkeys-hook)
@@ -181,6 +187,7 @@ export function HotkeyInput({
 	onEnabledChange,
 	enabledLoading,
 	registrationError,
+	mutationStatus,
 }: HotkeyInputProps) {
 	const [keys, { start, stop, isRecording: internalIsRecording }] =
 		useRecordHotkeys();
@@ -270,6 +277,7 @@ export function HotkeyInput({
 						<p className="settings-label" style={{ margin: 0 }}>
 							{label}
 						</p>
+						{mutationStatus && <StatusIndicator status={mutationStatus} />}
 						{registrationError && (
 							<Tooltip
 								label={registrationError}

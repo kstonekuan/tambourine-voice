@@ -43,7 +43,7 @@ tokio = { version = "1.49.0", features = ["rt", "sync"] }
 
 # Settings and history
 chrono = { version = "0.4.43", features = ["serde"] }
-uuid = { version = "1.19.0", features = ["v4", "serde"] }
+uuid = { version = "1.20.0", features = ["v4", "serde"] }
 
 # Audio playback
 rodio = { version = "0.21.1", default-features = false, features = [
