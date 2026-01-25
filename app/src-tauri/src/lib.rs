@@ -353,6 +353,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .manage(AppState::default())
         .manage(config_sync::new_config_sync())
         .invoke_handler(tauri::generate_handler![
@@ -378,6 +380,15 @@ pub fn run() {
             commands::history::get_history,
             commands::history::delete_history_entry,
             commands::history::clear_history,
+            commands::export_import::generate_settings_export,
+            commands::export_import::generate_history_export,
+            commands::export_import::generate_prompt_exports,
+            commands::export_import::parse_prompt_file,
+            commands::export_import::import_prompt,
+            commands::export_import::detect_export_file_type,
+            commands::export_import::import_settings,
+            commands::export_import::import_history,
+            commands::export_import::factory_reset,
             commands::overlay::resize_overlay,
             commands::config_sync::set_server_connected,
             commands::config_sync::set_server_disconnected,

@@ -333,6 +333,29 @@ interface HistoryEntry {
 	text: string;
 }
 
+// =============================================================================
+// Export/Import Types
+// =============================================================================
+
+/** Strategy for importing history entries */
+export type HistoryImportStrategy =
+	| "replace"
+	| "merge_append"
+	| "merge_deduplicate";
+
+/** Result of a history import operation */
+export interface HistoryImportResult {
+	success: boolean;
+	entries_imported: number | null;
+	entries_skipped: number | null;
+}
+
+/** Detected file type from import */
+export type DetectedFileType = "settings" | "history" | "unknown";
+
+/** Prompt section names */
+export type PromptSectionName = "main" | "advanced" | "dictionary";
+
 /**
  * Discriminated union for prompt section configuration.
  * - Auto mode: server uses built-in default prompt
@@ -674,6 +697,52 @@ export const tauriAPI = {
 
 	async setServerDisconnected(): Promise<void> {
 		return invoke("set_server_disconnected");
+	},
+
+	// Export/Import API
+	async generateSettingsExport(): Promise<string> {
+		return invoke("generate_settings_export");
+	},
+
+	async generateHistoryExport(): Promise<string> {
+		return invoke("generate_history_export");
+	},
+
+	/** Generate prompt exports as markdown content. Returns map of section name -> markdown content. */
+	async generatePromptExports(): Promise<Record<PromptSectionName, string>> {
+		return invoke("generate_prompt_exports");
+	},
+
+	/** Parse a prompt file and extract section name and content from HTML comment header. */
+	async parsePromptFile(content: string): Promise<[PromptSectionName, string]> {
+		return invoke("parse_prompt_file", { content });
+	},
+
+	/** Import a prompt into the specified section. */
+	async importPrompt(
+		section: PromptSectionName,
+		content: string,
+	): Promise<void> {
+		return invoke("import_prompt", { section, content });
+	},
+
+	async detectExportFileType(content: string): Promise<DetectedFileType> {
+		return invoke("detect_export_file_type", { content });
+	},
+
+	async importSettings(content: string): Promise<void> {
+		return invoke("import_settings", { content });
+	},
+
+	async importHistory(
+		content: string,
+		strategy: HistoryImportStrategy,
+	): Promise<HistoryImportResult> {
+		return invoke("import_history", { content, strategy });
+	},
+
+	async factoryReset(): Promise<void> {
+		return invoke("factory_reset");
 	},
 };
 

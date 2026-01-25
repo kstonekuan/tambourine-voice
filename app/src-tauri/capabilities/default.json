@@ -12,6 +12,10 @@
 		"core:window:allow-start-dragging",
 		"opener:default",
 		"global-shortcut:default",
-		"store:default"
+		"store:default",
+		"dialog:default",
+		"fs:default",
+		"fs:allow-read-text-file",
+		"fs:allow-write-text-file"
 	]
 }

@@ -7,6 +7,7 @@ import { HistoryFeed } from "./components/HistoryFeed";
 import { Logo } from "./components/Logo";
 import { AudioSettings } from "./components/settings/AudioSettings";
 import { ConnectionSettings } from "./components/settings/ConnectionSettings";
+import { DataManagementSettings } from "./components/settings/DataManagementSettings";
 import { HotkeySettings } from "./components/settings/HotkeySettings";
 import { PromptSettings } from "./components/settings/PromptSettings";
 import { ProvidersSettings } from "./components/settings/ProvidersSettings";
@@ -248,6 +249,7 @@ function SettingsView() {
 			<HotkeySettings />
 			<PromptSettings />
 			<ConnectionSettings />
+			<DataManagementSettings />
 		</div>
 	);
 }

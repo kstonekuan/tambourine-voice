@@ -30,8 +30,11 @@ import {
 	type CleanupPromptSections,
 	type ConnectionState,
 	configAPI,
+	type DetectedFileType,
 	getProviderIdFromSelection,
+	type HistoryImportStrategy,
 	type HotkeyConfig,
+	type PromptSectionName,
 	parseLLMProviderSelection,
 	parseSTTProviderSelection,
 	tauriAPI,
@@ -508,6 +511,302 @@ export function useUpdateSTTProviderWithServer() {
 			const providerId = getProviderIdFromSelection(selection);
 			tauriAPI.updateSTTProvider(providerId);
 			queryClient.invalidateQueries({ queryKey: ["settings"] });
+		},
+	});
+}
+
+// =============================================================================
+// Export/Import Hooks
+// =============================================================================
+
+/** Parsed file with its detected type and content */
+export interface ParsedExportFile {
+	type: DetectedFileType | "prompt";
+	content: string;
+	filename: string;
+	/** For prompt files, the section name */
+	promptSection?: PromptSectionName;
+	/** For prompt files, the actual prompt content (without header) */
+	promptContent?: string;
+}
+
+/**
+ * Hook to export data (settings, history, and prompts) to a selected folder.
+ * Opens a folder picker dialog and writes files.
+ * - tambourine-settings.json
+ * - tambourine-history.json
+ * - tambourine-prompt-{section}.md (for each custom prompt)
+ */
+export function useExportData() {
+	return useMutation({
+		mutationFn: async () => {
+			const { open } = await import("@tauri-apps/plugin-dialog");
+			const { writeTextFile } = await import("@tauri-apps/plugin-fs");
+
+			// Open folder picker
+			const selectedPath = await open({
+				directory: true,
+				multiple: false,
+				title: "Select Export Folder",
+			});
+
+			if (!selectedPath) {
+				// User cancelled
+				return null;
+			}
+
+			// Generate exports
+			const [settingsJson, historyJson, promptExports] = await Promise.all([
+				tauriAPI.generateSettingsExport(),
+				tauriAPI.generateHistoryExport(),
+				tauriAPI.generatePromptExports(),
+			]);
+
+			// Write JSON files
+			const settingsPath = `${selectedPath}/tambourine-settings.json`;
+			const historyPath = `${selectedPath}/tambourine-history.json`;
+
+			const writePromises: Promise<void>[] = [
+				writeTextFile(settingsPath, settingsJson),
+				writeTextFile(historyPath, historyJson),
+			];
+
+			// Write prompt .md files (only for custom prompts)
+			const promptFiles: string[] = [];
+			for (const [section, content] of Object.entries(promptExports)) {
+				const promptPath = `${selectedPath}/tambourine-prompt-${section}.md`;
+				writePromises.push(writeTextFile(promptPath, content));
+				promptFiles.push(promptPath);
+			}
+
+			await Promise.all(writePromises);
+
+			return { settingsPath, historyPath, promptFiles };
+		},
+		onSuccess: (result) => {
+			if (result) {
+				const promptCount = result.promptFiles.length;
+				const promptMsg =
+					promptCount > 0 ? ` and ${promptCount} prompt(s)` : "";
+				notifications.show({
+					title: "Export Complete",
+					message: `Settings, history${promptMsg} exported successfully`,
+					color: "green",
+					autoClose: 3000,
+				});
+			}
+		},
+		onError: (error) => {
+			notifications.show({
+				title: "Export Failed",
+				message: error instanceof Error ? error.message : "Unknown error",
+				color: "red",
+				autoClose: 5000,
+			});
+		},
+	});
+}
+
+/**
+ * Hook to import data from selected files.
+ * Opens a file picker (multi-select), auto-detects file types.
+ * - .json files: detected via `type` field (settings or history)
+ * - .md files: detected via HTML comment header (prompts)
+ * Returns parsed files for the caller to handle (e.g., show strategy modal for history).
+ */
+export function useImportData() {
+	return useMutation({
+		mutationFn: async (): Promise<ParsedExportFile[]> => {
+			const { open } = await import("@tauri-apps/plugin-dialog");
+			const { readTextFile } = await import("@tauri-apps/plugin-fs");
+
+			// Open file picker (allow multiple selection)
+			const selectedPaths = await open({
+				multiple: true,
+				filters: [
+					{
+						name: "Export Files",
+						extensions: ["json", "md"],
+					},
+				],
+				title: "Select Export Files to Import",
+			});
+
+			if (!selectedPaths || selectedPaths.length === 0) {
+				return [];
+			}
+
+			// Read and detect file types
+			const files: ParsedExportFile[] = [];
+
+			for (const path of selectedPaths) {
+				const content = await readTextFile(path);
+				const filename = path.split("/").pop() ?? path;
+
+				// Check if it's a markdown file (potential prompt)
+				if (filename.endsWith(".md")) {
+					try {
+						const [section, promptContent] =
+							await tauriAPI.parsePromptFile(content);
+						files.push({
+							type: "prompt",
+							content,
+							filename,
+							promptSection: section,
+							promptContent,
+						});
+					} catch {
+						// Not a valid prompt file, mark as unknown
+						files.push({ type: "unknown", content, filename });
+					}
+				} else {
+					// JSON file - detect type from content
+					const type = await tauriAPI.detectExportFileType(content);
+					files.push({ type, content, filename });
+				}
+			}
+
+			return files;
+		},
+	});
+}
+
+/**
+ * Hook to import settings from a parsed file content.
+ */
+export function useImportSettings() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async (content: string) => {
+			await tauriAPI.importSettings(content);
+			// Re-register shortcuts after importing settings
+			await tauriAPI.registerShortcuts();
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["settings"] });
+			queryClient.invalidateQueries({ queryKey: ["shortcutErrors"] });
+			tauriAPI.emitSettingsChanged();
+			notifications.show({
+				title: "Settings Imported",
+				message: "Settings have been imported and applied",
+				color: "green",
+				autoClose: 3000,
+			});
+		},
+		onError: (error) => {
+			notifications.show({
+				title: "Import Failed",
+				message: error instanceof Error ? error.message : "Unknown error",
+				color: "red",
+				autoClose: 5000,
+			});
+		},
+	});
+}
+
+/**
+ * Hook to import history from a parsed file content with a strategy.
+ */
+export function useImportHistory() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async ({
+			content,
+			strategy,
+		}: {
+			content: string;
+			strategy: HistoryImportStrategy;
+		}) => {
+			return tauriAPI.importHistory(content, strategy);
+		},
+		onSuccess: (result) => {
+			queryClient.invalidateQueries({ queryKey: ["history"] });
+			tauriAPI.emitHistoryChanged();
+			const imported = result.entries_imported ?? 0;
+			notifications.show({
+				title: "History Imported",
+				message: `${imported} entries imported`,
+				color: "green",
+				autoClose: 3000,
+			});
+		},
+		onError: (error) => {
+			notifications.show({
+				title: "Import Failed",
+				message: error instanceof Error ? error.message : "Unknown error",
+				color: "red",
+				autoClose: 5000,
+			});
+		},
+	});
+}
+
+/**
+ * Hook to import a prompt from a parsed file content.
+ */
+export function useImportPrompt() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async ({
+			section,
+			content,
+		}: {
+			section: PromptSectionName;
+			content: string;
+		}) => {
+			return tauriAPI.importPrompt(section, content);
+		},
+		onSuccess: (_result, { section }) => {
+			queryClient.invalidateQueries({ queryKey: ["settings"] });
+			notifications.show({
+				title: "Prompt Imported",
+				message: `${section} prompt imported successfully`,
+				color: "green",
+				autoClose: 3000,
+			});
+		},
+		onError: (error) => {
+			notifications.show({
+				title: "Import Failed",
+				message: error instanceof Error ? error.message : "Unknown error",
+				color: "red",
+				autoClose: 5000,
+			});
+		},
+	});
+}
+
+/**
+ * Hook to perform a factory reset.
+ */
+export function useFactoryReset() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async () => {
+			await tauriAPI.factoryReset();
+			// Re-register shortcuts with default settings
+			await tauriAPI.registerShortcuts();
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["settings"] });
+			queryClient.invalidateQueries({ queryKey: ["history"] });
+			queryClient.invalidateQueries({ queryKey: ["shortcutErrors"] });
+			tauriAPI.emitSettingsChanged();
+			tauriAPI.emitHistoryChanged();
+			notifications.show({
+				title: "Factory Reset Complete",
+				message: "All settings and history have been reset to defaults",
+				color: "green",
+				autoClose: 3000,
+			});
+		},
+		onError: (error) => {
+			notifications.show({
+				title: "Factory Reset Failed",
+				message: error instanceof Error ? error.message : "Unknown error",
+				color: "red",
+				autoClose: 5000,
+			});
 		},
 	});
 }

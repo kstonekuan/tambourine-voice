@@ -1,11 +1,32 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::RwLock;
 use uuid::Uuid;
 
 const MAX_HISTORY_ENTRIES: usize = 500;
+
+/// Strategy for importing history entries
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HistoryImportStrategy {
+    /// Replace all existing entries with imported ones
+    Replace,
+    /// Append imported entries to existing ones (imported entries first/newer)
+    MergeAppend,
+    /// Merge but skip entries with matching IDs
+    MergeDeduplicate,
+}
+
+/// Result of a history import operation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HistoryImportResult {
+    pub success: bool,
+    pub entries_imported: Option<usize>,
+    pub entries_skipped: Option<usize>,
+}
 
 /// A single dictation history entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,5 +161,79 @@ impl HistoryStorage {
             data.entries.clear();
         }
         self.save()
+    }
+
+    /// Import entries with the specified strategy
+    pub fn import_entries(
+        &self,
+        mut entries: Vec<HistoryEntry>,
+        strategy: HistoryImportStrategy,
+    ) -> Result<HistoryImportResult, String> {
+        let imported_count;
+        let skipped_count;
+
+        {
+            let mut data = self
+                .data
+                .write()
+                .map_err(|e| format!("Failed to write history: {}", e))?;
+
+            match strategy {
+                HistoryImportStrategy::Replace => {
+                    // Sort imported entries by timestamp (newest first)
+                    entries.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+                    imported_count = entries.len();
+                    skipped_count = 0;
+                    data.entries = entries;
+                }
+                HistoryImportStrategy::MergeAppend => {
+                    // Prepend imported entries (imported are considered newer)
+                    // Sort imported entries by timestamp (newest first)
+                    entries.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+                    imported_count = entries.len();
+                    skipped_count = 0;
+
+                    // Prepend imported entries to existing
+                    let mut combined = entries;
+                    combined.append(&mut data.entries);
+                    data.entries = combined;
+                }
+                HistoryImportStrategy::MergeDeduplicate => {
+                    // Collect existing IDs
+                    let existing_ids: HashSet<String> =
+                        data.entries.iter().map(|e| e.id.clone()).collect();
+
+                    // Filter out entries that already exist
+                    let new_entries: Vec<HistoryEntry> = entries
+                        .into_iter()
+                        .filter(|e| !existing_ids.contains(&e.id))
+                        .collect();
+
+                    imported_count = new_entries.len();
+                    skipped_count = 0; // We'll calculate this from the original count
+
+                    // Prepend new entries
+                    let mut combined = new_entries;
+                    combined.append(&mut data.entries);
+
+                    // Sort by timestamp (newest first)
+                    combined.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+                    data.entries = combined;
+                }
+            }
+
+            // Truncate to max entries
+            if data.entries.len() > MAX_HISTORY_ENTRIES {
+                data.entries.truncate(MAX_HISTORY_ENTRIES);
+            }
+        }
+
+        self.save()?;
+
+        Ok(HistoryImportResult {
+            success: true,
+            entries_imported: Some(imported_count),
+            entries_skipped: Some(skipped_count),
+        })
     }
 }
