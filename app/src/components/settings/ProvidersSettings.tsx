@@ -1,5 +1,5 @@
 import { Badge, Loader, Select, Slider, Text } from "@mantine/core";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	useAvailableProviders,
 	useSettings,
@@ -11,6 +11,14 @@ import type { ProviderInfo } from "../../lib/tauri";
 import { StatusIndicator } from "./StatusIndicator";
 
 const DEFAULT_STT_TIMEOUT = 0.8;
+
+const selectInputStyles = {
+	input: {
+		backgroundColor: "var(--bg-elevated)",
+		borderColor: "var(--border-default)",
+		color: "var(--text-primary)",
+	},
+} as const;
 
 /** Select option format for Mantine Select */
 interface SelectOption {
@@ -81,14 +89,28 @@ export function ProvidersSettings() {
 	const sttMutation = useUpdateSTTProviderWithServer();
 	const llmMutation = useUpdateLLMProviderWithServer();
 
+	// AbortControllers for cleanup on unmount
+	const sttAbortControllerRef = useRef<AbortController | null>(null);
+	const llmAbortControllerRef = useRef<AbortController | null>(null);
+
+	useEffect(() => {
+		return () => {
+			// Clean up any pending mutations on unmount
+			sttAbortControllerRef.current?.abort();
+			llmAbortControllerRef.current?.abort();
+		};
+	}, []);
+
 	const handleSTTProviderChange = (value: string | null) => {
 		if (!value || sttMutation.isPending) return;
-		sttMutation.mutate(value);
+		sttAbortControllerRef.current = new AbortController();
+		sttMutation.mutate({ value, signal: sttAbortControllerRef.current.signal });
 	};
 
 	const handleLLMProviderChange = (value: string | null) => {
 		if (!value || llmMutation.isPending) return;
-		llmMutation.mutate(value);
+		llmAbortControllerRef.current = new AbortController();
+		llmMutation.mutate({ value, signal: llmAbortControllerRef.current.signal });
 	};
 
 	const handleSTTTimeoutChange = (value: number) => {
@@ -117,13 +139,13 @@ export function ProvidersSettings() {
 	);
 
 	// Get display value for dropdown:
-	// - During mutation: show what user selected (mutation.variables)
+	// - During mutation: show what user selected (mutation.variables.value)
 	// - Otherwise: show confirmed value from store
 	const sttDisplayValue = sttMutation.isPending
-		? sttMutation.variables
+		? sttMutation.variables?.value
 		: (settings?.stt_provider ?? "auto");
 	const llmDisplayValue = llmMutation.isPending
-		? llmMutation.variables
+		? llmMutation.variables?.value
 		: (settings?.llm_provider ?? "auto");
 
 	// Determine if currently selected provider is local (only show badge for non-auto providers)
@@ -169,13 +191,7 @@ export function ProvidersSettings() {
 								) : undefined
 							}
 							rightSectionWidth={60}
-							styles={{
-								input: {
-									backgroundColor: "var(--bg-elevated)",
-									borderColor: "var(--border-default)",
-									color: "var(--text-primary)",
-								},
-							}}
+							styles={selectInputStyles}
 						/>
 					)}
 				</div>
@@ -204,13 +220,7 @@ export function ProvidersSettings() {
 								) : undefined
 							}
 							rightSectionWidth={60}
-							styles={{
-								input: {
-									backgroundColor: "var(--bg-elevated)",
-									borderColor: "var(--border-default)",
-									color: "var(--text-primary)",
-								},
-							}}
+							styles={selectInputStyles}
 						/>
 					)}
 				</div>
