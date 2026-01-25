@@ -327,10 +327,11 @@ export interface ShortcutRegistrationResult {
 	errors: ShortcutErrors;
 }
 
-interface HistoryEntry {
+export interface HistoryEntry {
 	id: string;
 	timestamp: string;
 	text: string;
+	raw_text: string;
 }
 
 // =============================================================================
@@ -566,9 +567,8 @@ export const tauriAPI = {
 		return invoke("set_hotkey_enabled", { hotkeyType, enabled });
 	},
 
-	// History API
-	async addHistoryEntry(text: string): Promise<HistoryEntry> {
-		return invoke("add_history_entry", { text });
+	async addHistoryEntry(text: string, rawText: string): Promise<HistoryEntry> {
+		return invoke("add_history_entry", { text, rawText });
 	},
 
 	async getHistory(limit?: number): Promise<HistoryEntry[]> {

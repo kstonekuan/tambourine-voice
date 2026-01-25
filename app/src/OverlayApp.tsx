@@ -1,6 +1,10 @@
 import { Loader } from "@mantine/core";
 import { useResizeObserver, useTimeout } from "@mantine/hooks";
-import { type BotLLMTextData, RTVIEvent } from "@pipecat-ai/client-js";
+import {
+	type BotLLMTextData,
+	RTVIEvent,
+	type TranscriptData,
+} from "@pipecat-ai/client-js";
 import {
 	PipecatClientProvider,
 	usePipecatClient,
@@ -245,6 +249,7 @@ function RecordingControl() {
 	const { data: settings } = useSettings();
 
 	const streamedLlmResponseChunksRef = useRef("");
+	const rawTranscriptionRef = useRef("");
 
 	const typeTextMutation = useTypeText();
 	const addHistoryEntry = useAddHistoryEntry();
@@ -287,6 +292,12 @@ function RecordingControl() {
 	const onStartRecording = useCallback(async () => {
 		// Clear error state when starting recording
 		setShowError(false);
+
+		// Reset accumulators for new recording
+		// Important: rawTranscriptionRef is reset here (not on BotLlmStarted)
+		// because UserTranscript events arrive DURING recording, before LLM processes
+		streamedLlmResponseChunksRef.current = "";
+		rawTranscriptionRef.current = "";
 
 		// Always show loading indicator during mic acquisition and recording start
 		// This ensures accurate UX feedback even when mic is pre-warmed
@@ -643,11 +654,26 @@ function RecordingControl() {
 		// (pessimistic updates - main window sends request, overlay sends to server)
 	}, [client, displayState, settings, buildConfigMessages, send]);
 
+	// Listen to native UserTranscript event for raw transcription
+	// RTVIObserver emits these automatically as user speaks
+	useRTVIClientEvent(
+		RTVIEvent.UserTranscript,
+		useCallback((data: TranscriptData) => {
+			// Accumulate final transcriptions (ignore partials to avoid duplicates)
+			if (data.final) {
+				rawTranscriptionRef.current +=
+					(rawTranscriptionRef.current ? " " : "") + data.text;
+			}
+		}, []),
+	);
+
 	// LLM text streaming handlers (using official RTVI protocol via RTVIObserver)
 	useRTVIClientEvent(
 		RTVIEvent.BotLlmStarted,
 		useCallback(() => {
-			// Reset accumulator when LLM starts generating
+			// Reset LLM accumulator when LLM starts generating
+			// Note: rawTranscriptionRef is reset on recording start, not here
+			// (transcripts arrive DURING recording, before LLM processes)
 			streamedLlmResponseChunksRef.current = "";
 		}, []),
 	);
@@ -665,16 +691,19 @@ function RecordingControl() {
 		useCallback(async () => {
 			clearResponseTimeout();
 			const text = streamedLlmResponseChunksRef.current.trim();
+			const rawText = rawTranscriptionRef.current.trim();
 			streamedLlmResponseChunksRef.current = "";
+			rawTranscriptionRef.current = "";
 
 			if (text) {
 				console.debug("[Pipecat] LLM response:", text);
+				console.debug("[Pipecat] Raw transcription:", rawText);
 				try {
 					await typeTextMutation.mutateAsync(text);
 				} catch (error) {
 					console.error("[Pipecat] Failed to type text:", error);
 				}
-				addHistoryEntry.mutate(text);
+				addHistoryEntry.mutate({ text, rawText });
 			}
 			send({ type: "RESPONSE_RECEIVED" });
 		}, [clearResponseTimeout, typeTextMutation, addHistoryEntry, send]),

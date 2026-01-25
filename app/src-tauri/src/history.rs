@@ -34,14 +34,17 @@ pub struct HistoryEntry {
     pub id: String,
     pub timestamp: DateTime<Utc>,
     pub text: String,
+    #[serde(default)]
+    pub raw_text: String,
 }
 
 impl HistoryEntry {
-    pub fn new(text: String) -> Self {
+    pub fn new(text: String, raw_text: String) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             timestamp: Utc::now(),
             text,
+            raw_text,
         }
     }
 }
@@ -98,8 +101,8 @@ impl HistoryStorage {
     }
 
     /// Add a new entry to the history
-    pub fn add_entry(&self, text: String) -> Result<HistoryEntry, String> {
-        let entry = HistoryEntry::new(text);
+    pub fn add_entry(&self, text: String, raw_text: String) -> Result<HistoryEntry, String> {
+        let entry = HistoryEntry::new(text, raw_text);
         {
             let mut data = self
                 .data

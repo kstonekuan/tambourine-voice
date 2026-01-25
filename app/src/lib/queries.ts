@@ -321,7 +321,8 @@ export function useHistory(limit?: number) {
 export function useAddHistoryEntry() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: (text: string) => tauriAPI.addHistoryEntry(text),
+		mutationFn: ({ text, rawText }: { text: string; rawText: string }) =>
+			tauriAPI.addHistoryEntry(text, rawText),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["history"] });
 			// Notify other windows about history change

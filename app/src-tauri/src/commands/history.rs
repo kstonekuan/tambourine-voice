@@ -5,9 +5,10 @@ use tauri::State;
 #[tauri::command]
 pub async fn add_history_entry(
     text: String,
+    raw_text: String,
     history: State<'_, HistoryStorage>,
 ) -> Result<HistoryEntry, String> {
-    history.add_entry(text)
+    history.add_entry(text, raw_text)
 }
 
 /// Get dictation history entries

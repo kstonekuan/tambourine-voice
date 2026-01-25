@@ -1,14 +1,22 @@
-import { ActionIcon, Button, Group, Modal, Text } from "@mantine/core";
+import { ActionIcon, Button, Group, Menu, Modal, Text } from "@mantine/core";
 import { useClipboard, useDisclosure } from "@mantine/hooks";
 import { useQueryClient } from "@tanstack/react-query";
 import { format, isToday, isYesterday } from "date-fns";
-import { Copy, MessageSquare, Trash2 } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo } from "react";
+import {
+	Copy,
+	Eye,
+	EyeOff,
+	MessageSquare,
+	MoreVertical,
+	Trash2,
+} from "lucide-react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
 	useClearHistory,
 	useDeleteHistoryEntry,
 	useHistory,
 } from "../lib/queries";
+import type { HistoryEntry } from "../lib/tauri";
 import { tauriAPI } from "../lib/tauri";
 
 function formatTime(timestamp: string): string {
@@ -24,16 +32,10 @@ function formatDate(timestamp: string): string {
 
 interface GroupedHistory {
 	date: string;
-	items: Array<{
-		id: string;
-		text: string;
-		timestamp: string;
-	}>;
+	items: HistoryEntry[];
 }
 
-function groupHistoryByDate(
-	history: Array<{ id: string; text: string; timestamp: string }>,
-): GroupedHistory[] {
+function groupHistoryByDate(history: HistoryEntry[]): GroupedHistory[] {
 	const groups: Record<string, GroupedHistory> = {};
 
 	for (const item of history) {
@@ -49,7 +51,7 @@ function groupHistoryByDate(
 
 // Memoized history item component to prevent re-renders when parent updates
 interface HistoryItemProps {
-	entry: { id: string; text: string; timestamp: string };
+	entry: HistoryEntry;
 	onCopy: (text: string) => void;
 	onDelete: (id: string) => void;
 	isDeleting: boolean;
@@ -61,30 +63,68 @@ const HistoryItem = memo(function HistoryItem({
 	onDelete,
 	isDeleting,
 }: HistoryItemProps) {
+	const [isExpanded, setIsExpanded] = useState(false);
+	const hasRawText = entry.raw_text && entry.raw_text.trim().length > 0;
+
 	return (
 		<div className="history-item">
 			<span className="history-time">{formatTime(entry.timestamp)}</span>
-			<p className="history-text">{entry.text}</p>
+			<div className="history-content">
+				<p className="history-text">{entry.text}</p>
+				{isExpanded && hasRawText && (
+					<div className="history-raw-text">
+						<Text size="xs" c="dimmed" fw={500} mb={4}>
+							Raw transcription:
+						</Text>
+						<Text size="sm" c="dimmed">
+							{entry.raw_text}
+						</Text>
+					</div>
+				)}
+			</div>
 			<div className="history-actions">
-				<ActionIcon
-					variant="subtle"
-					size="sm"
-					color="gray"
-					onClick={() => onCopy(entry.text)}
-					title="Copy to clipboard"
-				>
-					<Copy size={14} />
-				</ActionIcon>
-				<ActionIcon
-					variant="subtle"
-					size="sm"
-					color="red"
-					onClick={() => onDelete(entry.id)}
-					title="Delete"
-					disabled={isDeleting}
-				>
-					<Trash2 size={14} />
-				</ActionIcon>
+				<Menu shadow="md" width={180} position="bottom-end">
+					<Menu.Target>
+						<ActionIcon variant="subtle" size="sm" color="gray">
+							<MoreVertical size={14} />
+						</ActionIcon>
+					</Menu.Target>
+					<Menu.Dropdown>
+						<Menu.Item
+							leftSection={<Copy size={14} />}
+							onClick={() => onCopy(entry.text)}
+						>
+							Copy
+						</Menu.Item>
+						{hasRawText && (
+							<Menu.Item
+								leftSection={<Copy size={14} />}
+								onClick={() => onCopy(entry.raw_text)}
+							>
+								Copy raw
+							</Menu.Item>
+						)}
+						{hasRawText && (
+							<Menu.Item
+								leftSection={
+									isExpanded ? <EyeOff size={14} /> : <Eye size={14} />
+								}
+								onClick={() => setIsExpanded(!isExpanded)}
+							>
+								{isExpanded ? "Hide" : "View"} raw transcript
+							</Menu.Item>
+						)}
+						<Menu.Divider />
+						<Menu.Item
+							color="red"
+							leftSection={<Trash2 size={14} />}
+							onClick={() => onDelete(entry.id)}
+							disabled={isDeleting}
+						>
+							Delete
+						</Menu.Item>
+					</Menu.Dropdown>
+				</Menu>
 			</div>
 		</div>
 	);
