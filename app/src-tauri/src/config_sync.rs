@@ -6,6 +6,9 @@ use tokio::sync::RwLock;
 
 use crate::settings::CleanupPromptSections;
 
+/// Default STT timeout in seconds (matches server's DEFAULT_TRANSCRIPTION_WAIT_TIMEOUT_SECONDS)
+pub const DEFAULT_STT_TIMEOUT_SECONDS: f64 = 0.5;
+
 /// Tracks server connection state for config syncing
 pub struct ConfigSyncState {
     client: Client,

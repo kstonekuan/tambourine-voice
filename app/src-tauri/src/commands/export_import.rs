@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tauri::{AppHandle, Manager};
 
-use crate::config_sync::ConfigSync;
+use crate::config_sync::{ConfigSync, DEFAULT_STT_TIMEOUT_SECONDS};
 use crate::history::{HistoryEntry, HistoryImportResult, HistoryImportStrategy, HistoryStorage};
 use crate::settings::{AppSettings, CleanupPromptSections, PromptSection, StoreKey};
 
@@ -231,7 +231,12 @@ pub fn parse_prompt_file(content: String) -> Result<(String, String), String> {
 /// Import a prompt into the specified section.
 #[cfg(desktop)]
 #[tauri::command]
-pub fn import_prompt(app: AppHandle, section: String, content: String) -> Result<(), String> {
+pub async fn import_prompt(
+    app: AppHandle,
+    section: String,
+    content: String,
+    config_sync: tauri::State<'_, ConfigSync>,
+) -> Result<(), String> {
     use super::settings::get_setting_from_store;
 
     // Validate section name
@@ -266,13 +271,26 @@ pub fn import_prompt(app: AppHandle, section: String, content: String) -> Result
     // Save updated sections
     crate::save_setting_to_store(&app, StoreKey::CleanupPromptSections, &sections)?;
 
+    // Sync to server if connected
+    let sync = config_sync.read().await;
+    if sync.is_connected() {
+        if let Err(e) = sync.sync_prompt_sections(&sections).await {
+            log::warn!("Failed to sync prompt after import: {}", e);
+        }
+    }
+
     log::info!("Imported prompt for section: {}", section);
     Ok(())
 }
 
 #[cfg(not(desktop))]
 #[tauri::command]
-pub fn import_prompt(_app: AppHandle, _section: String, _content: String) -> Result<(), String> {
+pub async fn import_prompt(
+    _app: AppHandle,
+    _section: String,
+    _content: String,
+    _config_sync: tauri::State<'_, ConfigSync>,
+) -> Result<(), String> {
     Err("Not supported on this platform".to_string())
 }
 
@@ -469,7 +487,7 @@ pub fn import_history(
 #[tauri::command]
 pub async fn factory_reset(
     app: AppHandle,
-    _config_sync: tauri::State<'_, ConfigSync>,
+    config_sync: tauri::State<'_, ConfigSync>,
 ) -> Result<(), String> {
     // Clear the settings store completely
     let store = app
@@ -524,6 +542,25 @@ pub async fn factory_reset(
     store
         .save()
         .map_err(|e| format!("Failed to save default settings: {}", e))?;
+
+    // Sync defaults to server if connected
+    let sync = config_sync.read().await;
+    if sync.is_connected() {
+        // Reset prompts to auto mode
+        let auto_sections = CleanupPromptSections {
+            main: PromptSection::Auto { enabled: true },
+            advanced: PromptSection::Auto { enabled: true },
+            dictionary: PromptSection::Auto { enabled: true },
+        };
+        if let Err(e) = sync.sync_prompt_sections(&auto_sections).await {
+            log::warn!("Failed to sync prompts on factory reset: {}", e);
+        }
+
+        // Reset STT timeout to default
+        if let Err(e) = sync.sync_stt_timeout(DEFAULT_STT_TIMEOUT_SECONDS).await {
+            log::warn!("Failed to sync STT timeout on factory reset: {}", e);
+        }
+    }
 
     log::info!("Factory reset completed: settings and history cleared");
 

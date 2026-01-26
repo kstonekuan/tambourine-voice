@@ -10,7 +10,8 @@ import {
 import type { ProviderInfo } from "../../lib/tauri";
 import { StatusIndicator } from "./StatusIndicator";
 
-const DEFAULT_STT_TIMEOUT = 0.8;
+// Match server's DEFAULT_TRANSCRIPTION_WAIT_TIMEOUT_SECONDS
+const DEFAULT_STT_TIMEOUT = 0.5;
 
 const selectInputStyles = {
 	input: {
