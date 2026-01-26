@@ -55,7 +55,7 @@ importers:
         version: 10.3.1(react@19.2.3)
       '@xstate/react':
         specifier: ^6.0.0
-        version: 6.0.0(@types/react@19.2.9)(react@19.2.3)(xstate@5.25.1)
+        version: 6.0.0(@types/react@19.2.9)(react@19.2.3)(xstate@5.26.0)
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
@@ -84,8 +84,8 @@ importers:
         specifier: ^1.6.3
         version: 1.6.3
       xstate:
-        specifier: ^5.25.1
-        version: 5.25.1
+        specifier: ^5.26.0
+        version: 5.26.0
       zod:
         specifier: 4.3.6
         version: 4.3.6
@@ -2339,8 +2339,8 @@ packages:
     engines: {node: '>=8'}
     hasBin: true
 
-  xstate@5.25.1:
-    resolution: {integrity: sha512-oyvsNH5pF2qkHmiHEMdWqc3OjDtoZOH2MTAI35r01f/ZQWOD+VLOiYqo65UgQET0XMA5s9eRm8fnsIo+82biEw==}
+  xstate@5.26.0:
+    resolution: {integrity: sha512-Fvi9VBoqHgsGYLU2NTag8xDTWtKqUC0+ue7EAhBNBb06wf620QEy05upBaEI1VLMzIn63zugLV8nHb69ZUWYAA==}
 
   yallist@3.1.1:
     resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
@@ -3649,13 +3649,13 @@ snapshots:
       '@vitest/pretty-format': 4.0.18
       tinyrainbow: 3.0.3
 
-  '@xstate/react@6.0.0(@types/react@19.2.9)(react@19.2.3)(xstate@5.25.1)':
+  '@xstate/react@6.0.0(@types/react@19.2.9)(react@19.2.3)(xstate@5.26.0)':
     dependencies:
       react: 19.2.3
       use-isomorphic-layout-effect: 1.2.1(@types/react@19.2.9)(react@19.2.3)
       use-sync-external-store: 1.6.0(react@19.2.3)
     optionalDependencies:
-      xstate: 5.25.1
+      xstate: 5.26.0
     transitivePeerDependencies:
       - '@types/react'
 
@@ -4364,7 +4364,7 @@ snapshots:
       siginfo: 2.0.0
       stackback: 0.0.2
 
-  xstate@5.25.1: {}
+  xstate@5.26.0: {}
 
   yallist@3.1.1: {}
 
