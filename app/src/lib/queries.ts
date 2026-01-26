@@ -1,7 +1,9 @@
 import { notifications } from "@mantine/notifications";
+import type { QueryClient } from "@tanstack/react-query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef } from "react";
+import { match } from "ts-pattern";
 
 // =============================================================================
 // Notification Helpers
@@ -26,6 +28,7 @@ function showSettingsError(message: string): void {
 }
 
 import {
+	type AppSettings,
 	type AvailableProvidersData,
 	type CleanupPromptSections,
 	type ConnectionState,
@@ -34,9 +37,11 @@ import {
 	getProviderIdFromSelection,
 	type HistoryImportStrategy,
 	type HotkeyConfig,
+	type LLMProviderSelection,
 	type PromptSectionName,
 	parseLLMProviderSelection,
 	parseSTTProviderSelection,
+	type STTProviderSelection,
 	tauriAPI,
 	validateHotkeyNotDuplicate,
 } from "./tauri";
@@ -476,6 +481,42 @@ async function executeProviderChange<TSelection>(
 	return promise;
 }
 
+function handleProviderMutationSuccess<
+	TSelection extends STTProviderSelection | LLMProviderSelection,
+>(
+	queryClient: QueryClient,
+	providerType: "llm" | "stt",
+	selection: TSelection | null,
+): void {
+	if (!selection) return;
+	const providerId = getProviderIdFromSelection(selection);
+
+	const { updateTauriSetting, settingsKey } = match(providerType)
+		.with("llm", () => ({
+			updateTauriSetting: tauriAPI.updateLLMProvider,
+			settingsKey: "llm_provider" as const,
+		}))
+		.with("stt", () => ({
+			updateTauriSetting: tauriAPI.updateSTTProvider,
+			settingsKey: "stt_provider" as const,
+		}))
+		.exhaustive();
+
+	updateTauriSetting(providerId);
+
+	// Immediately update the settings cache to prevent flicker
+	queryClient.setQueryData(
+		["settings"],
+		(oldSettings: AppSettings | undefined) => {
+			if (!oldSettings) return oldSettings;
+			return { ...oldSettings, [settingsKey]: providerId };
+		},
+	);
+
+	// Invalidate to ensure eventual consistency with server
+	queryClient.invalidateQueries({ queryKey: ["settings"] });
+}
+
 export function useUpdateLLMProviderWithServer() {
 	const queryClient = useQueryClient();
 	return useMutation({
@@ -487,12 +528,8 @@ export function useUpdateLLMProviderWithServer() {
 				value,
 				signal,
 			),
-		onSuccess: (selection) => {
-			if (!selection) return;
-			const providerId = getProviderIdFromSelection(selection);
-			tauriAPI.updateLLMProvider(providerId);
-			queryClient.invalidateQueries({ queryKey: ["settings"] });
-		},
+		onSuccess: (selection) =>
+			handleProviderMutationSuccess(queryClient, "llm", selection),
 	});
 }
 
@@ -507,12 +544,8 @@ export function useUpdateSTTProviderWithServer() {
 				value,
 				signal,
 			),
-		onSuccess: (selection) => {
-			if (!selection) return;
-			const providerId = getProviderIdFromSelection(selection);
-			tauriAPI.updateSTTProvider(providerId);
-			queryClient.invalidateQueries({ queryKey: ["settings"] });
-		},
+		onSuccess: (selection) =>
+			handleProviderMutationSuccess(queryClient, "stt", selection),
 	});
 }
 
