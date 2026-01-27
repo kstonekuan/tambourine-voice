@@ -1,0 +1,21 @@
+# Docker Compose for local TURN server testing
+# Usage: docker compose up
+#
+# Test with: turnutils_uclient -t -u <timestamp> -w <hmac> localhost
+
+services:
+  coturn:
+    build: .
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "5349:5349/tcp"
+      # Note: For local testing, we use a smaller port range
+      # In production (EB), we use 49152-65535
+      - "49152-49252:49152-49252/udp"
+    environment:
+      # Generate a real secret for testing with:
+      # openssl rand -hex 32
+      - TURN_SHARED_SECRET=your_test_secret_here_replace_me
+    # For better performance on Linux hosts
+    network_mode: host

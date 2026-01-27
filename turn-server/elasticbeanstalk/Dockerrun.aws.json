@@ -1,0 +1,25 @@
+{
+  "AWSEBDockerrunVersion": "1",
+  "Image": {
+    "Name": "<AWS_ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/coturn-turn-server:latest",
+    "Update": "true"
+  },
+  "Ports": [
+    {
+      "ContainerPort": 3478,
+      "HostPort": 3478,
+      "Protocol": "udp"
+    },
+    {
+      "ContainerPort": 3478,
+      "HostPort": 3478,
+      "Protocol": "tcp"
+    },
+    {
+      "ContainerPort": 5349,
+      "HostPort": 5349,
+      "Protocol": "tcp"
+    }
+  ],
+  "Logging": "/var/log/coturn"
+}

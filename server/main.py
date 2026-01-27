@@ -41,6 +41,7 @@ from pipecat.transports.smallwebrtc.request_handler import (
     SmallWebRTCRequestHandler,
 )
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
+from pydantic import BaseModel
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -79,11 +80,64 @@ from utils.rate_limiter import (
     get_ip_only,
     limiter,
 )
+from utils.turn_credentials import generate_turn_credentials
 
-# ICE servers for WebRTC NAT traversal
-ICE_SERVERS: Final[list[IceServer]] = [
-    IceServer(urls="stun:stun.l.google.com:19302"),
-]
+# Default STUN server for WebRTC NAT traversal
+DEFAULT_STUN_SERVER: Final[IceServer] = IceServer(urls="stun:stun.l.google.com:19302")
+
+
+def build_ice_servers(settings: Settings) -> list[IceServer]:
+    """Build ICE servers list, including TURN server if configured.
+
+    Always includes Google STUN server. If TURN server is configured with
+    a shared secret, generates fresh time-limited HMAC credentials.
+
+    Args:
+        settings: Application settings containing TURN configuration
+
+    Returns:
+        List of ICE servers (STUN only, or STUN + TURN with credentials)
+    """
+    ice_servers: list[IceServer] = [DEFAULT_STUN_SERVER]
+
+    # Add TURN server with fresh credentials if configured
+    if settings.turn_server_url and settings.turn_shared_secret:
+        credentials = generate_turn_credentials(
+            secret=settings.turn_shared_secret,
+            ttl=settings.turn_credential_ttl,
+        )
+        turn_server = IceServer(
+            urls=settings.turn_server_url,
+            username=credentials.username,
+            credential=credentials.password,
+        )
+        ice_servers.append(turn_server)
+        logger.debug(
+            f"Generated TURN credentials (expires in {credentials.ttl}s): "
+            f"username={credentials.username}"
+        )
+
+    return ice_servers
+
+
+# =============================================================================
+# Pydantic models for ICE server response
+# =============================================================================
+
+
+class IceServerInfo(BaseModel):
+    """ICE server configuration matching WebRTC RTCIceServer interface."""
+
+    urls: str | list[str]
+    username: str | None = None
+    credential: str | None = None
+
+
+class IceServersResponse(BaseModel):
+    """Response containing ICE servers for WebRTC connection."""
+
+    ice_servers: list[IceServerInfo]
+
 
 # Pattern to match mDNS ICE candidates in SDP (e.g., "abc123-def4.local")
 # These candidates only work for local network peers and cause aioice state
@@ -351,9 +405,20 @@ def initialize_services(settings: Settings) -> AppServices | None:
     logger.info(f"Available STT providers: {[p.value for p in available_stt]}")
     logger.info(f"Available LLM providers: {[p.value for p in available_llm]}")
 
+    # Build ICE servers (STUN always, TURN if configured)
+    # Note: For the request handler, we pass the base config. Fresh TURN
+    # credentials are generated per-request via the /api/ice-servers endpoint
+    # which clients should call before connecting.
+    ice_servers = build_ice_servers(settings)
+
+    if settings.turn_server_url:
+        logger.info(f"TURN server configured: {settings.turn_server_url}")
+    else:
+        logger.info("No TURN server configured (STUN only)")
+
     return AppServices(
         settings=settings,
-        webrtc_handler=SmallWebRTCRequestHandler(ice_servers=ICE_SERVERS),
+        webrtc_handler=SmallWebRTCRequestHandler(ice_servers=ice_servers),
         active_pipeline_tasks=set(),
         client_manager=ClientConnectionManager(),
         available_stt_providers=available_stt,
@@ -433,6 +498,41 @@ app.include_router(config_router)
 async def health_check(request: Request) -> dict[str, str]:
     """Health check endpoint for container orchestration (e.g., Lightsail)."""
     return {"status": "ok"}
+
+
+# =============================================================================
+# ICE Server Configuration Endpoint
+# =============================================================================
+
+
+@app.get("/api/ice-servers", response_model=IceServersResponse)
+async def get_ice_servers(request: Request) -> IceServersResponse:
+    """Get ICE servers with fresh TURN credentials.
+
+    Returns the ICE server configuration that clients should use for WebRTC
+    connections. This endpoint generates fresh TURN credentials on each request,
+    ensuring clients always have valid, unexpired credentials.
+
+    Returns:
+        IceServersResponse with ice_servers list containing STUN server (always)
+        and TURN server with credentials (if configured).
+    """
+    services: AppServices = request.app.state.services
+
+    # Generate fresh ICE servers with new TURN credentials
+    ice_servers = build_ice_servers(services.settings)
+
+    # Convert pipecat IceServer objects to Pydantic models
+    ice_server_infos = [
+        IceServerInfo(
+            urls=server.urls,
+            username=server.username,
+            credential=server.credential,
+        )
+        for server in ice_servers
+    ]
+
+    return IceServersResponse(ice_servers=ice_server_infos)
 
 
 # =============================================================================
