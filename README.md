@@ -45,7 +45,7 @@ Open-source alternative to [Wispr Flow](https://wisprflow.ai), [Superwhisper](ht
 **Why not proprietary tools?** Unlike Wispr Flow or Superwhisper, this project gives you full control and transparency.
 
 **Fully customizable.** This is your voice interface, built your way:
-- **Choose your AI providers** — Pick your STT (Cartesia, Deepgram, AssemblyAI) and LLM (Cerebras, OpenAI, Anthropic), run fully local with Whisper and Ollama, or use any of [Pipecat's supported services](https://docs.pipecat.ai/server/services/supported-services)
+- **Choose your AI providers** — Pick your STT (Cartesia, Deepgram, AssemblyAI, Speechmatics, Azure, AWS, Google, Groq, OpenAI) and LLM (Cerebras, OpenAI, Anthropic, Gemini, Groq, OpenRouter), run fully local with Whisper and Ollama, or add more from [Pipecat's supported services](https://docs.pipecat.ai/server/services/supported-services)
 - **Customize the formatting** — Modify prompts, add custom rules, build your personal dictionary
 - **Extend freely** — Built on [Pipecat](https://github.com/pipecat-ai/pipecat)'s modular pipeline, fully open-source
 
@@ -112,7 +112,7 @@ Open-source alternative to [Wispr Flow](https://wisprflow.ai), [Superwhisper](ht
 - Rust
 - Node.js
 - pnpm
-- Python
+- Python 3.13+
 - uv (Python package manager)
 
 ### Linux Dependencies
