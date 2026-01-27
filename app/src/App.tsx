@@ -115,7 +115,6 @@ function Sidebar({
 
 			<footer className="sidebar-footer">
 				<ConnectionStatusIndicator />
-				<p className="sidebar-footer-text">v0.1.0</p>
 			</footer>
 		</aside>
 	);

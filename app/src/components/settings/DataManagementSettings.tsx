@@ -193,6 +193,17 @@ export function DataManagementSettings() {
 				</div>
 			</div>
 
+			{/* Version info */}
+			<Text
+				size="xs"
+				c="dimmed"
+				ta="center"
+				mt="xl"
+				className="animate-in animate-in-delay-5"
+			>
+				v0.1.0
+			</Text>
+
 			{/* History Import Strategy Modal */}
 			<Modal
 				opened={importModalState.type === "strategy"}
