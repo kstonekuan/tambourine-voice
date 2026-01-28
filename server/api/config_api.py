@@ -48,25 +48,35 @@ config_router = APIRouter(prefix="/api", tags=["config"])
 # =============================================================================
 
 
-class PromptSectionAuto(BaseModel):
+class PromptModeAuto(BaseModel):
     """Auto mode: use server's built-in default prompt."""
 
-    enabled: bool
     mode: Literal["auto"]
 
 
-class PromptSectionManual(BaseModel):
+class PromptModeManual(BaseModel):
     """Manual mode: use user-provided content."""
 
-    enabled: bool
     mode: Literal["manual"]
     content: str
 
 
-PromptSection = Annotated[
-    PromptSectionAuto | PromptSectionManual,
+PromptMode = Annotated[
+    PromptModeAuto | PromptModeManual,
     Field(discriminator="mode"),
 ]
+
+
+class PromptSection(BaseModel):
+    """Configuration for a single prompt section.
+
+    Two-layer structure:
+    - enabled: Whether the section is active
+    - mode: The prompt mode (auto or manual with content)
+    """
+
+    enabled: bool
+    mode: PromptMode
 
 
 class CleanupPromptSections(BaseModel):
@@ -224,12 +234,11 @@ async def update_prompt_sections(
             detail={"error": "Pipeline not ready", "code": "PIPELINE_NOT_READY"},
         )
 
-    # Extract content from discriminated union (None for auto mode)
-    def get_content(section: PromptSectionAuto | PromptSectionManual) -> str | None:
-        match section:
-            case PromptSectionAuto():
+    def get_content(section: PromptSection) -> str | None:
+        match section.mode:
+            case PromptModeAuto():
                 return None
-            case PromptSectionManual(content=content):
+            case PromptModeManual(content=content):
                 return content
 
     connection.context_manager.set_prompt_sections(

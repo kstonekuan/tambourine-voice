@@ -1,11 +1,4 @@
-import {
-	Accordion,
-	Button,
-	SegmentedControl,
-	Switch,
-	Text,
-	Textarea,
-} from "@mantine/core";
+import { Accordion, Button, Switch, Text, Textarea } from "@mantine/core";
 import { useEffect, useState } from "react";
 import { type MutationStatus, StatusIndicator } from "./StatusIndicator";
 
@@ -26,7 +19,7 @@ export interface PromptSectionEditorProps {
 	/** Whether auto mode is enabled (use default prompt) */
 	auto?: boolean;
 	/** Callback when auto mode is toggled */
-	onAutoToggle?: (auto: boolean) => void;
+	onAutoToggle?: () => void;
 	/** Whether to show the Auto/Manual toggle (default: false) */
 	showAutoToggle?: boolean;
 	onToggle: (enabled: boolean) => void;
@@ -120,21 +113,15 @@ export function PromptSectionEditor({
 			</Accordion.Control>
 			<Accordion.Panel>
 				{showAutoToggle && (
-					<SegmentedControl
-						value={auto ? "auto" : "manual"}
-						onChange={(value) => onAutoToggle?.(value === "auto")}
-						data={[
-							{ label: "Auto", value: "auto" },
-							{ label: "Manual", value: "manual" },
-						]}
-						size="xs"
-						mb="md"
-						styles={{
-							root: {
-								backgroundColor: "var(--bg-elevated)",
-							},
-						}}
-					/>
+					<div style={{ marginBottom: 16 }}>
+						<Switch
+							label="Customize prompt"
+							checked={!auto}
+							onChange={() => onAutoToggle?.()}
+							color="gray"
+							size="sm"
+						/>
+					</div>
 				)}
 				{auto ? (
 					<Text size="sm" c="dimmed">

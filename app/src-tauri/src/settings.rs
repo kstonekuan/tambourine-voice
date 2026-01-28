@@ -177,20 +177,25 @@ impl HotkeyConfig {
 // PROMPT SECTION TYPES
 // ============================================================================
 
-/// Configuration for a single prompt section.
-/// Discriminated union using `mode` as the tag.
+/// Mode of prompt: auto (server default) or manual (custom content)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "mode")]
-pub enum PromptSection {
-    /// Disabled: prompt is not enabled
-    #[serde(rename = "disabled")]
-    Disabled,
-    /// Auto mode: use the server's built-in default prompt
+pub enum PromptMode {
+    /// Use server's built-in default prompt
     #[serde(rename = "auto")]
     Auto,
-    /// Manual mode: use custom content provided by the user
+    /// Use custom content provided by the user
     #[serde(rename = "manual")]
     Manual { content: String },
+}
+
+/// Configuration for a single prompt section.
+/// Two-layer structure: enabled status + mode (auto/manual)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PromptSection {
+    pub enabled: bool,
+    #[serde(rename = "mode")]
+    pub prompt_mode: PromptMode,
 }
 
 /// Configuration for all cleanup prompt sections
@@ -204,9 +209,18 @@ pub struct CleanupPromptSections {
 impl Default for CleanupPromptSections {
     fn default() -> Self {
         Self {
-            main: PromptSection::Auto,
-            advanced: PromptSection::Auto,
-            dictionary: PromptSection::Disabled, // Dictionary starts disabled
+            main: PromptSection {
+                enabled: true,
+                prompt_mode: PromptMode::Auto,
+            },
+            advanced: PromptSection {
+                enabled: true,
+                prompt_mode: PromptMode::Auto,
+            },
+            dictionary: PromptSection {
+                enabled: false,
+                prompt_mode: PromptMode::Auto,
+            },
         }
     }
 }

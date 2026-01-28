@@ -359,15 +359,21 @@ export type DetectedFileType = "settings" | "history" | "unknown";
 export type PromptSectionName = "main" | "advanced" | "dictionary";
 
 /**
- * Discriminated union for prompt section configuration.
- * - Disabled: prompt is not enabled
- * - Auto mode: server uses built-in default prompt
- * - Manual mode: server uses user-provided content
+ * Mode of prompt: auto (server default) or manual (custom content).
+ * Discriminated union ensures content only exists for manual mode.
  */
-export type PromptSection =
-	| { mode: "disabled" }
-	| { mode: "auto" }
-	| { mode: "manual"; content: string };
+export type PromptMode = { mode: "auto" } | { mode: "manual"; content: string };
+
+/**
+ * Configuration for a single prompt section.
+ * Two-layer structure:
+ * - enabled: Whether the section is active
+ * - mode: The prompt mode (auto or manual with content)
+ */
+export interface PromptSection {
+	enabled: boolean;
+	mode: PromptMode;
+}
 
 export interface CleanupPromptSections {
 	main: PromptSection;

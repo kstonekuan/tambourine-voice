@@ -5,7 +5,7 @@ use tauri::{AppHandle, Manager};
 
 use crate::config_sync::{ConfigSync, DEFAULT_STT_TIMEOUT_SECONDS};
 use crate::history::{HistoryEntry, HistoryImportResult, HistoryImportStrategy, HistoryStorage};
-use crate::settings::{AppSettings, CleanupPromptSections, PromptSection, StoreKey};
+use crate::settings::{AppSettings, CleanupPromptSections, PromptMode, PromptSection, StoreKey};
 
 #[cfg(desktop)]
 use tauri_plugin_store::StoreExt;
@@ -170,28 +170,37 @@ pub fn generate_prompt_exports(app: AppHandle) -> Result<HashMap<String, String>
     let mut prompts = HashMap::new();
 
     if let Some(sections) = settings.cleanup_prompt_sections {
-        // Helper to format a prompt section as markdown with HTML comment header
         let format_prompt = |section_name: &str, section: &PromptSection| -> String {
-            match section {
-                PromptSection::Disabled => format!(
+            if !section.enabled {
+                let marker = match &section.prompt_mode {
+                    PromptMode::Auto => {
+                        format!("{} (disabled, was auto)", DISABLED_MODE_MARKER)
+                    }
+                    PromptMode::Manual { content } => {
+                        format!(
+                            "{} (disabled, was manual)\n\nPreserved content:\n{}",
+                            DISABLED_MODE_MARKER, content
+                        )
+                    }
+                };
+                return format!(
                     "{}{}{}\n\n{}",
-                    PROMPT_COMMENT_PREFIX,
-                    section_name,
-                    PROMPT_COMMENT_SUFFIX,
-                    DISABLED_MODE_MARKER
-                ),
-                PromptSection::Auto => format!(
+                    PROMPT_COMMENT_PREFIX, section_name, PROMPT_COMMENT_SUFFIX, marker
+                );
+            }
+
+            match &section.prompt_mode {
+                PromptMode::Auto => format!(
                     "{}{}{}\n\n{}",
                     PROMPT_COMMENT_PREFIX, section_name, PROMPT_COMMENT_SUFFIX, AUTO_MODE_MARKER
                 ),
-                PromptSection::Manual { content } => format!(
+                PromptMode::Manual { content } => format!(
                     "{}{}{}\n\n{}",
                     PROMPT_COMMENT_PREFIX, section_name, PROMPT_COMMENT_SUFFIX, content
                 ),
             }
         };
 
-        // Always export all 3 sections
         prompts.insert("main".to_string(), format_prompt("main", &sections.main));
         prompts.insert(
             "advanced".to_string(),
@@ -266,11 +275,39 @@ pub async fn import_prompt(
         CleanupPromptSections::default(),
     );
 
-    // Determine section state based on content markers
-    let new_section = match content.trim() {
-        DISABLED_MODE_MARKER => PromptSection::Disabled,
-        AUTO_MODE_MARKER => PromptSection::Auto,
-        _ => PromptSection::Manual { content },
+    let new_section = if content.trim().starts_with(DISABLED_MODE_MARKER) {
+        let was_auto = content.contains("(disabled, was auto)");
+        let preserved_content = if content.contains("Preserved content:") {
+            content
+                .split("Preserved content:\n")
+                .nth(1)
+                .map(|s| s.to_string())
+        } else {
+            None
+        };
+
+        let prompt_mode = if was_auto {
+            PromptMode::Auto
+        } else {
+            PromptMode::Manual {
+                content: preserved_content.unwrap_or_default(),
+            }
+        };
+
+        PromptSection {
+            enabled: false,
+            prompt_mode,
+        }
+    } else if content.trim() == AUTO_MODE_MARKER {
+        PromptSection {
+            enabled: true,
+            prompt_mode: PromptMode::Auto,
+        }
+    } else {
+        PromptSection {
+            enabled: true,
+            prompt_mode: PromptMode::Manual { content },
+        }
     };
 
     match section.as_str() {
