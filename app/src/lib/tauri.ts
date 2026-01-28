@@ -359,7 +359,7 @@ export type DetectedFileType = "settings" | "history" | "unknown";
 export type PromptSectionName = "main" | "advanced" | "dictionary";
 
 /**
- * Mode of prompt: auto (server default) or manual (custom content).
+ * Mode of prompt: auto (let server optimize) or manual (custom content).
  * Discriminated union ensures content only exists for manual mode.
  */
 export type PromptMode = { mode: "auto" } | { mode: "manual"; content: string };

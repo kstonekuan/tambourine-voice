@@ -177,11 +177,11 @@ impl HotkeyConfig {
 // PROMPT SECTION TYPES
 // ============================================================================
 
-/// Mode of prompt: auto (server default) or manual (custom content)
+/// Mode of prompt: auto (let server optimize) or manual (custom content)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "mode")]
 pub enum PromptMode {
-    /// Use server's built-in default prompt
+    /// Let the server optimize the prompt
     #[serde(rename = "auto")]
     Auto,
     /// Use custom content provided by the user

@@ -141,7 +141,7 @@ export function PromptSettings() {
 			const currentSection = localSections[key];
 			const newSection: PromptSection = {
 				enabled: currentSection.enabled,
-				mode: { mode: "auto" },
+				mode: { mode: "manual", content: defaultSections?.[key] ?? "" },
 			};
 			setLocalSections((prev) => ({
 				...prev,
@@ -149,7 +149,7 @@ export function PromptSettings() {
 			}));
 			saveAllSections(key, buildSections({ key, section: newSection }));
 		},
-		[localSections, buildSections, saveAllSections],
+		[localSections, defaultSections, buildSections, saveAllSections],
 	);
 
 	const handleAutoToggle = useCallback(

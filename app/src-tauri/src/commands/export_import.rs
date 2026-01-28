@@ -27,10 +27,6 @@ const HISTORY_EXPORT_TYPE: &str = "tambourine-history";
 const PROMPT_COMMENT_PREFIX: &str = "<!-- tambourine-prompt: ";
 const PROMPT_COMMENT_SUFFIX: &str = " -->";
 
-/// Markers for prompt section states
-const DISABLED_MODE_MARKER: &str = "<!-- DISABLED: This prompt is not enabled -->";
-const AUTO_MODE_MARKER: &str = "<!-- AUTO MODE: Using server default -->";
-
 /// Settings data for export (excludes prompts - they're exported as .md files)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SettingsExportData {
@@ -171,34 +167,25 @@ pub fn generate_prompt_exports(app: AppHandle) -> Result<HashMap<String, String>
 
     if let Some(sections) = settings.cleanup_prompt_sections {
         let format_prompt = |section_name: &str, section: &PromptSection| -> String {
-            if !section.enabled {
-                let marker = match &section.prompt_mode {
-                    PromptMode::Auto => {
-                        format!("{} (disabled, was auto)", DISABLED_MODE_MARKER)
-                    }
-                    PromptMode::Manual { content } => {
-                        format!(
-                            "{} (disabled, was manual)\n\nPreserved content:\n{}",
-                            DISABLED_MODE_MARKER, content
-                        )
-                    }
-                };
-                return format!(
-                    "{}{}{}\n\n{}",
-                    PROMPT_COMMENT_PREFIX, section_name, PROMPT_COMMENT_SUFFIX, marker
-                );
-            }
+            let mode_str = match &section.prompt_mode {
+                PromptMode::Auto => "auto",
+                PromptMode::Manual { .. } => "manual",
+            };
 
-            match &section.prompt_mode {
-                PromptMode::Auto => format!(
-                    "{}{}{}\n\n{}",
-                    PROMPT_COMMENT_PREFIX, section_name, PROMPT_COMMENT_SUFFIX, AUTO_MODE_MARKER
-                ),
-                PromptMode::Manual { content } => format!(
-                    "{}{}{}\n\n{}",
-                    PROMPT_COMMENT_PREFIX, section_name, PROMPT_COMMENT_SUFFIX, content
-                ),
-            }
+            let content = match &section.prompt_mode {
+                PromptMode::Auto => String::new(),
+                PromptMode::Manual { content } => content.clone(),
+            };
+
+            format!(
+                "{}{}{}\nenabled: {}\nmode: {}\n---\n{}",
+                PROMPT_COMMENT_PREFIX,
+                section_name,
+                PROMPT_COMMENT_SUFFIX,
+                section.enabled,
+                mode_str,
+                content
+            )
         };
 
         prompts.insert("main".to_string(), format_prompt("main", &sections.main));
@@ -275,39 +262,40 @@ pub async fn import_prompt(
         CleanupPromptSections::default(),
     );
 
-    let new_section = if content.trim().starts_with(DISABLED_MODE_MARKER) {
-        let was_auto = content.contains("(disabled, was auto)");
-        let preserved_content = if content.contains("Preserved content:") {
-            content
-                .split("Preserved content:\n")
-                .nth(1)
-                .map(|s| s.to_string())
-        } else {
-            None
-        };
+    let lines: Vec<&str> = content.lines().collect();
 
-        let prompt_mode = if was_auto {
-            PromptMode::Auto
-        } else {
-            PromptMode::Manual {
-                content: preserved_content.unwrap_or_default(),
-            }
-        };
+    let enabled = lines
+        .iter()
+        .find(|line| line.starts_with("enabled:"))
+        .and_then(|line| line.strip_prefix("enabled:"))
+        .map(|s| s.trim() == "true")
+        .unwrap_or(true);
 
-        PromptSection {
-            enabled: false,
-            prompt_mode,
-        }
-    } else if content.trim() == AUTO_MODE_MARKER {
-        PromptSection {
-            enabled: true,
-            prompt_mode: PromptMode::Auto,
+    let mode = lines
+        .iter()
+        .find(|line| line.starts_with("mode:"))
+        .and_then(|line| line.strip_prefix("mode:"))
+        .map(|s| s.trim())
+        .unwrap_or("auto");
+
+    let content_start = lines.iter().position(|line| line.trim() == "---");
+    let prompt_content = if let Some(idx) = content_start {
+        lines[idx + 1..].join("\n")
+    } else {
+        content.clone()
+    };
+
+    let prompt_mode = if mode == "manual" {
+        PromptMode::Manual {
+            content: prompt_content,
         }
     } else {
-        PromptSection {
-            enabled: true,
-            prompt_mode: PromptMode::Manual { content },
-        }
+        PromptMode::Auto
+    };
+
+    let new_section = PromptSection {
+        enabled,
+        prompt_mode,
     };
 
     match section.as_str() {

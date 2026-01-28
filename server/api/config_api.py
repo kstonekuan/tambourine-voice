@@ -49,13 +49,13 @@ config_router = APIRouter(prefix="/api", tags=["config"])
 
 
 class PromptModeAuto(BaseModel):
-    """Auto mode: use server's built-in default prompt."""
+    """Auto mode: let the server optimize the prompt."""
 
     mode: Literal["auto"]
 
 
 class PromptModeManual(BaseModel):
-    """Manual mode: use user-provided content."""
+    """Manual mode: use user-provided custom content."""
 
     mode: Literal["manual"]
     content: str
