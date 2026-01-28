@@ -115,6 +115,8 @@ Client and server should evolve independently:
 
 1. Fork the repository and create a feature branch from `main`
 2. Make your changes and ensure all checks pass (`pnpm check` in app, CI will run server checks)
+    * The pre-commit hooks run automatically and will auto-fix most formatting issues and check for linting / type issues
+    * If a hook fails, you can review the output, stage the auto-fixed files, and commit again
 3. Write clear commit messages following the conventions above
 4. Submit a pull request to `main` with a description of your changes
 
