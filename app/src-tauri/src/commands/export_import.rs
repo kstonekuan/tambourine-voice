@@ -27,6 +27,10 @@ const HISTORY_EXPORT_TYPE: &str = "tambourine-history";
 const PROMPT_COMMENT_PREFIX: &str = "<!-- tambourine-prompt: ";
 const PROMPT_COMMENT_SUFFIX: &str = " -->";
 
+/// Markers for prompt section states
+const DISABLED_MODE_MARKER: &str = "<!-- DISABLED: This prompt is not enabled -->";
+const AUTO_MODE_MARKER: &str = "<!-- AUTO MODE: Using server default -->";
+
 /// Settings data for export (excludes prompts - they're exported as .md files)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SettingsExportData {
@@ -156,7 +160,7 @@ pub fn generate_history_export(app: AppHandle) -> Result<String, String> {
 }
 
 /// Generate prompt exports as markdown content with HTML comment headers.
-/// Returns a HashMap of section name -> markdown content (only for manual mode sections).
+/// Returns a HashMap of section name -> markdown content (always 3 files with state markers).
 #[cfg(desktop)]
 #[tauri::command]
 pub fn generate_prompt_exports(app: AppHandle) -> Result<HashMap<String, String>, String> {
@@ -167,25 +171,36 @@ pub fn generate_prompt_exports(app: AppHandle) -> Result<HashMap<String, String>
 
     if let Some(sections) = settings.cleanup_prompt_sections {
         // Helper to format a prompt section as markdown with HTML comment header
-        let format_prompt = |section_name: &str, section: &PromptSection| -> Option<String> {
+        let format_prompt = |section_name: &str, section: &PromptSection| -> String {
             match section {
-                PromptSection::Manual { content, .. } => Some(format!(
+                PromptSection::Disabled => format!(
+                    "{}{}{}\n\n{}",
+                    PROMPT_COMMENT_PREFIX,
+                    section_name,
+                    PROMPT_COMMENT_SUFFIX,
+                    DISABLED_MODE_MARKER
+                ),
+                PromptSection::Auto => format!(
+                    "{}{}{}\n\n{}",
+                    PROMPT_COMMENT_PREFIX, section_name, PROMPT_COMMENT_SUFFIX, AUTO_MODE_MARKER
+                ),
+                PromptSection::Manual { content } => format!(
                     "{}{}{}\n\n{}",
                     PROMPT_COMMENT_PREFIX, section_name, PROMPT_COMMENT_SUFFIX, content
-                )),
-                PromptSection::Auto { .. } => None, // Don't export auto mode
+                ),
             }
         };
 
-        if let Some(content) = format_prompt("main", &sections.main) {
-            prompts.insert("main".to_string(), content);
-        }
-        if let Some(content) = format_prompt("advanced", &sections.advanced) {
-            prompts.insert("advanced".to_string(), content);
-        }
-        if let Some(content) = format_prompt("dictionary", &sections.dictionary) {
-            prompts.insert("dictionary".to_string(), content);
-        }
+        // Always export all 3 sections
+        prompts.insert("main".to_string(), format_prompt("main", &sections.main));
+        prompts.insert(
+            "advanced".to_string(),
+            format_prompt("advanced", &sections.advanced),
+        );
+        prompts.insert(
+            "dictionary".to_string(),
+            format_prompt("dictionary", &sections.dictionary),
+        );
     }
 
     Ok(prompts)
@@ -244,21 +259,18 @@ pub async fn import_prompt(
         return Err(format!("Unknown prompt section: {}", section));
     }
 
-    // Get current prompt sections or create default
+    // Get current prompt sections or use default
     let mut sections: CleanupPromptSections = get_setting_from_store(
         &app,
         StoreKey::CleanupPromptSections,
-        CleanupPromptSections {
-            main: PromptSection::Auto { enabled: true },
-            advanced: PromptSection::Auto { enabled: true },
-            dictionary: PromptSection::Auto { enabled: true },
-        },
+        CleanupPromptSections::default(),
     );
 
-    // Update the specific section to manual mode with imported content
-    let new_section = PromptSection::Manual {
-        enabled: true,
-        content,
+    // Determine section state based on content markers
+    let new_section = match content.trim() {
+        DISABLED_MODE_MARKER => PromptSection::Disabled,
+        AUTO_MODE_MARKER => PromptSection::Auto,
+        _ => PromptSection::Manual { content },
     };
 
     match section.as_str() {
@@ -546,13 +558,9 @@ pub async fn factory_reset(
     // Sync defaults to server if connected
     let sync = config_sync.read().await;
     if sync.is_connected() {
-        // Reset prompts to auto mode
-        let auto_sections = CleanupPromptSections {
-            main: PromptSection::Auto { enabled: true },
-            advanced: PromptSection::Auto { enabled: true },
-            dictionary: PromptSection::Auto { enabled: true },
-        };
-        if let Err(e) = sync.sync_prompt_sections(&auto_sections).await {
+        // Reset prompts to default mode
+        let default_sections = CleanupPromptSections::default();
+        if let Err(e) = sync.sync_prompt_sections(&default_sections).await {
             log::warn!("Failed to sync prompts on factory reset: {}", e);
         }
 

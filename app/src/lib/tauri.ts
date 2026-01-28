@@ -360,12 +360,14 @@ export type PromptSectionName = "main" | "advanced" | "dictionary";
 
 /**
  * Discriminated union for prompt section configuration.
+ * - Disabled: prompt is not enabled
  * - Auto mode: server uses built-in default prompt
  * - Manual mode: server uses user-provided content
  */
 export type PromptSection =
-	| { enabled: boolean; mode: "auto" }
-	| { enabled: boolean; mode: "manual"; content: string };
+	| { mode: "disabled" }
+	| { mode: "auto" }
+	| { mode: "manual"; content: string };
 
 export interface CleanupPromptSections {
 	main: PromptSection;

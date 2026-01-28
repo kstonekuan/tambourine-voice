@@ -182,12 +182,15 @@ impl HotkeyConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "mode")]
 pub enum PromptSection {
+    /// Disabled: prompt is not enabled
+    #[serde(rename = "disabled")]
+    Disabled,
     /// Auto mode: use the server's built-in default prompt
     #[serde(rename = "auto")]
-    Auto { enabled: bool },
+    Auto,
     /// Manual mode: use custom content provided by the user
     #[serde(rename = "manual")]
-    Manual { enabled: bool, content: String },
+    Manual { content: String },
 }
 
 /// Configuration for all cleanup prompt sections
@@ -196,6 +199,16 @@ pub struct CleanupPromptSections {
     pub main: PromptSection,
     pub advanced: PromptSection,
     pub dictionary: PromptSection,
+}
+
+impl Default for CleanupPromptSections {
+    fn default() -> Self {
+        Self {
+            main: PromptSection::Auto,
+            advanced: PromptSection::Auto,
+            dictionary: PromptSection::Disabled, // Dictionary starts disabled
+        }
+    }
 }
 
 // ============================================================================
@@ -210,6 +223,7 @@ pub struct AppSettings {
     pub paste_last_hotkey: HotkeyConfig,
     pub selected_mic_id: Option<String>,
     pub sound_enabled: bool,
+    #[serde(default)]
     pub cleanup_prompt_sections: Option<CleanupPromptSections>,
     pub stt_provider: String,
     pub llm_provider: String,
