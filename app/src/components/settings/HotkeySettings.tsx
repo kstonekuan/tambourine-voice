@@ -141,7 +141,7 @@ export function HotkeySettings() {
 						<ActionIcon
 							variant="light"
 							color="gray"
-							size="md"
+							size="lg"
 							onClick={() => resetHotkeys.mutate()}
 							loading={resetHotkeys.isPending}
 							disabled={isLoading}

@@ -1,7 +1,7 @@
 import { ActionIcon, Button, Loader, TextInput, Tooltip } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import ky from "ky";
-import { Check, Copy, RefreshCw, X, Zap } from "lucide-react";
+import { Check, Copy, RefreshCw, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { match } from "ts-pattern";
 import { joinURL } from "ufo";
@@ -266,32 +266,26 @@ export function ConnectionSettings() {
 								},
 							}}
 						/>
-						<Tooltip
-							label={
-								pingStatus === "success"
-									? "Reachable"
-									: pingStatus === "error"
-										? "Unreachable"
-										: "Test"
-							}
-							withArrow
-						>
-							<ActionIcon
-								onClick={handlePing}
-								loading={pingStatus === "loading"}
-								size="lg"
-								variant="light"
-								color={PING_STATUS_COLORS[pingStatus]}
-							>
-								{pingStatus === "success" ? (
+						<Button
+							onClick={handlePing}
+							loading={pingStatus === "loading"}
+							size="sm"
+							variant="light"
+							color={PING_STATUS_COLORS[pingStatus]}
+							leftSection={
+								pingStatus === "success" ? (
 									<Check size={14} />
 								) : pingStatus === "error" ? (
 									<X size={14} />
-								) : (
-									<Zap size={14} />
-								)}
-							</ActionIcon>
-						</Tooltip>
+								) : undefined
+							}
+						>
+							{pingStatus === "success"
+								? "Reachable"
+								: pingStatus === "error"
+									? "Unreachable"
+									: "Test"}
+						</Button>
 						{hasChanges && (
 							<Button
 								onClick={handleSave}

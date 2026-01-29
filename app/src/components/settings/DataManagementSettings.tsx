@@ -139,7 +139,7 @@ export function DataManagementSettings() {
 				<div className="settings-card">
 					<div
 						className="settings-row"
-						style={{ flexDirection: "column", alignItems: "stretch", gap: 12 }}
+						style={{ justifyContent: "space-between", alignItems: "center" }}
 					>
 						<div>
 							<p className="settings-label">Export & Import</p>
@@ -187,16 +187,14 @@ export function DataManagementSettings() {
 								Reset all settings to defaults and clear transcription history
 							</p>
 						</div>
-						<Tooltip label="Factory Reset" withArrow>
-							<ActionIcon
-								onClick={handleFactoryResetClick}
-								size="lg"
-								variant="light"
-								color="red"
-							>
-								<RotateCcw size={16} />
-							</ActionIcon>
-						</Tooltip>
+						<Button
+							onClick={handleFactoryResetClick}
+							leftSection={<RotateCcw size={16} />}
+							variant="light"
+							color="red"
+						>
+							Factory Reset
+						</Button>
 					</div>
 				</div>
 			</div>
