@@ -1,4 +1,4 @@
-import { Alert, Button, Text } from "@mantine/core";
+import { ActionIcon, Alert, Text, Tooltip } from "@mantine/core";
 import { AlertCircle, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import {
@@ -137,17 +137,18 @@ export function HotkeySettings() {
 					<Text size="sm" c="dimmed">
 						Reset all hotkeys to their default values
 					</Text>
-					<Button
-						variant="light"
-						color="gray"
-						size="xs"
-						leftSection={<RotateCcw size={14} />}
-						onClick={() => resetHotkeys.mutate()}
-						loading={resetHotkeys.isPending}
-						disabled={isLoading}
-					>
-						Reset to Defaults
-					</Button>
+					<Tooltip label="Reset to Defaults" withArrow>
+						<ActionIcon
+							variant="light"
+							color="gray"
+							size="md"
+							onClick={() => resetHotkeys.mutate()}
+							loading={resetHotkeys.isPending}
+							disabled={isLoading}
+						>
+							<RotateCcw size={14} />
+						</ActionIcon>
+					</Tooltip>
 				</div>
 			</div>
 		</div>

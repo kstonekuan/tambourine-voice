@@ -1,7 +1,7 @@
-import { Button, Loader, TextInput } from "@mantine/core";
+import { ActionIcon, Button, Loader, TextInput, Tooltip } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import ky from "ky";
-import { Check, Copy, RefreshCw, X } from "lucide-react";
+import { Check, Copy, RefreshCw, X, Zap } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { match } from "ts-pattern";
 import { joinURL } from "ufo";
@@ -216,17 +216,18 @@ export function ConnectionSettings() {
 							</span>
 						</div>
 					</div>
-					<Button
-						onClick={handleReconnect}
-						disabled={isButtonDisabled}
-						loading={isReconnecting}
-						size="sm"
-						variant="light"
-						color="gray"
-						leftSection={!isReconnecting && <RefreshCw size={14} />}
-					>
-						{isReconnecting ? "Reconnecting..." : "Reconnect"}
-					</Button>
+					<Tooltip label={isReconnecting ? "Reconnecting..." : "Reconnect"} withArrow>
+						<ActionIcon
+							onClick={handleReconnect}
+							disabled={isButtonDisabled}
+							loading={isReconnecting}
+							size="lg"
+							variant="light"
+							color="gray"
+						>
+							<RefreshCw size={14} />
+						</ActionIcon>
+					</Tooltip>
 				</div>
 			</div>
 
@@ -265,26 +266,32 @@ export function ConnectionSettings() {
 								},
 							}}
 						/>
-						<Button
-							onClick={handlePing}
-							loading={pingStatus === "loading"}
-							size="sm"
-							variant="light"
-							color={PING_STATUS_COLORS[pingStatus]}
-							leftSection={
-								pingStatus === "success" ? (
+						<Tooltip
+							label={
+								pingStatus === "success"
+									? "Reachable"
+									: pingStatus === "error"
+										? "Unreachable"
+										: "Test"
+							}
+							withArrow
+						>
+							<ActionIcon
+								onClick={handlePing}
+								loading={pingStatus === "loading"}
+								size="lg"
+								variant="light"
+								color={PING_STATUS_COLORS[pingStatus]}
+							>
+								{pingStatus === "success" ? (
 									<Check size={14} />
 								) : pingStatus === "error" ? (
 									<X size={14} />
-								) : undefined
-							}
-						>
-							{pingStatus === "success"
-								? "Reachable"
-								: pingStatus === "error"
-									? "Unreachable"
-									: "Test"}
-						</Button>
+								) : (
+									<Zap size={14} />
+								)}
+							</ActionIcon>
+						</Tooltip>
 						{hasChanges && (
 							<Button
 								onClick={handleSave}
@@ -334,17 +341,16 @@ export function ConnectionSettings() {
 						</p>
 					</div>
 					{clientUUID && (
-						<Button
-							onClick={handleCopyUUID}
-							size="sm"
-							variant="light"
-							color={uuidCopied ? "green" : "gray"}
-							leftSection={
-								uuidCopied ? <Check size={14} /> : <Copy size={14} />
-							}
-						>
-							{uuidCopied ? "Copied" : "Copy"}
-						</Button>
+						<Tooltip label={uuidCopied ? "Copied" : "Copy"} withArrow>
+							<ActionIcon
+								onClick={handleCopyUUID}
+								size="lg"
+								variant="light"
+								color={uuidCopied ? "green" : "gray"}
+							>
+								{uuidCopied ? <Check size={14} /> : <Copy size={14} />}
+							</ActionIcon>
+						</Tooltip>
 					)}
 				</div>
 			</div>

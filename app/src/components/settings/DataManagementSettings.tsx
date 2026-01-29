@@ -1,4 +1,5 @@
 import {
+	ActionIcon,
 	Button,
 	Group,
 	Modal,
@@ -6,6 +7,7 @@ import {
 	Stack,
 	Text,
 	TextInput,
+	Tooltip,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { AlertTriangle, Download, RotateCcw, Upload } from "lucide-react";
@@ -147,24 +149,28 @@ export function DataManagementSettings() {
 							</p>
 						</div>
 						<Group gap="sm">
-							<Button
-								onClick={handleExport}
-								loading={exportData.isPending}
-								leftSection={<Download size={16} />}
-								variant="light"
-								color="gray"
-							>
-								Export Data
-							</Button>
-							<Button
-								onClick={handleImport}
-								loading={importData.isPending}
-								leftSection={<Upload size={16} />}
-								variant="light"
-								color="gray"
-							>
-								Import Data
-							</Button>
+							<Tooltip label="Export Data" withArrow>
+								<ActionIcon
+									onClick={handleExport}
+									loading={exportData.isPending}
+									size="lg"
+									variant="light"
+									color="gray"
+								>
+									<Download size={16} />
+								</ActionIcon>
+							</Tooltip>
+							<Tooltip label="Import Data" withArrow>
+								<ActionIcon
+									onClick={handleImport}
+									loading={importData.isPending}
+									size="lg"
+									variant="light"
+									color="gray"
+								>
+									<Upload size={16} />
+								</ActionIcon>
+							</Tooltip>
 						</Group>
 					</div>
 				</div>
@@ -181,14 +187,16 @@ export function DataManagementSettings() {
 								Reset all settings to defaults and clear transcription history
 							</p>
 						</div>
-						<Button
-							onClick={handleFactoryResetClick}
-							leftSection={<RotateCcw size={16} />}
-							variant="light"
-							color="red"
-						>
-							Factory Reset
-						</Button>
+						<Tooltip label="Factory Reset" withArrow>
+							<ActionIcon
+								onClick={handleFactoryResetClick}
+								size="lg"
+								variant="light"
+								color="red"
+							>
+								<RotateCcw size={16} />
+							</ActionIcon>
+						</Tooltip>
 					</div>
 				</div>
 			</div>
