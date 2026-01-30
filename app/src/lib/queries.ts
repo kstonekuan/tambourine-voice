@@ -6,6 +6,19 @@ import { useEffect, useRef } from "react";
 import { match } from "ts-pattern";
 
 // =============================================================================
+// Query Stale Time Constants
+// =============================================================================
+
+/** Data that never goes stale (static configuration, settings) */
+const STALE_TIME_INFINITE = Number.POSITIVE_INFINITY;
+
+/** Provider lists refresh after 30 seconds */
+const STALE_TIME_PROVIDERS_MS = 30_000;
+
+/** Always refetch to get the latest data (e.g., errors) */
+const STALE_TIME_ALWAYS_REFETCH = 0;
+
+// =============================================================================
 // Notification Helpers
 // =============================================================================
 
@@ -80,7 +93,7 @@ export function useServerUrl() {
 	return useQuery({
 		queryKey: ["serverUrl"],
 		queryFn: () => invoke<string>("get_server_url"),
-		staleTime: Number.POSITIVE_INFINITY,
+		staleTime: STALE_TIME_INFINITE,
 	});
 }
 
@@ -95,7 +108,7 @@ export function useSettings() {
 	return useQuery({
 		queryKey: ["settings"],
 		queryFn: () => tauriAPI.getSettings(),
-		staleTime: Number.POSITIVE_INFINITY,
+		staleTime: STALE_TIME_INFINITE,
 	});
 }
 
@@ -224,7 +237,7 @@ export function useIsAudioMuteSupported() {
 	return useQuery({
 		queryKey: ["audioMuteSupported"],
 		queryFn: () => tauriAPI.isAudioMuteSupported(),
-		staleTime: Number.POSITIVE_INFINITY,
+		staleTime: STALE_TIME_INFINITE,
 	});
 }
 
@@ -266,7 +279,7 @@ export function useShortcutErrors() {
 	return useQuery({
 		queryKey: ["shortcutErrors"],
 		queryFn: () => tauriAPI.getShortcutErrors(),
-		staleTime: 0, // Always refetch to get the latest errors
+		staleTime: STALE_TIME_ALWAYS_REFETCH,
 	});
 }
 
@@ -372,7 +385,7 @@ export function useDefaultSections() {
 			}
 			return configAPI.getDefaultSections(serverUrl);
 		},
-		staleTime: Number.POSITIVE_INFINITY, // Default prompts never change
+		staleTime: STALE_TIME_INFINITE,
 		retry: false, // Don't retry if server not available
 		enabled: !!serverUrl, // Only fetch when server URL is available
 	});
@@ -399,7 +412,7 @@ export function useAvailableProviders() {
 				return null;
 			}
 		},
-		staleTime: 30_000, // Consider stale after 30 seconds
+		staleTime: STALE_TIME_PROVIDERS_MS,
 		retry: false, // Don't retry, connection handling will refetch
 		enabled: !!serverUrl,
 	});
