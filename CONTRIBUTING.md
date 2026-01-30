@@ -2,6 +2,8 @@
 
 Thanks for your interest in contributing to Tambourine! This guide will help you get started.
 
+If you find Tambourine useful, consider giving the repo a star — it helps others discover the project and keeps contributors motivated.
+
 ## Development Setup
 
 ### Prerequisites
