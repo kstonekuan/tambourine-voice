@@ -49,7 +49,7 @@ class DictationContextManager:
         self._main_custom: str | None = None
         self._advanced_enabled: bool = True
         self._advanced_custom: str | None = None
-        self._dictionary_enabled: bool = False
+        self._dictionary_enabled: bool = True
         self._dictionary_custom: str | None = None
 
         # Create shared context (will be reset before each recording)

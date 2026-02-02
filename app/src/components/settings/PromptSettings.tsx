@@ -13,7 +13,7 @@ import type { MutationStatus } from "./StatusIndicator";
 const DEFAULT_SECTIONS: CleanupPromptSections = {
 	main: { enabled: true, mode: { mode: "auto" } },
 	advanced: { enabled: true, mode: { mode: "auto" } },
-	dictionary: { enabled: false, mode: { mode: "auto" } },
+	dictionary: { enabled: true, mode: { mode: "auto" } },
 };
 
 type SectionKey = "main" | "advanced" | "dictionary";

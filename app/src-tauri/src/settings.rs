@@ -218,7 +218,7 @@ impl Default for CleanupPromptSections {
                 prompt_mode: PromptMode::Auto,
             },
             dictionary: PromptSection {
-                enabled: false,
+                enabled: true,
                 prompt_mode: PromptMode::Auto,
             },
         }
