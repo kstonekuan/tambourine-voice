@@ -20,7 +20,7 @@ pub async fn unregister_shortcuts(app: AppHandle) -> Result<(), String> {
     let shortcut_manager = app.global_shortcut();
     shortcut_manager
         .unregister_all()
-        .map_err(|e| format!("Failed to unregister shortcuts: {}", e))?;
+        .map_err(|e| format!("Failed to unregister shortcuts: {e}"))?;
     Ok(())
 }
 
@@ -166,8 +166,7 @@ pub async fn update_hotkey(
     config: HotkeyConfig,
 ) -> Result<(), SettingsError> {
     // Get current settings to check for conflicts
-    let settings =
-        get_settings(app.clone()).map_err(|e| SettingsError::StoreError(e.to_string()))?;
+    let settings = get_settings(app.clone()).map_err(|e| SettingsError::StoreError(e.clone()))?;
 
     // Check for conflicts with other hotkeys
     if let Some(error) = check_hotkey_conflict(&config, &settings, hotkey_type) {
@@ -202,7 +201,7 @@ pub async fn update_hotkey(
 #[tauri::command]
 pub async fn update_selected_mic(app: AppHandle, mic_id: Option<String>) -> Result<(), String> {
     crate::save_setting_to_store(&app, StoreKey::SelectedMicId, &mic_id)?;
-    log::info!("Updated selected microphone: {:?}", mic_id);
+    log::info!("Updated selected microphone: {mic_id:?}");
     Ok(())
 }
 
@@ -217,7 +216,7 @@ pub async fn update_selected_mic(_app: AppHandle, _mic_id: Option<String>) -> Re
 #[tauri::command]
 pub async fn update_sound_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
     crate::save_setting_to_store(&app, StoreKey::SoundEnabled, &enabled)?;
-    log::info!("Updated sound enabled: {}", enabled);
+    log::info!("Updated sound enabled: {enabled}");
     Ok(())
 }
 
@@ -242,7 +241,7 @@ pub async fn update_cleanup_prompt_sections(
     // Sync to server
     if let Some(ref s) = sections {
         if let Err(e) = config_sync.read().await.sync_prompt_sections(s).await {
-            log::warn!("Failed to sync prompt sections to server: {}", e);
+            log::warn!("Failed to sync prompt sections to server: {e}");
             return Err(e);
         }
     }
@@ -264,7 +263,7 @@ pub async fn update_cleanup_prompt_sections(
 #[tauri::command]
 pub async fn update_stt_provider(app: AppHandle, provider: String) -> Result<(), String> {
     crate::save_setting_to_store(&app, StoreKey::SttProvider, &provider)?;
-    log::info!("Updated STT provider: {}", provider);
+    log::info!("Updated STT provider: {provider}");
     Ok(())
 }
 
@@ -279,7 +278,7 @@ pub async fn update_stt_provider(_app: AppHandle, _provider: String) -> Result<(
 #[tauri::command]
 pub async fn update_llm_provider(app: AppHandle, provider: String) -> Result<(), String> {
     crate::save_setting_to_store(&app, StoreKey::LlmProvider, &provider)?;
-    log::info!("Updated LLM provider: {}", provider);
+    log::info!("Updated LLM provider: {provider}");
     Ok(())
 }
 
@@ -294,7 +293,7 @@ pub async fn update_llm_provider(_app: AppHandle, _provider: String) -> Result<(
 #[tauri::command]
 pub async fn update_auto_mute_audio(app: AppHandle, enabled: bool) -> Result<(), String> {
     crate::save_setting_to_store(&app, StoreKey::AutoMuteAudio, &enabled)?;
-    log::info!("Updated auto mute audio: {}", enabled);
+    log::info!("Updated auto mute audio: {enabled}");
     Ok(())
 }
 
@@ -314,12 +313,12 @@ pub async fn update_stt_timeout(
 ) -> Result<(), String> {
     // Save locally
     crate::save_setting_to_store(&app, StoreKey::SttTimeoutSeconds, &timeout_seconds)?;
-    log::info!("Updated STT timeout: {:?}", timeout_seconds);
+    log::info!("Updated STT timeout: {timeout_seconds:?}");
 
     // Sync to server
     if let Some(timeout) = timeout_seconds {
         if let Err(e) = config_sync.read().await.sync_stt_timeout(timeout).await {
-            log::warn!("Failed to sync STT timeout to server: {}", e);
+            log::warn!("Failed to sync STT timeout to server: {e}");
             return Err(e);
         }
     }
@@ -341,7 +340,7 @@ pub async fn update_stt_timeout(
 #[tauri::command]
 pub async fn update_server_url(app: AppHandle, url: String) -> Result<(), String> {
     crate::save_setting_to_store(&app, StoreKey::ServerUrl, &url)?;
-    log::info!("Updated server URL: {}", url);
+    log::info!("Updated server URL: {url}");
     Ok(())
 }
 

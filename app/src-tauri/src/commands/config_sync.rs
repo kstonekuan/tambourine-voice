@@ -30,7 +30,7 @@ pub async fn set_server_connected(
                 );
             }
             Err(e) => {
-                log::warn!("Failed to sync prompt sections on connect: {}", e);
+                log::warn!("Failed to sync prompt sections on connect: {e}");
                 let _ = app.emit(
                     EventName::ConfigResponse.as_str(),
                     ConfigResponse::<()>::error(ConfigSetting::PromptSections, e),
@@ -48,7 +48,7 @@ pub async fn set_server_connected(
                 );
             }
             Err(e) => {
-                log::warn!("Failed to sync STT timeout on connect: {}", e);
+                log::warn!("Failed to sync STT timeout on connect: {e}");
                 let _ = app.emit(
                     EventName::ConfigResponse.as_str(),
                     ConfigResponse::<()>::error(ConfigSetting::SttTimeout, e),

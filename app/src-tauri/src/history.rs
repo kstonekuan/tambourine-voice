@@ -89,13 +89,13 @@ impl HistoryStorage {
         let data = self
             .data
             .read()
-            .map_err(|e| format!("Failed to read history: {}", e))?;
+            .map_err(|e| format!("Failed to read history: {e}"))?;
 
         let content = serde_json::to_string_pretty(&*data)
-            .map_err(|e| format!("Failed to serialize history: {}", e))?;
+            .map_err(|e| format!("Failed to serialize history: {e}"))?;
 
         fs::write(&self.file_path, content)
-            .map_err(|e| format!("Failed to write history file: {}", e))?;
+            .map_err(|e| format!("Failed to write history file: {e}"))?;
 
         Ok(())
     }
@@ -107,7 +107,7 @@ impl HistoryStorage {
             let mut data = self
                 .data
                 .write()
-                .map_err(|e| format!("Failed to write history: {}", e))?;
+                .map_err(|e| format!("Failed to write history: {e}"))?;
 
             data.entries.insert(0, entry.clone());
 
@@ -124,7 +124,7 @@ impl HistoryStorage {
         let data = self
             .data
             .read()
-            .map_err(|e| format!("Failed to read history: {}", e))?;
+            .map_err(|e| format!("Failed to read history: {e}"))?;
 
         let entries = match limit {
             Some(n) => data.entries.iter().take(n).cloned().collect(),
@@ -140,7 +140,7 @@ impl HistoryStorage {
             let mut data = self
                 .data
                 .write()
-                .map_err(|e| format!("Failed to write history: {}", e))?;
+                .map_err(|e| format!("Failed to write history: {e}"))?;
 
             let initial_len = data.entries.len();
             data.entries.retain(|e| e.id != id);
@@ -160,7 +160,7 @@ impl HistoryStorage {
             let mut data = self
                 .data
                 .write()
-                .map_err(|e| format!("Failed to write history: {}", e))?;
+                .map_err(|e| format!("Failed to write history: {e}"))?;
             data.entries.clear();
         }
         self.save()
@@ -179,7 +179,7 @@ impl HistoryStorage {
             let mut data = self
                 .data
                 .write()
-                .map_err(|e| format!("Failed to write history: {}", e))?;
+                .map_err(|e| format!("Failed to write history: {e}"))?;
 
             match strategy {
                 HistoryImportStrategy::Replace => {

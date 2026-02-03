@@ -6,7 +6,7 @@ use tokio::sync::RwLock;
 
 use crate::settings::CleanupPromptSections;
 
-/// Default STT timeout in seconds (matches server's DEFAULT_TRANSCRIPTION_WAIT_TIMEOUT_SECONDS)
+/// Default STT timeout in seconds (matches server's `DEFAULT_TRANSCRIPTION_WAIT_TIMEOUT_SECONDS`)
 pub const DEFAULT_STT_TIMEOUT_SECONDS: f64 = 0.5;
 
 /// Tracks server connection state for config syncing
@@ -36,11 +36,7 @@ impl ConfigSyncState {
 
     /// Set connection info when connected to server
     pub fn set_connected(&mut self, server_url: String, client_uuid: String) {
-        log::info!(
-            "Config sync connected: {} (uuid: {})",
-            server_url,
-            client_uuid
-        );
+        log::info!("Config sync connected: {server_url} (uuid: {client_uuid})");
         self.server_url = Some(server_url);
         self.client_uuid = Some(client_uuid);
     }
@@ -62,13 +58,12 @@ impl ConfigSyncState {
         &self,
         sections: &CleanupPromptSections,
     ) -> Result<(), String> {
-        let (url, uuid) = match (&self.server_url, &self.client_uuid) {
-            (Some(u), Some(id)) => (u, id),
-            _ => return Ok(()), // Not connected, skip silently
+        let (Some(url), Some(uuid)) = (&self.server_url, &self.client_uuid) else {
+            return Ok(()); // Not connected, skip silently
         };
 
         self.client
-            .put(format!("{}/api/config/prompts", url))
+            .put(format!("{url}/api/config/prompts"))
             .header("X-Client-UUID", uuid)
             .json(sections)
             .send()
@@ -83,18 +78,17 @@ impl ConfigSyncState {
 
     /// Sync STT timeout to server
     pub async fn sync_stt_timeout(&self, timeout_seconds: f64) -> Result<(), String> {
-        let (url, uuid) = match (&self.server_url, &self.client_uuid) {
-            (Some(u), Some(id)) => (u, id),
-            _ => return Ok(()), // Not connected, skip silently
-        };
-
         #[derive(Serialize)]
         struct TimeoutBody {
             timeout_seconds: f64,
         }
 
+        let (Some(url), Some(uuid)) = (&self.server_url, &self.client_uuid) else {
+            return Ok(()); // Not connected, skip silently
+        };
+
         self.client
-            .put(format!("{}/api/config/stt-timeout", url))
+            .put(format!("{url}/api/config/stt-timeout"))
             .header("X-Client-UUID", uuid)
             .json(&TimeoutBody { timeout_seconds })
             .send()
@@ -103,7 +97,7 @@ impl ConfigSyncState {
             .error_for_status()
             .map_err(|e| e.to_string())?;
 
-        log::debug!("Synced STT timeout ({}) to server", timeout_seconds);
+        log::debug!("Synced STT timeout ({timeout_seconds}) to server");
         Ok(())
     }
 }

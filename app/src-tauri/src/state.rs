@@ -3,13 +3,14 @@ use std::sync::atomic::AtomicBool;
 use std::sync::RwLock;
 
 /// Tracks errors from shortcut registration attempts
+#[allow(clippy::struct_field_names)]
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ShortcutErrors {
     /// Error message if toggle shortcut failed to register
     pub toggle_error: Option<String>,
     /// Error message if hold shortcut failed to register
     pub hold_error: Option<String>,
-    /// Error message if paste_last shortcut failed to register
+    /// Error message if `paste_last` shortcut failed to register
     pub paste_last_error: Option<String>,
 }
 

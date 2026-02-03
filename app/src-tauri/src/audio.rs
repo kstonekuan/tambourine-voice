@@ -19,7 +19,7 @@ const DEFAULT_AUDIO_PLAYBACK_DURATION_MS: u64 = 500;
 pub fn play_sound(sound_type: SoundType) {
     thread::spawn(move || {
         if let Err(e) = play_sound_blocking(sound_type) {
-            log::warn!("Failed to play sound: {}", e);
+            log::warn!("Failed to play sound: {e}");
         }
     });
 }

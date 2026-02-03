@@ -31,9 +31,9 @@ pub enum AudioControlError {
 impl fmt::Display for AudioControlError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InitializationFailed(msg) => write!(f, "Audio init failed: {}", msg),
-            Self::GetPropertyFailed(msg) => write!(f, "Failed to get audio property: {}", msg),
-            Self::SetPropertyFailed(msg) => write!(f, "Failed to set audio property: {}", msg),
+            Self::InitializationFailed(msg) => write!(f, "Audio init failed: {msg}"),
+            Self::GetPropertyFailed(msg) => write!(f, "Failed to get audio property: {msg}"),
+            Self::SetPropertyFailed(msg) => write!(f, "Failed to set audio property: {msg}"),
             Self::NotSupported => write!(f, "Audio control not supported on this platform"),
         }
     }
@@ -99,7 +99,7 @@ pub struct AudioMuteManager {
 }
 
 impl AudioMuteManager {
-    /// Create a new AudioMuteManager.
+    /// Create a new `AudioMuteManager`.
     ///
     /// Returns None if audio control is not available on this platform.
     pub fn new() -> Option<Self> {
@@ -110,7 +110,7 @@ impl AudioMuteManager {
                 is_currently_muting: AtomicBool::new(false),
             }),
             Err(e) => {
-                log::warn!("Audio mute not available: {}", e);
+                log::warn!("Audio mute not available: {e}");
                 None
             }
         }
@@ -131,11 +131,11 @@ impl AudioMuteManager {
         self.was_muted_before.store(was_muted, Ordering::SeqCst);
 
         // Only mute if not already muted
-        if !was_muted {
+        if was_muted {
+            log::info!("System audio already muted, skipping");
+        } else {
             self.controller.set_muted(true)?;
             log::info!("System audio muted for recording");
-        } else {
-            log::info!("System audio already muted, skipping");
         }
 
         Ok(())
@@ -152,11 +152,11 @@ impl AudioMuteManager {
         }
 
         // Only unmute if it wasn't already muted before we started
-        if !self.was_muted_before.load(Ordering::SeqCst) {
+        if self.was_muted_before.load(Ordering::SeqCst) {
+            log::info!("System audio was already muted, leaving muted");
+        } else {
             self.controller.set_muted(false)?;
             log::info!("System audio unmuted after recording");
-        } else {
-            log::info!("System audio was already muted, leaving muted");
         }
 
         Ok(())

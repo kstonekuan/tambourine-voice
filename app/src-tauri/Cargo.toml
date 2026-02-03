@@ -11,20 +11,20 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 name = "tambourine_voice_lib"
 
 [build-dependencies]
-tauri-build = { version = "2.5.3", features = [] }
+tauri-build = { version = "2.5.4", features = [] }
 
 [dependencies]
 # Tauri core and plugins
-tauri = { version = "2.9.5", features = [
+tauri = { version = "2.10.1", features = [
     "tray-icon",
     "macos-private-api",
     "image-png",
     "devtools",
 ] }
-tauri-utils = "2.8.1"
+tauri-utils = "2.8.2"
 tauri-plugin-opener = "2.5.3"
 tauri-plugin-store = "2.4.2"
-tauri-plugin-http = { version = "2.5.6", features = ["json"] }
+tauri-plugin-http = { version = "2.5.7", features = ["json"] }
 tauri-plugin-dialog = "2.6.0"
 tauri-plugin-fs = "2.4.5"
 
@@ -80,3 +80,9 @@ windows = { version = "0.62.2", features = [
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-core-audio = "0.3.2"
 tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2.1" }
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+needless_pass_by_value = "allow"
+unnecessary_wraps = "allow"
+missing_panics_doc = "allow"

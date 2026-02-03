@@ -12,10 +12,10 @@ pub async fn resize_overlay(app: AppHandle, width: f64, height: f64) -> Result<(
         // This allows the overlay to be dragged and maintain its new position
         let center = if let (Ok(pos), Ok(size)) = (window.outer_position(), window.outer_size()) {
             let scale = window.scale_factor().unwrap_or(1.0);
-            let x = pos.x as f64 / scale;
-            let y = pos.y as f64 / scale;
-            let w = size.width as f64 / scale;
-            let h = size.height as f64 / scale;
+            let x = f64::from(pos.x) / scale;
+            let y = f64::from(pos.y) / scale;
+            let w = f64::from(size.width) / scale;
+            let h = f64::from(size.height) / scale;
             Some((x + w / 2.0, y + h / 2.0))
         } else {
             None

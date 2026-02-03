@@ -83,12 +83,12 @@ pub(crate) fn save_setting_to_store<T: serde::Serialize>(
 ) -> Result<(), String> {
     let store = app
         .store("settings.json")
-        .map_err(|e| format!("Failed to get store: {}", e))?;
+        .map_err(|e| format!("Failed to get store: {e}"))?;
     let json_value = serde_json::to_value(value).map_err(|e| e.to_string())?;
     store.set(key.as_str(), json_value); // set() returns ()
     store
         .save()
-        .map_err(|e| format!("Failed to save store: {}", e))?;
+        .map_err(|e| format!("Failed to save store: {e}"))?;
     Ok(())
 }
 
@@ -98,12 +98,12 @@ fn start_recording(
     app: &AppHandle,
     state: &AppState,
     sound_enabled: bool,
-    audio_mute_manager: &Option<tauri::State<'_, AudioMuteManager>>,
+    audio_mute_manager: Option<&tauri::State<'_, AudioMuteManager>>,
     auto_mute_audio: bool,
     source: &str,
 ) {
     state.is_recording.store(true, Ordering::SeqCst);
-    log::info!("{}: starting recording", source);
+    log::info!("{source}: starting recording");
     // Play sound BEFORE muting so it's audible
     if sound_enabled {
         audio::play_sound(audio::SoundType::RecordingStart);
@@ -113,7 +113,7 @@ fn start_recording(
     if auto_mute_audio {
         if let Some(manager) = audio_mute_manager {
             if let Err(e) = manager.mute() {
-                log::warn!("Failed to mute audio: {}", e);
+                log::warn!("Failed to mute audio: {e}");
             }
         }
     }
@@ -126,17 +126,17 @@ fn stop_recording(
     app: &AppHandle,
     state: &AppState,
     sound_enabled: bool,
-    audio_mute_manager: &Option<tauri::State<'_, AudioMuteManager>>,
+    audio_mute_manager: Option<&tauri::State<'_, AudioMuteManager>>,
     auto_mute_audio: bool,
     source: &str,
 ) {
     state.is_recording.store(false, Ordering::SeqCst);
-    log::info!("{}: stopping recording", source);
+    log::info!("{source}: stopping recording");
     // Unmute system audio if it was muted
     if auto_mute_audio {
         if let Some(manager) = audio_mute_manager {
             if let Err(e) = manager.unmute() {
-                log::warn!("Failed to unmute audio: {}", e);
+                log::warn!("Failed to unmute audio: {e}");
             }
         }
     }
@@ -148,6 +148,7 @@ fn stop_recording(
 
 /// Handle a shortcut event - public so it can be called from commands/settings.rs
 #[cfg(desktop)]
+#[allow(clippy::too_many_lines)]
 pub fn handle_shortcut_event(app: &AppHandle, shortcut: &Shortcut, event: &ShortcutEvent) {
     let state = app.state::<AppState>();
 
@@ -170,24 +171,19 @@ pub fn handle_shortcut_event(app: &AppHandle, shortcut: &Shortcut, event: &Short
     );
 
     // Validate hotkeys - if they can't be parsed as shortcuts, use defaults
-    let toggle_shortcut_str = normalize_shortcut_string(
-        &toggle_hotkey
-            .to_shortcut()
-            .map(|_| toggle_hotkey.to_shortcut_string())
-            .unwrap_or_else(|_| HotkeyConfig::default_toggle().to_shortcut_string()),
-    );
-    let hold_shortcut_str = normalize_shortcut_string(
-        &hold_hotkey
-            .to_shortcut()
-            .map(|_| hold_hotkey.to_shortcut_string())
-            .unwrap_or_else(|_| HotkeyConfig::default_hold().to_shortcut_string()),
-    );
-    let paste_last_shortcut_str = normalize_shortcut_string(
-        &paste_last_hotkey
-            .to_shortcut()
-            .map(|_| paste_last_hotkey.to_shortcut_string())
-            .unwrap_or_else(|_| HotkeyConfig::default_paste_last().to_shortcut_string()),
-    );
+    let toggle_shortcut_str = normalize_shortcut_string(&toggle_hotkey.to_shortcut().map_or_else(
+        |_| HotkeyConfig::default_toggle().to_shortcut_string(),
+        |_| toggle_hotkey.to_shortcut_string(),
+    ));
+    let hold_shortcut_str = normalize_shortcut_string(&hold_hotkey.to_shortcut().map_or_else(
+        |_| HotkeyConfig::default_hold().to_shortcut_string(),
+        |_| hold_hotkey.to_shortcut_string(),
+    ));
+    let paste_last_shortcut_str =
+        normalize_shortcut_string(&paste_last_hotkey.to_shortcut().map_or_else(
+            |_| HotkeyConfig::default_paste_last().to_shortcut_string(),
+            |_| paste_last_hotkey.to_shortcut_string(),
+        ));
 
     // Get audio mute manager if available
     let audio_mute_manager = app.try_state::<AudioMuteManager>();
@@ -215,7 +211,7 @@ pub fn handle_shortcut_event(app: &AppHandle, shortcut: &Shortcut, event: &Short
                             app,
                             &state,
                             sound_enabled,
-                            &audio_mute_manager,
+                            audio_mute_manager.as_ref(),
                             auto_mute_audio,
                             "Toggle",
                         );
@@ -224,7 +220,7 @@ pub fn handle_shortcut_event(app: &AppHandle, shortcut: &Shortcut, event: &Short
                             app,
                             &state,
                             sound_enabled,
-                            &audio_mute_manager,
+                            audio_mute_manager.as_ref(),
                             auto_mute_audio,
                             "Toggle",
                         );
@@ -241,7 +237,7 @@ pub fn handle_shortcut_event(app: &AppHandle, shortcut: &Shortcut, event: &Short
                         app,
                         &state,
                         sound_enabled,
-                        &audio_mute_manager,
+                        audio_mute_manager.as_ref(),
                         auto_mute_audio,
                         "Hold",
                     );
@@ -253,7 +249,7 @@ pub fn handle_shortcut_event(app: &AppHandle, shortcut: &Shortcut, event: &Short
                         app,
                         &state,
                         sound_enabled,
-                        &audio_mute_manager,
+                        audio_mute_manager.as_ref(),
                         auto_mute_audio,
                         "Hold",
                     );
@@ -276,7 +272,7 @@ pub fn handle_shortcut_event(app: &AppHandle, shortcut: &Shortcut, event: &Short
                     if let Ok(entries) = history_storage.get_all(Some(1)) {
                         if let Some(entry) = entries.first() {
                             if let Err(e) = commands::text::type_text_blocking(&entry.text) {
-                                log::error!("Failed to paste last transcription: {}", e);
+                                log::error!("Failed to paste last transcription: {e}");
                             }
                         } else {
                             log::info!("PasteLast: no history entries available");
@@ -286,7 +282,7 @@ pub fn handle_shortcut_event(app: &AppHandle, shortcut: &Shortcut, event: &Short
             }
         }
     } else {
-        log::warn!("Unknown shortcut: {}", shortcut_str);
+        log::warn!("Unknown shortcut: {shortcut_str}");
     }
 }
 
@@ -333,6 +329,7 @@ fn list_native_mic_devices(state: tauri::State<'_, MicCaptureManager>) -> Vec<Au
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[allow(clippy::too_many_lines)]
 pub fn run() {
     // Initialize logger
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
@@ -495,11 +492,14 @@ pub fn run() {
             if let Ok(Some(monitor)) = overlay.current_monitor() {
                 let size = monitor.size();
                 let scale = monitor.scale_factor();
-                let x = (size.width as f64 / scale) as i32 - 150;
-                let y = (size.height as f64 / scale) as i32 - 100;
+                // Truncation is intentional: pixel coordinates don't need sub-pixel precision
+                #[allow(clippy::cast_possible_truncation)]
+                let x = (f64::from(size.width) / scale) as i32 - 150;
+                #[allow(clippy::cast_possible_truncation)]
+                let y = (f64::from(size.height) / scale) as i32 - 100;
                 let _ = overlay.set_position(tauri::Position::Logical(tauri::LogicalPosition {
-                    x: x as f64,
-                    y: y as f64,
+                    x: f64::from(x),
+                    y: f64::from(y),
                 }));
             }
 
@@ -619,7 +619,7 @@ pub(crate) fn do_register_shortcuts(app: &AppHandle) -> state::ShortcutRegistrat
                         registered: &mut bool,
                         error: &mut Option<String>| {
         if !hotkey.enabled {
-            log::info!("{} shortcut is disabled, skipping", name);
+            log::info!("{name} shortcut is disabled, skipping");
             return;
         }
 
@@ -627,17 +627,13 @@ pub(crate) fn do_register_shortcuts(app: &AppHandle) -> state::ShortcutRegistrat
         match shortcut_manager.on_shortcut(shortcut, |app_handle, shortcut, event| {
             handle_shortcut_event(app_handle, shortcut, &event);
         }) {
-            Ok(_) => {
+            Ok(()) => {
                 *registered = true;
-                log::info!("{} shortcut registered", name);
+                log::info!("{name} shortcut registered");
             }
             Err(e) => {
-                *error = Some(format!("Hotkey conflict: {}", e));
-                log::warn!(
-                    "Failed to register {} shortcut: {}. Auto-disabling.",
-                    name,
-                    e
-                );
+                *error = Some(format!("Hotkey conflict: {e}"));
+                log::warn!("Failed to register {name} shortcut: {e}. Auto-disabling.");
                 hotkey.enabled = false;
                 let _ = save_setting_to_store(app, store_key, hotkey);
             }
@@ -679,7 +675,7 @@ pub(crate) fn do_register_shortcuts(app: &AppHandle) -> state::ShortcutRegistrat
     result
 }
 
-/// Register shortcuts from store settings (called from setup() after store plugin is available)
+/// Register shortcuts from store settings (called from `setup()` after store plugin is available)
 #[cfg(desktop)]
 fn register_initial_shortcuts(app: &AppHandle) {
     let result = do_register_shortcuts(app);

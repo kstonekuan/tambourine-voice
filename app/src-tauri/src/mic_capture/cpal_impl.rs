@@ -1,7 +1,7 @@
 //! cpal-based microphone capture implementation using a dedicated audio thread.
 //!
-//! Uses channels to communicate with the audio thread since cpal::Stream
-//! is not Send+Sync on macOS (CoreAudio callbacks must run on specific threads).
+//! Uses channels to communicate with the audio thread since `cpal::Stream`
+//! is not Send+Sync on macOS (`CoreAudio` callbacks must run on specific threads).
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -224,7 +224,7 @@ impl Drop for CpalMicCapture {
         // Wait for the thread to finish (proper cleanup)
         if let Some(handle) = self.thread_handle.lock().unwrap().take() {
             if let Err(e) = handle.join() {
-                log::error!("Audio capture thread panicked: {:?}", e);
+                log::error!("Audio capture thread panicked: {e:?}");
             }
         }
     }

@@ -126,8 +126,7 @@ pub fn generate_settings_export(app: AppHandle) -> Result<String, String> {
         data: export_data,
     };
 
-    serde_json::to_string_pretty(&export)
-        .map_err(|e| format!("Failed to serialize settings: {}", e))
+    serde_json::to_string_pretty(&export).map_err(|e| format!("Failed to serialize settings: {e}"))
 }
 
 #[cfg(not(desktop))]
@@ -142,7 +141,7 @@ pub fn generate_history_export(app: AppHandle) -> Result<String, String> {
     let history_storage = app.state::<HistoryStorage>();
     let entries = history_storage
         .get_all(None)
-        .map_err(|e| format!("Failed to get history: {}", e))?;
+        .map_err(|e| format!("Failed to get history: {e}"))?;
 
     let export = HistoryExportFile {
         file_type: HISTORY_EXPORT_TYPE.to_string(),
@@ -152,11 +151,11 @@ pub fn generate_history_export(app: AppHandle) -> Result<String, String> {
         data: entries,
     };
 
-    serde_json::to_string_pretty(&export).map_err(|e| format!("Failed to serialize history: {}", e))
+    serde_json::to_string_pretty(&export).map_err(|e| format!("Failed to serialize history: {e}"))
 }
 
 /// Generate prompt exports as markdown content with HTML comment headers.
-/// Returns a HashMap of section name -> markdown content (always 3 files with state markers).
+/// Returns a `HashMap` of section name -> markdown content (always 3 files with state markers).
 #[cfg(desktop)]
 #[tauri::command]
 pub fn generate_prompt_exports(app: AppHandle) -> Result<HashMap<String, String>, String> {
@@ -209,7 +208,7 @@ pub fn generate_prompt_exports(_app: AppHandle) -> Result<HashMap<String, String
 }
 
 /// Parse a prompt file content and extract the section name from the HTML comment.
-/// Returns (section_name, content) if valid, or an error message.
+/// Returns (`section_name`, content) if valid, or an error message.
 #[tauri::command]
 pub fn parse_prompt_file(content: String) -> Result<(String, String), String> {
     let trimmed = content.trim();
@@ -229,7 +228,7 @@ pub fn parse_prompt_file(content: String) -> Result<(String, String), String> {
 
     // Validate section name
     if !["main", "advanced", "dictionary"].contains(&section_name.as_str()) {
-        return Err(format!("Unknown prompt section: {}", section_name));
+        return Err(format!("Unknown prompt section: {section_name}"));
     }
 
     // Extract content after the comment
@@ -252,7 +251,7 @@ pub async fn import_prompt(
 
     // Validate section name
     if !["main", "advanced", "dictionary"].contains(&section.as_str()) {
-        return Err(format!("Unknown prompt section: {}", section));
+        return Err(format!("Unknown prompt section: {section}"));
     }
 
     // Get current prompt sections or use default
@@ -268,15 +267,13 @@ pub async fn import_prompt(
         .iter()
         .find(|line| line.starts_with("enabled:"))
         .and_then(|line| line.strip_prefix("enabled:"))
-        .map(|s| s.trim() == "true")
-        .unwrap_or(true);
+        .is_none_or(|s| s.trim() == "true");
 
     let mode = lines
         .iter()
         .find(|line| line.starts_with("mode:"))
         .and_then(|line| line.strip_prefix("mode:"))
-        .map(|s| s.trim())
-        .unwrap_or("auto");
+        .map_or("auto", str::trim);
 
     let content_start = lines.iter().position(|line| line.trim() == "---");
     let prompt_content = if let Some(idx) = content_start {
@@ -312,11 +309,11 @@ pub async fn import_prompt(
     let sync = config_sync.read().await;
     if sync.is_connected() {
         if let Err(e) = sync.sync_prompt_sections(&sections).await {
-            log::warn!("Failed to sync prompt after import: {}", e);
+            log::warn!("Failed to sync prompt after import: {e}");
         }
     }
 
-    log::info!("Imported prompt for section: {}", section);
+    log::info!("Imported prompt for section: {section}");
     Ok(())
 }
 
@@ -366,7 +363,7 @@ pub fn detect_export_file_type(content: String) -> DetectedFileType {
             }
         },
         Err(e) => {
-            log::warn!("Failed to parse file type: {}", e);
+            log::warn!("Failed to parse file type: {e}");
             DetectedFileType::Unknown
         }
     }
@@ -382,7 +379,7 @@ pub async fn import_settings(
 ) -> Result<(), String> {
     // Parse the export file
     let export: SettingsExportFile = serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse settings file: {}", e))?;
+        .map_err(|e| format!("Failed to parse settings file: {e}"))?;
 
     // Validate file type
     if export.file_type != SETTINGS_EXPORT_TYPE {
@@ -403,7 +400,7 @@ pub async fn import_settings(
     // Get store
     let store = app
         .store("settings.json")
-        .map_err(|e| format!("Failed to get store: {}", e))?;
+        .map_err(|e| format!("Failed to get store: {e}"))?;
 
     // Import each setting
     let settings = export.data;
@@ -453,7 +450,7 @@ pub async fn import_settings(
 
     store
         .save()
-        .map_err(|e| format!("Failed to save settings: {}", e))?;
+        .map_err(|e| format!("Failed to save settings: {e}"))?;
 
     log::info!("Successfully imported settings from export file");
 
@@ -461,7 +458,7 @@ pub async fn import_settings(
     if sync.is_connected() {
         if let Some(timeout) = settings.stt_timeout_seconds {
             if let Err(e) = sync.sync_stt_timeout(timeout).await {
-                log::warn!("Failed to sync STT timeout after import: {}", e);
+                log::warn!("Failed to sync STT timeout after import: {e}");
             }
         }
     }
@@ -487,8 +484,8 @@ pub fn import_history(
     strategy: HistoryImportStrategy,
 ) -> Result<HistoryImportResult, String> {
     // Parse the export file
-    let export: HistoryExportFile = serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse history file: {}", e))?;
+    let export: HistoryExportFile =
+        serde_json::from_str(&content).map_err(|e| format!("Failed to parse history file: {e}"))?;
 
     // Validate file type
     if export.file_type != HISTORY_EXPORT_TYPE {
@@ -529,12 +526,12 @@ pub async fn factory_reset(
     // Clear the settings store completely
     let store = app
         .store("settings.json")
-        .map_err(|e| format!("Failed to get store: {}", e))?;
+        .map_err(|e| format!("Failed to get store: {e}"))?;
 
     store.clear();
     store
         .save()
-        .map_err(|e| format!("Failed to save cleared store: {}", e))?;
+        .map_err(|e| format!("Failed to save cleared store: {e}"))?;
 
     // Clear history
     let history_storage = app.state::<HistoryStorage>();
@@ -578,7 +575,7 @@ pub async fn factory_reset(
 
     store
         .save()
-        .map_err(|e| format!("Failed to save default settings: {}", e))?;
+        .map_err(|e| format!("Failed to save default settings: {e}"))?;
 
     // Sync defaults to server if connected
     let sync = config_sync.read().await;
@@ -586,12 +583,12 @@ pub async fn factory_reset(
         // Reset prompts to default mode
         let default_sections = CleanupPromptSections::default();
         if let Err(e) = sync.sync_prompt_sections(&default_sections).await {
-            log::warn!("Failed to sync prompts on factory reset: {}", e);
+            log::warn!("Failed to sync prompts on factory reset: {e}");
         }
 
         // Reset STT timeout to default
         if let Err(e) = sync.sync_stt_timeout(DEFAULT_STT_TIMEOUT_SECONDS).await {
-            log::warn!("Failed to sync STT timeout on factory reset: {}", e);
+            log::warn!("Failed to sync STT timeout on factory reset: {e}");
         }
     }
 

@@ -44,6 +44,7 @@ pub enum EventName {
 
 impl EventName {
     /// Returns the string representation for Tauri event emission.
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::RecordingStart => "recording-start",
@@ -77,6 +78,7 @@ pub enum ConfigSetting {
 
 impl ConfigSetting {
     /// Returns the string representation for config response payloads.
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::PromptSections => "prompt-sections",

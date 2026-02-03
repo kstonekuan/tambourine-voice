@@ -1,6 +1,6 @@
 //! Native microphone capture for low-latency audio.
 //!
-//! Captures audio directly via CoreAudio (macOS) / WASAPI (Windows) using cpal,
+//! Captures audio directly via `CoreAudio` (macOS) / WASAPI (Windows) using cpal,
 //! then streams PCM data to the frontend via Tauri events.
 
 use serde::Serialize;
