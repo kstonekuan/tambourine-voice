@@ -44,7 +44,7 @@
 		"lucide-react": "^0.563.0",
 		"react": "^19.2.4",
 		"react-dom": "^19.2.4",
-		"react-hotkeys-hook": "^5.2.3",
+		"react-hotkeys-hook": "^5.2.4",
 		"tailwindcss": "4.1.18",
 		"ts-pattern": "^5.9.0",
 		"ufo": "^1.6.3",
