@@ -11,12 +11,20 @@ if TYPE_CHECKING:
 
 
 def _should_log(record: "Record") -> bool:
-    """Filter out known harmless warnings."""
-    # Filter out pipecat timeout warnings (harmless when not streaming audio)
-    return not (
-        record["name"] == "pipecat.transports.smallwebrtc.transport"
-        and "Timeout: No audio frame received" in record["message"]
+    """Filter out known harmless warnings from pipecat transport layer."""
+    module_name = record["name"]
+    message = record["message"]
+
+    is_smallwebrtc_timeout = (
+        module_name == "pipecat.transports.smallwebrtc.transport"
+        and "Timeout: No audio frame received" in message
     )
+    is_base_input_timeout = (
+        module_name == "pipecat.transports.base_input"
+        and "audio not received for more than" in message
+    )
+
+    return not (is_smallwebrtc_timeout or is_base_input_timeout)
 
 
 def _log_format(record: "Record") -> str:
