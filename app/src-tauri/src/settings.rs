@@ -198,6 +198,41 @@ pub struct PromptSection {
     pub prompt_mode: PromptMode,
 }
 
+/// Type of prompt section
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PromptSectionType {
+    Main,
+    Advanced,
+    Dictionary,
+}
+
+impl PromptSectionType {
+    /// All available section types
+    pub const ALL: [Self; 3] = [Self::Main, Self::Advanced, Self::Dictionary];
+
+    /// Returns the string representation used in exports/imports
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Main => "main",
+            Self::Advanced => "advanced",
+            Self::Dictionary => "dictionary",
+        }
+    }
+}
+
+impl FromStr for PromptSectionType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "main" => Ok(Self::Main),
+            "advanced" => Ok(Self::Advanced),
+            "dictionary" => Ok(Self::Dictionary),
+            _ => Err(format!("Unknown prompt section: {s}")),
+        }
+    }
+}
+
 /// Configuration for all cleanup prompt sections
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CleanupPromptSections {
@@ -221,6 +256,26 @@ impl Default for CleanupPromptSections {
                 enabled: true,
                 prompt_mode: PromptMode::Auto,
             },
+        }
+    }
+}
+
+impl CleanupPromptSections {
+    /// Get a section by type
+    pub fn get(&self, section_type: PromptSectionType) -> &PromptSection {
+        match section_type {
+            PromptSectionType::Main => &self.main,
+            PromptSectionType::Advanced => &self.advanced,
+            PromptSectionType::Dictionary => &self.dictionary,
+        }
+    }
+
+    /// Set a section by type
+    pub fn set(&mut self, section_type: PromptSectionType, section: PromptSection) {
+        match section_type {
+            PromptSectionType::Main => self.main = section,
+            PromptSectionType::Advanced => self.advanced = section,
+            PromptSectionType::Dictionary => self.dictionary = section,
         }
     }
 }

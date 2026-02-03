@@ -5,7 +5,9 @@ use tauri::{AppHandle, Manager};
 
 use crate::config_sync::{ConfigSync, DEFAULT_STT_TIMEOUT_SECONDS};
 use crate::history::{HistoryEntry, HistoryImportResult, HistoryImportStrategy, HistoryStorage};
-use crate::settings::{AppSettings, CleanupPromptSections, PromptMode, PromptSection, StoreKey};
+use crate::settings::{
+    AppSettings, CleanupPromptSections, PromptMode, PromptSection, PromptSectionType, StoreKey,
+};
 
 #[cfg(desktop)]
 use tauri_plugin_store::StoreExt;
@@ -187,15 +189,12 @@ pub fn generate_prompt_exports(app: AppHandle) -> Result<HashMap<String, String>
             )
         };
 
-        prompts.insert("main".to_string(), format_prompt("main", &sections.main));
-        prompts.insert(
-            "advanced".to_string(),
-            format_prompt("advanced", &sections.advanced),
-        );
-        prompts.insert(
-            "dictionary".to_string(),
-            format_prompt("dictionary", &sections.dictionary),
-        );
+        for section_type in PromptSectionType::ALL {
+            prompts.insert(
+                section_type.as_str().to_string(),
+                format_prompt(section_type.as_str(), sections.get(section_type)),
+            );
+        }
     }
 
     Ok(prompts)
@@ -224,12 +223,11 @@ pub fn parse_prompt_file(content: String) -> Result<(String, String), String> {
         .find(PROMPT_COMMENT_SUFFIX)
         .ok_or("Not a valid prompt file: malformed header comment")?;
 
-    let section_name = after_prefix[..suffix_pos].trim().to_string();
+    let section_name = after_prefix[..suffix_pos].trim();
 
-    // Validate section name
-    if !["main", "advanced", "dictionary"].contains(&section_name.as_str()) {
-        return Err(format!("Unknown prompt section: {section_name}"));
-    }
+    // Validate section name by parsing as PromptSectionType
+    section_name.parse::<PromptSectionType>()?;
+    let section_name = section_name.to_string();
 
     // Extract content after the comment
     let content_start = PROMPT_COMMENT_PREFIX.len() + suffix_pos + PROMPT_COMMENT_SUFFIX.len();
@@ -249,10 +247,8 @@ pub async fn import_prompt(
 ) -> Result<(), String> {
     use super::settings::get_setting_from_store;
 
-    // Validate section name
-    if !["main", "advanced", "dictionary"].contains(&section.as_str()) {
-        return Err(format!("Unknown prompt section: {section}"));
-    }
+    // Validate and parse section name
+    let section_type: PromptSectionType = section.parse()?;
 
     // Get current prompt sections or use default
     let mut sections: CleanupPromptSections = get_setting_from_store(
@@ -295,12 +291,7 @@ pub async fn import_prompt(
         prompt_mode,
     };
 
-    match section.as_str() {
-        "main" => sections.main = new_section,
-        "advanced" => sections.advanced = new_section,
-        "dictionary" => sections.dictionary = new_section,
-        _ => unreachable!(), // Already validated above
-    }
+    sections.set(section_type, new_section);
 
     // Save updated sections
     crate::save_setting_to_store(&app, StoreKey::CleanupPromptSections, &sections)?;
@@ -313,7 +304,7 @@ pub async fn import_prompt(
         }
     }
 
-    log::info!("Imported prompt for section: {section}");
+    log::info!("Imported prompt for section: {}", section_type.as_str());
     Ok(())
 }
 
