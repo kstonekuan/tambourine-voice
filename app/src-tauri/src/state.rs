@@ -1,6 +1,32 @@
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::AtomicBool;
-use std::sync::RwLock;
+use std::sync::{Mutex, RwLock};
+
+/// State machine for shortcut handling.
+///
+/// This enum represents all valid states the shortcut system can be in,
+/// preventing invalid state combinations that were possible with separate booleans.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ShortcutState {
+    /// No keys pressed, not recording
+    #[default]
+    Idle,
+    /// Toggle key held, mic warming up (preparing to record)
+    PreparingToggle,
+    /// Recording via toggle mode (press-release to start, press-release to stop)
+    RecordingToggle,
+    /// Recording via hold mode (hold to record, release to stop)
+    RecordingHold,
+    /// Paste key held, waiting for release to paste
+    PastePending,
+}
+
+impl ShortcutState {
+    /// Check if currently in a recording state (either toggle or hold mode)
+    #[allow(dead_code)] // Provided for external use
+    pub fn is_recording(self) -> bool {
+        matches!(self, Self::RecordingToggle | Self::RecordingHold)
+    }
+}
 
 /// Tracks errors from shortcut registration attempts
 #[allow(clippy::struct_field_names)]
@@ -32,14 +58,8 @@ pub struct ShortcutRegistrationResult {
 
 #[derive(Default)]
 pub struct AppState {
-    /// Tracks if currently recording (for both toggle and hold modes)
-    pub is_recording: AtomicBool,
-    /// Tracks if PTT key is currently held down (for hold-to-record mode)
-    pub ptt_key_held: AtomicBool,
-    /// Tracks if paste-last key is currently held down
-    pub paste_key_held: AtomicBool,
-    /// Tracks if toggle key is currently held down (for debouncing - action happens on release)
-    pub toggle_key_held: AtomicBool,
+    /// Current state of the shortcut state machine
+    pub shortcut_state: Mutex<ShortcutState>,
     /// Tracks errors from shortcut registration attempts
     pub shortcut_errors: RwLock<ShortcutErrors>,
 }

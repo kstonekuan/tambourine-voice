@@ -1,4 +1,3 @@
-use std::sync::atomic::Ordering;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -24,17 +23,31 @@ mod tests;
 use audio_mute::AudioMuteManager;
 use history::HistoryStorage;
 use mic_capture::{AudioDeviceInfo, MicCapture, MicCaptureManager};
-use settings::{HotkeyConfig, StoreKey};
-use state::AppState;
+use settings::{HotkeyConfig, HotkeyType, StoreKey};
+use state::{AppState, ShortcutState};
 
 #[cfg(desktop)]
 use tauri_plugin_store::StoreExt;
 
 #[cfg(desktop)]
-use tauri_plugin_global_shortcut::{Shortcut, ShortcutEvent, ShortcutState};
+use tauri_plugin_global_shortcut::{
+    Shortcut, ShortcutEvent as TauriShortcutEvent, ShortcutState as TauriShortcutState,
+};
 
 #[cfg(desktop)]
 use commands::settings::get_setting_from_store;
+
+/// Events that can trigger state transitions in the shortcut state machine
+#[cfg(desktop)]
+#[derive(Debug, Clone, Copy)]
+pub enum ShortcutEvent {
+    TogglePressed,
+    ToggleReleased,
+    HoldPressed,
+    HoldReleased,
+    PastePressed,
+    PasteReleased,
+}
 
 // Define NSPanel type for overlay on macOS
 #[cfg(target_os = "macos")]
@@ -74,6 +87,48 @@ pub(crate) fn normalize_shortcut_string(s: &str) -> String {
         .join("+")
 }
 
+/// Get the normalized shortcut string for a hotkey config, falling back to default if invalid
+#[cfg(desktop)]
+fn get_normalized_shortcut_string(
+    hotkey: &HotkeyConfig,
+    default_fn: fn() -> HotkeyConfig,
+) -> String {
+    let shortcut_str = hotkey.to_shortcut().map_or_else(
+        |_| default_fn().to_shortcut_string(),
+        |_| hotkey.to_shortcut_string(),
+    );
+    normalize_shortcut_string(&shortcut_str)
+}
+
+/// Match a shortcut string against configured hotkeys
+#[cfg(desktop)]
+fn match_hotkey(app: &AppHandle, shortcut_str: &str) -> Option<HotkeyType> {
+    let toggle_hotkey: HotkeyConfig =
+        get_setting_from_store(app, StoreKey::ToggleHotkey, HotkeyConfig::default_toggle());
+    let hold_hotkey: HotkeyConfig =
+        get_setting_from_store(app, StoreKey::HoldHotkey, HotkeyConfig::default_hold());
+    let paste_last_hotkey: HotkeyConfig = get_setting_from_store(
+        app,
+        StoreKey::PasteLastHotkey,
+        HotkeyConfig::default_paste_last(),
+    );
+
+    if shortcut_str == get_normalized_shortcut_string(&toggle_hotkey, HotkeyConfig::default_toggle)
+    {
+        Some(HotkeyType::Toggle)
+    } else if shortcut_str
+        == get_normalized_shortcut_string(&hold_hotkey, HotkeyConfig::default_hold)
+    {
+        Some(HotkeyType::Hold)
+    } else if shortcut_str
+        == get_normalized_shortcut_string(&paste_last_hotkey, HotkeyConfig::default_paste_last)
+    {
+        Some(HotkeyType::PasteLast)
+    } else {
+        None
+    }
+}
+
 /// Save a setting to the store
 #[cfg(desktop)]
 pub(crate) fn save_setting_to_store<T: serde::Serialize>(
@@ -96,13 +151,11 @@ pub(crate) fn save_setting_to_store<T: serde::Serialize>(
 #[cfg(desktop)]
 fn start_recording(
     app: &AppHandle,
-    state: &AppState,
     sound_enabled: bool,
-    audio_mute_manager: Option<&tauri::State<'_, AudioMuteManager>>,
+    audio_mute_manager: Option<&AudioMuteManager>,
     auto_mute_audio: bool,
     source: &str,
 ) {
-    state.is_recording.store(true, Ordering::SeqCst);
     log::info!("{source}: starting recording");
     // Play sound BEFORE muting so it's audible
     if sound_enabled {
@@ -124,13 +177,11 @@ fn start_recording(
 #[cfg(desktop)]
 fn stop_recording(
     app: &AppHandle,
-    state: &AppState,
     sound_enabled: bool,
-    audio_mute_manager: Option<&tauri::State<'_, AudioMuteManager>>,
+    audio_mute_manager: Option<&AudioMuteManager>,
     auto_mute_audio: bool,
     source: &str,
 ) {
-    state.is_recording.store(false, Ordering::SeqCst);
     log::info!("{source}: stopping recording");
     // Unmute system audio if it was muted
     if auto_mute_audio {
@@ -146,144 +197,154 @@ fn stop_recording(
     let _ = app.emit(EventName::RecordingStop.as_str(), ());
 }
 
-/// Handle a shortcut event - public so it can be called from commands/settings.rs
+/// Paste the last transcription from history
 #[cfg(desktop)]
-#[allow(clippy::too_many_lines)]
-pub fn handle_shortcut_event(app: &AppHandle, shortcut: &Shortcut, event: &ShortcutEvent) {
-    let state = app.state::<AppState>();
+fn paste_last_transcription(app: &AppHandle) {
+    log::info!("PasteLast: pasting last transcription");
+    let history_storage = app.state::<HistoryStorage>();
 
-    // Get current settings from store
-    let sound_enabled: bool = get_setting_from_store(app, StoreKey::SoundEnabled, true);
-    let auto_mute_audio: bool = get_setting_from_store(app, StoreKey::AutoMuteAudio, false);
+    if let Ok(entries) = history_storage.get_all(Some(1)) {
+        if let Some(entry) = entries.first() {
+            if let Err(e) = commands::text::type_text_blocking(&entry.text) {
+                log::error!("Failed to paste last transcription: {e}");
+            }
+        } else {
+            log::info!("PasteLast: no history entries available");
+        }
+    }
+}
 
-    // Get shortcut string for comparison (normalized to handle "ctrl" vs "control" differences)
+/// Map a Tauri shortcut event to our internal `ShortcutEvent` type.
+/// Returns None if the shortcut doesn't match any configured hotkey.
+#[cfg(desktop)]
+fn map_to_shortcut_event(
+    app: &AppHandle,
+    shortcut: &Shortcut,
+    event: TauriShortcutEvent,
+) -> Option<ShortcutEvent> {
     let shortcut_str = normalize_shortcut_string(&shortcut.to_string());
 
-    // Get configured shortcut strings from store (normalized), with validation fallback
-    let toggle_hotkey: HotkeyConfig =
-        get_setting_from_store(app, StoreKey::ToggleHotkey, HotkeyConfig::default_toggle());
-    let hold_hotkey: HotkeyConfig =
-        get_setting_from_store(app, StoreKey::HoldHotkey, HotkeyConfig::default_hold());
-    let paste_last_hotkey: HotkeyConfig = get_setting_from_store(
-        app,
-        StoreKey::PasteLastHotkey,
-        HotkeyConfig::default_paste_last(),
-    );
+    let Some(matched) = match_hotkey(app, &shortcut_str) else {
+        log::warn!("Unknown shortcut: {shortcut_str}");
+        return None;
+    };
 
-    // Validate hotkeys - if they can't be parsed as shortcuts, use defaults
-    let toggle_shortcut_str = normalize_shortcut_string(&toggle_hotkey.to_shortcut().map_or_else(
-        |_| HotkeyConfig::default_toggle().to_shortcut_string(),
-        |_| toggle_hotkey.to_shortcut_string(),
-    ));
-    let hold_shortcut_str = normalize_shortcut_string(&hold_hotkey.to_shortcut().map_or_else(
-        |_| HotkeyConfig::default_hold().to_shortcut_string(),
-        |_| hold_hotkey.to_shortcut_string(),
-    ));
-    let paste_last_shortcut_str =
-        normalize_shortcut_string(&paste_last_hotkey.to_shortcut().map_or_else(
-            |_| HotkeyConfig::default_paste_last().to_shortcut_string(),
-            |_| paste_last_hotkey.to_shortcut_string(),
-        ));
+    Some(match (matched, event.state) {
+        (HotkeyType::Toggle, TauriShortcutState::Pressed) => ShortcutEvent::TogglePressed,
+        (HotkeyType::Toggle, TauriShortcutState::Released) => ShortcutEvent::ToggleReleased,
+        (HotkeyType::Hold, TauriShortcutState::Pressed) => ShortcutEvent::HoldPressed,
+        (HotkeyType::Hold, TauriShortcutState::Released) => ShortcutEvent::HoldReleased,
+        (HotkeyType::PasteLast, TauriShortcutState::Pressed) => ShortcutEvent::PastePressed,
+        (HotkeyType::PasteLast, TauriShortcutState::Released) => ShortcutEvent::PasteReleased,
+    })
+}
 
-    // Get audio mute manager if available
+/// Handle a shortcut event using a state machine.
+///
+/// This function implements clean state transitions based on the current state
+/// and the incoming event. Invalid states are unrepresentable by design.
+#[cfg(desktop)]
+pub fn handle_shortcut_event(app: &AppHandle, shortcut: &Shortcut, event: TauriShortcutEvent) {
+    // Map the Tauri event to our internal event type
+    let Some(shortcut_event) = map_to_shortcut_event(app, shortcut, event) else {
+        return;
+    };
+
+    // Get application state and settings
+    let state = app.state::<AppState>();
+    let sound_enabled: bool = get_setting_from_store(app, StoreKey::SoundEnabled, true);
+    let auto_mute_audio: bool = get_setting_from_store(app, StoreKey::AutoMuteAudio, false);
     let audio_mute_manager = app.try_state::<AudioMuteManager>();
 
-    // Compare normalized strings directly
-    let is_toggle = shortcut_str == toggle_shortcut_str;
-    let is_hold = shortcut_str == hold_shortcut_str;
-    let is_paste_last = shortcut_str == paste_last_shortcut_str;
+    // Lock the state for the duration of the transition
+    let mut current_state = state.shortcut_state.lock().unwrap();
 
-    if is_toggle {
-        // Toggle mode: action happens on key release (debounced)
-        match event.state {
-            ShortcutState::Pressed => {
-                state.toggle_key_held.swap(true, Ordering::SeqCst);
-                // Emit prepare event to start mic acquisition early (before key release)
-                // This allows the frontend to pre-warm the microphone while user holds the key
-                if !state.is_recording.load(Ordering::SeqCst) {
-                    let _ = app.emit(EventName::PrepareRecording.as_str(), ());
-                }
-            }
-            ShortcutState::Released => {
-                if state.toggle_key_held.swap(false, Ordering::SeqCst) {
-                    if state.is_recording.load(Ordering::SeqCst) {
-                        stop_recording(
-                            app,
-                            &state,
-                            sound_enabled,
-                            audio_mute_manager.as_ref(),
-                            auto_mute_audio,
-                            "Toggle",
-                        );
-                    } else {
-                        start_recording(
-                            app,
-                            &state,
-                            sound_enabled,
-                            audio_mute_manager.as_ref(),
-                            auto_mute_audio,
-                            "Toggle",
-                        );
-                    }
-                }
-            }
+    // State machine: match on (current_state, event) to determine next state and side effects
+    *current_state = match (&*current_state, shortcut_event) {
+        // === Toggle mode transitions ===
+        // Idle -> PreparingToggle: User pressed toggle key, prepare mic
+        (ShortcutState::Idle, ShortcutEvent::TogglePressed) => {
+            let _ = app.emit(EventName::PrepareRecording.as_str(), ());
+            ShortcutState::PreparingToggle
         }
-    } else if is_hold {
-        // Hold-to-Record: start on press, stop on release
-        match event.state {
-            ShortcutState::Pressed => {
-                if !state.ptt_key_held.swap(true, Ordering::SeqCst) {
-                    start_recording(
-                        app,
-                        &state,
-                        sound_enabled,
-                        audio_mute_manager.as_ref(),
-                        auto_mute_audio,
-                        "Hold",
-                    );
-                }
-            }
-            ShortcutState::Released => {
-                if state.ptt_key_held.swap(false, Ordering::SeqCst) {
-                    stop_recording(
-                        app,
-                        &state,
-                        sound_enabled,
-                        audio_mute_manager.as_ref(),
-                        auto_mute_audio,
-                        "Hold",
-                    );
-                }
-            }
+        // PreparingToggle -> RecordingToggle: User released toggle key, start recording
+        (ShortcutState::PreparingToggle, ShortcutEvent::ToggleReleased) => {
+            start_recording(
+                app,
+                sound_enabled,
+                audio_mute_manager.as_deref(),
+                auto_mute_audio,
+                "Toggle",
+            );
+            ShortcutState::RecordingToggle
         }
-    } else if is_paste_last {
-        // Paste last transcription: hold-to-paste (paste happens on release)
-        match event.state {
-            ShortcutState::Pressed => {
-                // Mark key as held (ignore OS key repeat)
-                state.paste_key_held.swap(true, Ordering::SeqCst);
-            }
-            ShortcutState::Released => {
-                if state.paste_key_held.swap(false, Ordering::SeqCst) {
-                    // Key released - do the paste
-                    log::info!("PasteLast: pasting last transcription");
-                    let history_storage = app.state::<HistoryStorage>();
+        // RecordingToggle -> RecordingToggle: User pressed toggle key (waiting for release to stop)
+        (ShortcutState::RecordingToggle, ShortcutEvent::TogglePressed) => {
+            ShortcutState::RecordingToggle
+        }
+        // RecordingToggle -> Idle: User released toggle key, stop recording
+        (ShortcutState::RecordingToggle, ShortcutEvent::ToggleReleased) => {
+            stop_recording(
+                app,
+                sound_enabled,
+                audio_mute_manager.as_deref(),
+                auto_mute_audio,
+                "Toggle",
+            );
+            ShortcutState::Idle
+        }
 
-                    if let Ok(entries) = history_storage.get_all(Some(1)) {
-                        if let Some(entry) = entries.first() {
-                            if let Err(e) = commands::text::type_text_blocking(&entry.text) {
-                                log::error!("Failed to paste last transcription: {e}");
-                            }
-                        } else {
-                            log::info!("PasteLast: no history entries available");
-                        }
-                    }
-                }
-            }
+        // === Hold mode transitions ===
+        // Idle -> RecordingHold: User pressed hold key, start recording immediately
+        (ShortcutState::Idle, ShortcutEvent::HoldPressed) => {
+            start_recording(
+                app,
+                sound_enabled,
+                audio_mute_manager.as_deref(),
+                auto_mute_audio,
+                "Hold",
+            );
+            ShortcutState::RecordingHold
         }
-    } else {
-        log::warn!("Unknown shortcut: {shortcut_str}");
-    }
+        // RecordingHold -> Idle: User released hold key, stop recording
+        (ShortcutState::RecordingHold, ShortcutEvent::HoldReleased) => {
+            stop_recording(
+                app,
+                sound_enabled,
+                audio_mute_manager.as_deref(),
+                auto_mute_audio,
+                "Hold",
+            );
+            ShortcutState::Idle
+        }
+        // RecordingHold -> RecordingHold: Ignore OS key repeat
+        (ShortcutState::RecordingHold, ShortcutEvent::HoldPressed) => ShortcutState::RecordingHold,
+
+        // === Paste mode transitions ===
+        // Idle/PastePending -> PastePending: User pressed paste key (or OS key repeat)
+        (ShortcutState::Idle | ShortcutState::PastePending, ShortcutEvent::PastePressed) => {
+            ShortcutState::PastePending
+        }
+        // PastePending -> Idle: User released paste key, perform paste
+        (ShortcutState::PastePending, ShortcutEvent::PasteReleased) => {
+            paste_last_transcription(app);
+            ShortcutState::Idle
+        }
+
+        // === PreparingToggle key repeat handling ===
+        // PreparingToggle -> PreparingToggle: Ignore OS key repeat
+        (ShortcutState::PreparingToggle, ShortcutEvent::TogglePressed) => {
+            ShortcutState::PreparingToggle
+        }
+
+        // === All other transitions: stay in current state ===
+        // This handles events that don't make sense in the current state
+        // (e.g., HoldPressed while RecordingToggle - modes are independent)
+        (current, event) => {
+            log::trace!("Ignoring event {event:?} in state {current:?}");
+            *current
+        }
+    };
 }
 
 /// Check if audio mute is supported on this platform
@@ -625,7 +686,7 @@ pub(crate) fn do_register_shortcuts(app: &AppHandle) -> state::ShortcutRegistrat
 
         let shortcut = hotkey.to_shortcut_or_default(default_fn);
         match shortcut_manager.on_shortcut(shortcut, |app_handle, shortcut, event| {
-            handle_shortcut_event(app_handle, shortcut, &event);
+            handle_shortcut_event(app_handle, shortcut, event);
         }) {
             Ok(()) => {
                 *registered = true;

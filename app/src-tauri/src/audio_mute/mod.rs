@@ -4,7 +4,7 @@
 //! making it easy to swap implementations or migrate to a cross-platform library.
 
 use std::fmt;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 
 // Platform-specific implementations
 #[cfg(target_os = "macos")]
@@ -86,16 +86,29 @@ pub fn create_controller() -> Result<Box<dyn SystemAudioControl>, AudioControlEr
     }
 }
 
+/// State machine for audio mute management.
+///
+/// This enum represents all valid states for the mute manager,
+/// preventing invalid combinations of the previous boolean flags.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MuteState {
+    /// We haven't muted system audio
+    #[default]
+    NotMuting,
+    /// We muted system audio (it was unmuted before)
+    MutedByUs,
+    /// We "muted" but audio was already muted by user
+    WasAlreadyMuted,
+}
+
 /// Manages muting/unmuting system audio during recording.
 ///
-/// Tracks whether audio was muted before we started, so we can restore
-/// the correct state after recording ends.
+/// Uses a state machine to track mute state, ensuring we only unmute
+/// audio that we muted ourselves.
 pub struct AudioMuteManager {
     controller: Box<dyn SystemAudioControl>,
-    /// Was audio already muted before we started muting?
-    was_muted_before: AtomicBool,
-    /// Are we currently in a muted state (that we caused)?
-    is_currently_muting: AtomicBool,
+    /// Current mute state (replaces two atomic booleans)
+    state: Mutex<MuteState>,
 }
 
 impl AudioMuteManager {
@@ -106,8 +119,7 @@ impl AudioMuteManager {
         match create_controller() {
             Ok(controller) => Some(Self {
                 controller,
-                was_muted_before: AtomicBool::new(false),
-                is_currently_muting: AtomicBool::new(false),
+                state: Mutex::new(MuteState::NotMuting),
             }),
             Err(e) => {
                 log::warn!("Audio mute not available: {e}");
@@ -121,21 +133,22 @@ impl AudioMuteManager {
     /// Saves the current mute state so it can be restored later.
     /// If already muting, this is a no-op.
     pub fn mute(&self) -> Result<(), AudioControlError> {
-        // Check if we're already muting
-        if self.is_currently_muting.swap(true, Ordering::SeqCst) {
-            return Ok(()); // Already muting, nothing to do
+        let mut state = self.state.lock().unwrap();
+
+        // Already in a muting state - nothing to do
+        if *state != MuteState::NotMuting {
+            return Ok(());
         }
 
-        // Check current mute state and save it
+        // Check current mute state and transition accordingly
         let was_muted = self.controller.is_muted().unwrap_or(false);
-        self.was_muted_before.store(was_muted, Ordering::SeqCst);
-
-        // Only mute if not already muted
         if was_muted {
             log::info!("System audio already muted, skipping");
+            *state = MuteState::WasAlreadyMuted;
         } else {
             self.controller.set_muted(true)?;
             log::info!("System audio muted for recording");
+            *state = MuteState::MutedByUs;
         }
 
         Ok(())
@@ -146,27 +159,36 @@ impl AudioMuteManager {
     /// Only unmutes if we were the ones who muted it.
     /// If not currently muting, this is a no-op.
     pub fn unmute(&self) -> Result<(), AudioControlError> {
-        // Check if we're currently muting
-        if !self.is_currently_muting.swap(false, Ordering::SeqCst) {
-            return Ok(()); // Not muting, nothing to do
-        }
+        let mut state = self.state.lock().unwrap();
 
-        // Only unmute if it wasn't already muted before we started
-        if self.was_muted_before.load(Ordering::SeqCst) {
-            log::info!("System audio was already muted, leaving muted");
-        } else {
-            self.controller.set_muted(false)?;
-            log::info!("System audio unmuted after recording");
+        match *state {
+            MuteState::NotMuting => {
+                // Not muting, nothing to do
+                Ok(())
+            }
+            MuteState::MutedByUs => {
+                // We muted it, so unmute
+                self.controller.set_muted(false)?;
+                log::info!("System audio unmuted after recording");
+                *state = MuteState::NotMuting;
+                Ok(())
+            }
+            MuteState::WasAlreadyMuted => {
+                // Audio was already muted by user, don't unmute
+                log::info!("System audio was already muted, leaving muted");
+                *state = MuteState::NotMuting;
+                Ok(())
+            }
         }
-
-        Ok(())
     }
 }
 
 impl Drop for AudioMuteManager {
     fn drop(&mut self) {
         // Try to unmute on drop (app exit/crash)
-        if self.is_currently_muting.load(Ordering::SeqCst) {
+        let state = self.state.lock().unwrap();
+        if *state == MuteState::MutedByUs {
+            drop(state); // Release lock before calling unmute
             let _ = self.unmute();
         }
     }
