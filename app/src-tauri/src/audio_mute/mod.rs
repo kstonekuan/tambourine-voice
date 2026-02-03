@@ -86,35 +86,21 @@ pub fn create_controller() -> Result<Box<dyn SystemAudioControl>, AudioControlEr
     }
 }
 
-/// State machine for audio mute management.
-///
-/// This enum represents all valid states for the mute manager,
-/// preventing invalid combinations of the previous boolean flags.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MuteState {
-    /// We haven't muted system audio
     #[default]
     NotMuting,
-    /// We muted system audio (it was unmuted before)
     MutedByUs,
-    /// We "muted" but audio was already muted by user
-    WasAlreadyMuted,
+    AudioWasAlreadyMutedByUser,
 }
 
 /// Manages muting/unmuting system audio during recording.
-///
-/// Uses a state machine to track mute state, ensuring we only unmute
-/// audio that we muted ourselves.
 pub struct AudioMuteManager {
     controller: Box<dyn SystemAudioControl>,
-    /// Current mute state (replaces two atomic booleans)
     state: Mutex<MuteState>,
 }
 
 impl AudioMuteManager {
-    /// Create a new `AudioMuteManager`.
-    ///
-    /// Returns None if audio control is not available on this platform.
     pub fn new() -> Option<Self> {
         match create_controller() {
             Ok(controller) => Some(Self {
@@ -128,23 +114,17 @@ impl AudioMuteManager {
         }
     }
 
-    /// Mute system audio for recording.
-    ///
-    /// Saves the current mute state so it can be restored later.
-    /// If already muting, this is a no-op.
     pub fn mute(&self) -> Result<(), AudioControlError> {
         let mut state = self.state.lock().unwrap();
 
-        // Already in a muting state - nothing to do
         if *state != MuteState::NotMuting {
             return Ok(());
         }
 
-        // Check current mute state and transition accordingly
-        let was_muted = self.controller.is_muted().unwrap_or(false);
-        if was_muted {
+        let audio_is_already_muted = self.controller.is_muted().unwrap_or(false);
+        if audio_is_already_muted {
             log::info!("System audio already muted, skipping");
-            *state = MuteState::WasAlreadyMuted;
+            *state = MuteState::AudioWasAlreadyMutedByUser;
         } else {
             self.controller.set_muted(true)?;
             log::info!("System audio muted for recording");
@@ -154,27 +134,18 @@ impl AudioMuteManager {
         Ok(())
     }
 
-    /// Unmute system audio after recording.
-    ///
-    /// Only unmutes if we were the ones who muted it.
-    /// If not currently muting, this is a no-op.
     pub fn unmute(&self) -> Result<(), AudioControlError> {
         let mut state = self.state.lock().unwrap();
 
         match *state {
-            MuteState::NotMuting => {
-                // Not muting, nothing to do
-                Ok(())
-            }
+            MuteState::NotMuting => Ok(()),
             MuteState::MutedByUs => {
-                // We muted it, so unmute
                 self.controller.set_muted(false)?;
                 log::info!("System audio unmuted after recording");
                 *state = MuteState::NotMuting;
                 Ok(())
             }
-            MuteState::WasAlreadyMuted => {
-                // Audio was already muted by user, don't unmute
+            MuteState::AudioWasAlreadyMutedByUser => {
                 log::info!("System audio was already muted, leaving muted");
                 *state = MuteState::NotMuting;
                 Ok(())

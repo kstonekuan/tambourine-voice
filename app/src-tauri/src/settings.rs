@@ -198,7 +198,6 @@ pub struct PromptSection {
     pub prompt_mode: PromptMode,
 }
 
-/// Type of prompt section
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PromptSectionType {
     Main,
@@ -207,10 +206,9 @@ pub enum PromptSectionType {
 }
 
 impl PromptSectionType {
-    /// All available section types
     pub const ALL: [Self; 3] = [Self::Main, Self::Advanced, Self::Dictionary];
 
-    /// Returns the string representation used in exports/imports
+    /// String representation used in file exports/imports
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Main => "main",
@@ -261,7 +259,6 @@ impl Default for CleanupPromptSections {
 }
 
 impl CleanupPromptSections {
-    /// Get a section by type
     pub fn get(&self, section_type: PromptSectionType) -> &PromptSection {
         match section_type {
             PromptSectionType::Main => &self.main,
@@ -270,7 +267,6 @@ impl CleanupPromptSections {
         }
     }
 
-    /// Set a section by type
     pub fn set(&mut self, section_type: PromptSectionType, section: PromptSection) {
         match section_type {
             PromptSectionType::Main => self.main = section,

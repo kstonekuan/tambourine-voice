@@ -259,16 +259,12 @@ pub fn handle_shortcut_event(app: &AppHandle, shortcut: &Shortcut, event: TauriS
     // Lock the state for the duration of the transition
     let mut current_state = state.shortcut_state.lock().unwrap();
 
-    // State machine: match on (current_state, event) to determine next state and side effects
     *current_state = match (&*current_state, shortcut_event) {
-        // === Toggle mode transitions ===
-        // Idle -> PreparingToggle: User pressed toggle key, prepare mic
         (ShortcutState::Idle, ShortcutEvent::TogglePressed) => {
             let _ = app.emit(EventName::PrepareRecording.as_str(), ());
-            ShortcutState::PreparingToggle
+            ShortcutState::PreparingToRecordViaToggle
         }
-        // PreparingToggle -> RecordingToggle: User released toggle key, start recording
-        (ShortcutState::PreparingToggle, ShortcutEvent::ToggleReleased) => {
+        (ShortcutState::PreparingToRecordViaToggle, ShortcutEvent::ToggleReleased) => {
             start_recording(
                 app,
                 sound_enabled,
@@ -276,14 +272,12 @@ pub fn handle_shortcut_event(app: &AppHandle, shortcut: &Shortcut, event: TauriS
                 auto_mute_audio,
                 "Toggle",
             );
-            ShortcutState::RecordingToggle
+            ShortcutState::RecordingViaToggle
         }
-        // RecordingToggle -> RecordingToggle: User pressed toggle key (waiting for release to stop)
-        (ShortcutState::RecordingToggle, ShortcutEvent::TogglePressed) => {
-            ShortcutState::RecordingToggle
+        (ShortcutState::RecordingViaToggle, ShortcutEvent::TogglePressed) => {
+            ShortcutState::RecordingViaToggle
         }
-        // RecordingToggle -> Idle: User released toggle key, stop recording
-        (ShortcutState::RecordingToggle, ShortcutEvent::ToggleReleased) => {
+        (ShortcutState::RecordingViaToggle, ShortcutEvent::ToggleReleased) => {
             stop_recording(
                 app,
                 sound_enabled,
@@ -293,9 +287,6 @@ pub fn handle_shortcut_event(app: &AppHandle, shortcut: &Shortcut, event: TauriS
             );
             ShortcutState::Idle
         }
-
-        // === Hold mode transitions ===
-        // Idle -> RecordingHold: User pressed hold key, start recording immediately
         (ShortcutState::Idle, ShortcutEvent::HoldPressed) => {
             start_recording(
                 app,
@@ -304,10 +295,9 @@ pub fn handle_shortcut_event(app: &AppHandle, shortcut: &Shortcut, event: TauriS
                 auto_mute_audio,
                 "Hold",
             );
-            ShortcutState::RecordingHold
+            ShortcutState::RecordingViaHold
         }
-        // RecordingHold -> Idle: User released hold key, stop recording
-        (ShortcutState::RecordingHold, ShortcutEvent::HoldReleased) => {
+        (ShortcutState::RecordingViaHold, ShortcutEvent::HoldReleased) => {
             stop_recording(
                 app,
                 sound_enabled,
@@ -317,29 +307,20 @@ pub fn handle_shortcut_event(app: &AppHandle, shortcut: &Shortcut, event: TauriS
             );
             ShortcutState::Idle
         }
-        // RecordingHold -> RecordingHold: Ignore OS key repeat
-        (ShortcutState::RecordingHold, ShortcutEvent::HoldPressed) => ShortcutState::RecordingHold,
-
-        // === Paste mode transitions ===
-        // Idle/PastePending -> PastePending: User pressed paste key (or OS key repeat)
-        (ShortcutState::Idle | ShortcutState::PastePending, ShortcutEvent::PastePressed) => {
-            ShortcutState::PastePending
+        (ShortcutState::RecordingViaHold, ShortcutEvent::HoldPressed) => {
+            ShortcutState::RecordingViaHold
         }
-        // PastePending -> Idle: User released paste key, perform paste
-        (ShortcutState::PastePending, ShortcutEvent::PasteReleased) => {
+        (
+            ShortcutState::Idle | ShortcutState::WaitingForPasteKeyRelease,
+            ShortcutEvent::PastePressed,
+        ) => ShortcutState::WaitingForPasteKeyRelease,
+        (ShortcutState::WaitingForPasteKeyRelease, ShortcutEvent::PasteReleased) => {
             paste_last_transcription(app);
             ShortcutState::Idle
         }
-
-        // === PreparingToggle key repeat handling ===
-        // PreparingToggle -> PreparingToggle: Ignore OS key repeat
-        (ShortcutState::PreparingToggle, ShortcutEvent::TogglePressed) => {
-            ShortcutState::PreparingToggle
+        (ShortcutState::PreparingToRecordViaToggle, ShortcutEvent::TogglePressed) => {
+            ShortcutState::PreparingToRecordViaToggle
         }
-
-        // === All other transitions: stay in current state ===
-        // This handles events that don't make sense in the current state
-        // (e.g., HoldPressed while RecordingToggle - modes are independent)
         (current, event) => {
             log::trace!("Ignoring event {event:?} in state {current:?}");
             *current
