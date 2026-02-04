@@ -49,7 +49,7 @@ const KnownServerMessageSchema = z.discriminatedUnion("type", [
 		type: z.literal("recording-complete"),
 		hasContent: z.boolean().optional(),
 	}),
-	// Raw transcription (LLM bypassed) - sent when skip_llm is true or auto-skip threshold triggered
+	// Raw transcription (LLM bypassed) - sent when LLM formatting is disabled
 	z.object({
 		type: z.literal("raw-transcription"),
 		text: z.string(),
@@ -364,19 +364,11 @@ function RecordingControl() {
 				}
 				send({ type: "START_RECORDING" });
 
-				// Determine skip_llm flag based on LLM formatting setting
-				// - enabled (true): use LLM formatting (skip_llm: false)
-				// - disabled (false): skip LLM, return raw transcription (skip_llm: true)
-				const skipLlm = settings?.llm_formatting_enabled === false;
-
 				// Signal server to start turn management
-				// This is required for server-side buffer management and turn detection
+				// LLM formatting is now controlled globally via the config API
 				// Use safe send to detect communication failures and trigger reconnection
-				safeSendClientMessage(
-					client,
-					"start-recording",
-					{ skip_llm: skipLlm },
-					(error) => send({ type: "COMMUNICATION_ERROR", error }),
+				safeSendClientMessage(client, "start-recording", {}, (error) =>
+					send({ type: "COMMUNICATION_ERROR", error }),
 				);
 			}
 		} catch (error) {
@@ -387,7 +379,6 @@ function RecordingControl() {
 	}, [
 		client,
 		settings?.selected_mic_id,
-		settings?.llm_formatting_enabled,
 		isNativeAudioReady,
 		nativeAudioTrack,
 		startNativeCapture,

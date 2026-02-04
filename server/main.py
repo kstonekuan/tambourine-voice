@@ -48,6 +48,7 @@ from config.settings import Settings
 from processors.client_manager import ClientConnectionManager
 from processors.configuration import ConfigurationHandler
 from processors.context_manager import DictationContextManager
+from processors.llm_gate import LLMGateFilter
 from processors.turn_controller import TurnController
 from protocol.messages import (
     SetLLMProviderMessage,
@@ -170,6 +171,7 @@ async def run_pipeline(
     llm_services: dict[LLMProviderId, LLMService],
     context_manager: DictationContextManager,
     turn_controller: TurnController,
+    llm_gate: LLMGateFilter,
 ) -> None:
     """Run the Pipecat pipeline for a single WebRTC connection.
 
@@ -217,6 +219,7 @@ async def run_pipeline(
             transport.input(),
             stt_switcher,
             turn_controller,  # Controls turn boundaries, passes transcriptions through
+            llm_gate,  # Gates frames to aggregator based on LLM formatting setting
             context_manager.user_aggregator(),  # Collects transcriptions, emits LLMContextFrame
             llm_switcher,
             context_manager.assistant_aggregator(),  # Collects LLM responses
@@ -273,7 +276,8 @@ async def run_pipeline(
         # Handle the typed message with exhaustive pattern matching
         match parsed:
             case StartRecordingMessage():
-                await turn_controller.start_recording(skip_llm=parsed.skip_llm)
+                llm_gate.reset_for_recording()
+                await turn_controller.start_recording()
             case StopRecordingMessage():
                 await turn_controller.stop_recording()
             case SetSTTProviderMessage() | SetLLMProviderMessage():
@@ -542,6 +546,7 @@ async def webrtc_offer(
         # DictationContextManager wraps LLMContextAggregatorPair with dictation-specific features
         context_manager = DictationContextManager()
         turn_controller = TurnController()
+        llm_gate = LLMGateFilter()
         # Wire up turn controller to context manager for context reset coordination
         turn_controller.set_context_manager(context_manager)
 
@@ -553,6 +558,7 @@ async def webrtc_offer(
                 llm_services=llm_services,
                 context_manager=context_manager,
                 turn_controller=turn_controller,
+                llm_gate=llm_gate,
             )
         )
         services.active_pipeline_tasks.add(task)
@@ -565,6 +571,7 @@ async def webrtc_offer(
             task,
             context_manager=context_manager,
             turn_controller=turn_controller,
+            llm_gate=llm_gate,
             stt_services=stt_services,
             llm_services=llm_services,
         )

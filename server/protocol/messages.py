@@ -37,27 +37,14 @@ class SettingName(StrEnum):
 # =============================================================================
 
 
-class StartRecordingData(BaseModel):
-    """Data payload for start-recording message."""
-
-    skip_llm: bool = False
-
-
 class StartRecordingMessage(BaseModel):
     """Client request to start recording audio.
 
-    Args:
-        type: Message type discriminator.
-        data: Optional data payload. If not provided, defaults to normal LLM processing.
+    This is a simple marker message with no data payload.
+    LLM formatting is controlled globally via the /api/config/llm-formatting endpoint.
     """
 
     type: Literal["start-recording"]
-    data: StartRecordingData | None = None
-
-    @property
-    def skip_llm(self) -> bool:
-        """Whether to skip LLM formatting and return raw transcription."""
-        return self.data.skip_llm if self.data else False
 
 
 class StopRecordingMessage(BaseModel):
@@ -171,7 +158,7 @@ class RecordingCompleteMessage(BaseModel):
 class RawTranscriptionMessage(BaseModel):
     """Server message containing raw transcription (LLM bypassed).
 
-    Sent when skip_llm is true or when auto-skip threshold is triggered.
+    Sent when LLM formatting is disabled via the config API.
     Contains the unformatted transcription directly from STT.
     """
 

@@ -34,7 +34,7 @@ from pipecat.frames.frames import (
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.processors.frameworks.rtvi import RTVIServerMessageFrame
 
-from protocol.messages import RawTranscriptionMessage, RecordingCompleteMessage
+from protocol.messages import RecordingCompleteMessage
 from utils.logger import logger
 
 if TYPE_CHECKING:
@@ -119,12 +119,6 @@ class TurnController(FrameProcessor):
         # Context manager for reset coordination (set from main.py)
         self._context_manager: DictationContextManager | None = None
 
-        # LLM bypass state
-        self._skip_llm_for_current_recording: bool = False
-        self._accumulated_transcriptions: list[str] = []
-        # LLM formatting enabled (True = format with LLM, False = raw transcription)
-        self._llm_formatting_enabled: bool = True
-
     def set_context_manager(self, context_manager: DictationContextManager) -> None:
         """Set the context manager for context reset coordination.
 
@@ -147,22 +141,6 @@ class TurnController(FrameProcessor):
         """Get the current transcription wait timeout."""
         return self._transcription_wait_timeout
 
-    def set_llm_formatting_enabled(self, enabled: bool) -> None:
-        """Set whether LLM formatting is enabled.
-
-        Args:
-            enabled: True to use LLM formatting, False for raw transcription
-        """
-        self._llm_formatting_enabled = enabled
-        if enabled:
-            logger.info("LLM formatting enabled")
-        else:
-            logger.info("LLM formatting disabled")
-
-    def get_llm_formatting_enabled(self) -> bool:
-        """Get whether LLM formatting is enabled."""
-        return self._llm_formatting_enabled
-
     async def cleanup(self) -> None:
         """Clean up processor resources including internal tasks.
 
@@ -176,8 +154,9 @@ class TurnController(FrameProcessor):
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         """Process frames using state machine pattern.
 
-        Transcriptions are passed through to the downstream aggregator during recording
-        states. This processor only tracks whether content arrived for empty detection.
+        Transcriptions are passed through to the downstream LLMGateFilter during
+        recording states. This processor only tracks whether content arrived for
+        empty detection. The LLMGateFilter handles the actual LLM bypass logic.
         """
         await super().process_frame(frame, direction)
 
@@ -188,7 +167,8 @@ class TurnController(FrameProcessor):
 
             case TranscriptionFrame(text=text) if text:
                 await self._handle_transcription(frame, direction)
-                # Pass transcriptions through to aggregator during recording states
+                # Pass transcriptions through during recording states
+                # LLMGateFilter will decide whether to gate them for the aggregator
                 match self._state:
                     case RecordingState() | WaitingForSTTState() | DrainingState():
                         await self.push_frame(frame, direction)
@@ -201,13 +181,9 @@ class TurnController(FrameProcessor):
     # Public API for RTVI Event Handler
     # =========================================================================
 
-    async def start_recording(self, *, skip_llm: bool = False) -> None:
-        """Start recording - called from RTVI on_client_message handler.
-
-        Args:
-            skip_llm: If True, bypass LLM formatting and return raw transcription.
-        """
-        await self._handle_start_recording(skip_llm=skip_llm)
+    async def start_recording(self) -> None:
+        """Start recording - called from RTVI on_client_message handler."""
+        await self._handle_start_recording()
 
     async def stop_recording(self, direction: FrameDirection = FrameDirection.DOWNSTREAM) -> None:
         """Stop recording - called from RTVI on_client_message handler."""
@@ -217,12 +193,8 @@ class TurnController(FrameProcessor):
     # State Transition Handlers
     # =========================================================================
 
-    async def _handle_start_recording(self, *, skip_llm: bool = False) -> None:
-        """Transition to RecordingState from any state.
-
-        Args:
-            skip_llm: If True, bypass LLM formatting for this recording.
-        """
+    async def _handle_start_recording(self) -> None:
+        """Transition to RecordingState from any state."""
         # Cancel any pending tasks from previous states
         self._cancel_timeout()
         self._cancel_draining()
@@ -231,14 +203,11 @@ class TurnController(FrameProcessor):
         if self._context_manager:
             self._context_manager.reset_context_for_new_recording()
 
-        # Reset LLM bypass state for new recording
-        self._skip_llm_for_current_recording = skip_llm
-        self._accumulated_transcriptions = []
-
-        logger.info(f"Start-recording received, entering RecordingState (skip_llm={skip_llm})")
+        logger.info("Start-recording received, entering RecordingState")
         self._state = RecordingState()
 
-        # Signal user turn start to aggregator (even when skipping LLM, for consistency)
+        # Signal user turn start to downstream processors
+        # LLMGateFilter will decide whether to pass this to the aggregator
         await self.push_frame(UserStartedSpeakingFrame(), FrameDirection.DOWNSTREAM)
 
     async def _handle_stop_recording(self, direction: FrameDirection) -> None:
@@ -299,12 +268,8 @@ class TurnController(FrameProcessor):
     async def _handle_transcription(
         self, frame: TranscriptionFrame, direction: FrameDirection
     ) -> None:
-        """Track that content arrived, accumulate text, and signal draining if needed."""
+        """Track that content arrived and signal draining if needed."""
         _ = direction  # Unused, kept for consistency with other handlers
-
-        # Accumulate transcription text for potential LLM bypass
-        if frame.text:
-            self._accumulated_transcriptions.append(frame.text)
 
         match self._state:
             case RecordingState():
@@ -412,42 +377,12 @@ class TurnController(FrameProcessor):
     # =========================================================================
 
     async def _emit_turn_end(self, direction: FrameDirection) -> None:
-        """Signal end of user turn to the aggregator, or emit raw transcription if bypassing LLM.
+        """Signal end of user turn to downstream processors.
 
-        Checks whether to bypass LLM based on:
-        1. Explicit skip_llm flag set on start_recording()
-        2. LLM formatting enabled setting
-
-        If bypassing, emits RawTranscriptionMessage directly. Otherwise, signals
-        UserStoppedSpeakingFrame to trigger normal LLM processing.
+        Emits UserStoppedSpeakingFrame to signal turn end. The LLMGateFilter
+        decides whether to pass this to the aggregator or emit raw transcription.
         """
-        # Combine accumulated transcriptions
-        combined_text = " ".join(self._accumulated_transcriptions).strip()
-
-        # Determine effective LLM enabled state:
-        # - If skip_llm was set on start_recording(), treat as disabled
-        # - Otherwise, use the configured _llm_formatting_enabled
-        effective_enabled = (
-            False if self._skip_llm_for_current_recording else self._llm_formatting_enabled
-        )
-
-        # Bypass LLM when formatting is disabled
-        bypass_llm = not effective_enabled
-
-        if bypass_llm:
-            logger.info(
-                f"Bypassing LLM, emitting raw transcription: '{combined_text}' "
-                f"(skip_llm={self._skip_llm_for_current_recording}, "
-                f"llm_formatting_enabled={self._llm_formatting_enabled})"
-            )
-            # Emit raw transcription message directly to client
-            frame = RTVIServerMessageFrame(
-                data=RawTranscriptionMessage(text=combined_text).model_dump()
-            )
-            await self.push_frame(frame, direction)
-        else:
-            # Normal flow: signal end of turn to aggregator for LLM processing
-            await self.push_frame(UserStoppedSpeakingFrame(), direction)
+        await self.push_frame(UserStoppedSpeakingFrame(), direction)
 
     async def _emit_empty_response(self, direction: FrameDirection) -> None:
         """Send an empty response message to the client."""

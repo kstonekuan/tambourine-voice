@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
 
     from processors.context_manager import DictationContextManager
+    from processors.llm_gate import LLMGateFilter
     from processors.turn_controller import TurnController
     from services.provider_registry import LLMProviderId, STTProviderId
 
@@ -36,6 +37,7 @@ class ConnectionInfo:
     # Pipeline component references for HTTP API configuration
     context_manager: "DictationContextManager | None" = None
     turn_controller: "TurnController | None" = None
+    llm_gate: "LLMGateFilter | None" = None
     stt_services: "dict[STTProviderId, STTService] | None" = None
     llm_services: "dict[LLMProviderId, LLMService] | None" = None
 
@@ -83,6 +85,7 @@ class ClientConnectionManager:
         *,
         context_manager: "DictationContextManager | None" = None,
         turn_controller: "TurnController | None" = None,
+        llm_gate: "LLMGateFilter | None" = None,
         stt_services: "dict[STTProviderId, STTService] | None" = None,
         llm_services: "dict[LLMProviderId, LLMService] | None" = None,
     ) -> None:
@@ -94,6 +97,7 @@ class ClientConnectionManager:
             pipeline_task: The pipeline task associated with this connection.
             context_manager: The DictationContextManager for this connection.
             turn_controller: The TurnController for this connection.
+            llm_gate: The LLMGateFilter for this connection.
             stt_services: Dictionary mapping STT provider IDs to services.
             llm_services: Dictionary mapping LLM provider IDs to services.
         """
@@ -103,6 +107,7 @@ class ClientConnectionManager:
             pipeline_task=pipeline_task,
             context_manager=context_manager,
             turn_controller=turn_controller,
+            llm_gate=llm_gate,
             stt_services=stt_services,
             llm_services=llm_services,
         )

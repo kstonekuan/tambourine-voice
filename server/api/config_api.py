@@ -303,13 +303,13 @@ async def update_llm_formatting(
             detail={"error": "Client not connected", "code": "CLIENT_NOT_FOUND"},
         )
 
-    if connection.turn_controller is None:
+    if connection.llm_gate is None:
         raise HTTPException(
             status_code=404,
             detail={"error": "Pipeline not ready", "code": "PIPELINE_NOT_READY"},
         )
 
-    connection.turn_controller.set_llm_formatting_enabled(body.enabled)
+    connection.llm_gate.set_llm_formatting_enabled(body.enabled)
 
     logger.info(f"Set LLM formatting enabled={body.enabled} for client: {x_client_uuid}")
     return ConfigSuccessResponse(setting="llm-formatting", value=body.enabled)
