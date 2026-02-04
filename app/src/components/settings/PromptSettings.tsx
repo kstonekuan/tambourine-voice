@@ -213,7 +213,7 @@ export function PromptSettings() {
 							<StatusIndicator status={llmFormattingMutation.status} />
 						</div>
 						<p className="settings-description">
-							Format transcriptions using AI for better accuracy
+							Format transcriptions using AI
 						</p>
 					</div>
 					<Switch
@@ -223,7 +223,7 @@ export function PromptSettings() {
 						}
 						disabled={llmFormattingMutation.isPending}
 						size="md"
-						color="var(--accent-primary)"
+						color="gray"
 					/>
 				</div>
 			</div>
@@ -234,8 +234,8 @@ export function PromptSettings() {
 				</Text>
 			) : (
 				<Text size="xs" c="dimmed" mb="sm">
-					Custom prompts are stored locally. Consider backing up your
-					customizations externally.
+					Custom prompts are stored locally, consider backing up externally. You
+					can export all settings including prompts below.
 				</Text>
 			)}
 			<div
@@ -332,34 +332,13 @@ export function PromptSettings() {
 			<Modal
 				opened={disableWarningOpened}
 				onClose={disableWarningHandlers.close}
-				title="Disable LLM Formatting?"
+				title="Are you sure?"
 				centered
 				size="md"
 			>
 				<Text size="sm" mb="md">
-					Disabling LLM formatting will significantly reduce transcription
-					accuracy. You will lose:
-				</Text>
-				<ul style={{ margin: "0 0 16px 16px", padding: 0 }}>
-					<li>
-						<Text size="sm">Intelligent punctuation and capitalization</Text>
-					</li>
-					<li>
-						<Text size="sm">Filler word removal (um, uh, like)</Text>
-					</li>
-					<li>
-						<Text size="sm">Context-aware corrections</Text>
-					</li>
-					<li>
-						<Text size="sm">Custom dictionary word mappings</Text>
-					</li>
-					<li>
-						<Text size="sm">Advanced features like "scratch that"</Text>
-					</li>
-				</ul>
-				<Text size="sm" c="dimmed" mb="lg">
-					Only disable this if you know what you're doing or need raw STT
-					output.
+					Disabling LLM formatting might negatively impact your experience. Only
+					disable this if you know what you're doing or need raw STT output.
 				</Text>
 				<div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
 					<Button variant="default" onClick={disableWarningHandlers.close}>
