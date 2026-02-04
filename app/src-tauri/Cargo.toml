@@ -11,11 +11,11 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 name = "tambourine_voice_lib"
 
 [build-dependencies]
-tauri-build = { version = "2.5.4", features = [] }
+tauri-build = { version = "2.5.5", features = [] }
 
 [dependencies]
 # Tauri core and plugins
-tauri = { version = "2.10.1", features = [
+tauri = { version = "2.10.2", features = [
     "tray-icon",
     "macos-private-api",
     "image-png",
