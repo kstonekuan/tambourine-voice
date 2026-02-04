@@ -273,7 +273,7 @@ async def run_pipeline(
         # Handle the typed message with exhaustive pattern matching
         match parsed:
             case StartRecordingMessage():
-                await turn_controller.start_recording()
+                await turn_controller.start_recording(skip_llm=parsed.skip_llm)
             case StopRecordingMessage():
                 await turn_controller.stop_recording()
             case SetSTTProviderMessage() | SetLLMProviderMessage():

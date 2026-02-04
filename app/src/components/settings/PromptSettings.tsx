@@ -178,14 +178,30 @@ export function PromptSettings() {
 		[localSections, defaultSections, buildSections, saveAllSections],
 	);
 
+	// Check if LLM formatting is disabled
+	const isLLMFormattingDisabled = settings?.llm_formatting_enabled === false;
+
 	return (
 		<div className="settings-section animate-in animate-in-delay-4">
 			<h3 className="settings-section-title">LLM Formatting Prompt</h3>
-			<Text size="xs" c="dimmed" mb="sm">
-				Custom prompts are stored locally. Consider backing up your
-				customizations externally.
-			</Text>
-			<div className="settings-card">
+			{isLLMFormattingDisabled ? (
+				<Text size="xs" c="yellow" mb="sm">
+					LLM formatting is disabled. These prompts are not used when formatting
+					is turned off.
+				</Text>
+			) : (
+				<Text size="xs" c="dimmed" mb="sm">
+					Custom prompts are stored locally. Consider backing up your
+					customizations externally.
+				</Text>
+			)}
+			<div
+				className="settings-card"
+				style={{
+					opacity: isLLMFormattingDisabled ? 0.5 : 1,
+					pointerEvents: isLLMFormattingDisabled ? "none" : "auto",
+				}}
+			>
 				{isLoadingDefaultSections ? (
 					<div
 						style={{

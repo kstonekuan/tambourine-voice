@@ -147,6 +147,7 @@ pub fn get_settings(app: AppHandle) -> Result<AppSettings, String> {
             StoreKey::ServerUrl,
             DEFAULT_SERVER_URL.to_string(),
         ),
+        llm_formatting_enabled: get_setting_from_store(&app, StoreKey::LlmFormattingEnabled, true),
     })
 }
 
@@ -347,6 +348,44 @@ pub async fn update_server_url(app: AppHandle, url: String) -> Result<(), String
 #[cfg(not(desktop))]
 #[tauri::command]
 pub async fn update_server_url(_app: AppHandle, _url: String) -> Result<(), String> {
+    Ok(())
+}
+
+/// Update LLM formatting enabled setting
+#[cfg(desktop)]
+#[tauri::command]
+pub async fn update_llm_formatting_enabled(
+    app: AppHandle,
+    enabled: bool,
+    config_sync: tauri::State<'_, crate::config_sync::ConfigSync>,
+) -> Result<(), String> {
+    // Save locally
+    crate::save_setting_to_store(&app, StoreKey::LlmFormattingEnabled, &enabled)?;
+
+    // Log the change
+    if enabled {
+        log::info!("LLM formatting enabled");
+    } else {
+        log::info!("LLM formatting disabled");
+    }
+
+    // Sync to server
+    if let Err(e) = config_sync
+        .read()
+        .await
+        .sync_llm_formatting_enabled(enabled)
+        .await
+    {
+        log::warn!("Failed to sync LLM formatting to server: {e}");
+        return Err(e);
+    }
+
+    Ok(())
+}
+
+#[cfg(not(desktop))]
+#[tauri::command]
+pub async fn update_llm_formatting_enabled(_app: AppHandle, _enabled: bool) -> Result<(), String> {
     Ok(())
 }
 

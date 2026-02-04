@@ -57,6 +57,22 @@ pub async fn set_server_connected(
         }
     }
 
+    // Sync LLM formatting enabled setting on connect
+    match sync
+        .sync_llm_formatting_enabled(settings.llm_formatting_enabled)
+        .await
+    {
+        Ok(()) => {
+            log::info!(
+                "Synced LLM formatting enabled={} on connect",
+                settings.llm_formatting_enabled
+            );
+        }
+        Err(e) => {
+            log::warn!("Failed to sync LLM formatting on connect: {e}");
+        }
+    }
+
     Ok(())
 }
 

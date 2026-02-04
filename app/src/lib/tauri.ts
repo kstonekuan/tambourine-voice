@@ -393,6 +393,8 @@ export interface AppSettings {
 	auto_mute_audio: boolean;
 	stt_timeout_seconds: number | null;
 	server_url: string;
+	/** LLM formatting enabled (true = format with LLM, false = raw transcription) */
+	llm_formatting_enabled: boolean;
 }
 
 export const DEFAULT_SERVER_URL = "http://127.0.0.1:8765";
@@ -547,6 +549,10 @@ export const tauriAPI = {
 
 	async updateServerUrl(url: string): Promise<void> {
 		return invoke("update_server_url", { url });
+	},
+
+	async updateLLMFormattingEnabled(enabled: boolean): Promise<void> {
+		return invoke("update_llm_formatting_enabled", { enabled });
 	},
 
 	async isAudioMuteSupported(): Promise<boolean> {

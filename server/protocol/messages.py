@@ -37,10 +37,27 @@ class SettingName(StrEnum):
 # =============================================================================
 
 
+class StartRecordingData(BaseModel):
+    """Data payload for start-recording message."""
+
+    skip_llm: bool = False
+
+
 class StartRecordingMessage(BaseModel):
-    """Client request to start recording audio."""
+    """Client request to start recording audio.
+
+    Args:
+        type: Message type discriminator.
+        data: Optional data payload. If not provided, defaults to normal LLM processing.
+    """
 
     type: Literal["start-recording"]
+    data: StartRecordingData | None = None
+
+    @property
+    def skip_llm(self) -> bool:
+        """Whether to skip LLM formatting and return raw transcription."""
+        return self.data.skip_llm if self.data else False
 
 
 class StopRecordingMessage(BaseModel):
@@ -151,6 +168,17 @@ class RecordingCompleteMessage(BaseModel):
     hasContent: bool = False
 
 
+class RawTranscriptionMessage(BaseModel):
+    """Server message containing raw transcription (LLM bypassed).
+
+    Sent when skip_llm is true or when auto-skip threshold is triggered.
+    Contains the unformatted transcription directly from STT.
+    """
+
+    type: Literal["raw-transcription"] = "raw-transcription"
+    text: str
+
+
 class ConfigUpdatedMessage(BaseModel):
     """Server notification that a setting was updated successfully."""
 
@@ -169,6 +197,6 @@ class ConfigErrorMessage(BaseModel):
 
 
 ServerMessage = Annotated[
-    RecordingCompleteMessage | ConfigUpdatedMessage | ConfigErrorMessage,
+    RecordingCompleteMessage | RawTranscriptionMessage | ConfigUpdatedMessage | ConfigErrorMessage,
     Field(discriminator="type"),
 ]

@@ -93,6 +93,17 @@ class STTTimeoutRequest(BaseModel):
     timeout_seconds: float
 
 
+class LLMFormattingRequest(BaseModel):
+    """Request body for LLM formatting configuration update.
+
+    Simple boolean:
+    - {"enabled": true}: Use LLM formatting
+    - {"enabled": false}: Raw transcription (no LLM)
+    """
+
+    enabled: bool
+
+
 class ConfigSuccessResponse(BaseModel):
     """Response for successful configuration update."""
 
@@ -251,6 +262,57 @@ async def update_prompt_sections(
 
     logger.info(f"Updated prompt sections for client: {x_client_uuid}")
     return ConfigSuccessResponse(setting="prompt-sections", value="custom")
+
+
+@config_router.put(
+    "/config/llm-formatting",
+    response_model=ConfigSuccessResponse,
+    responses={
+        404: {"model": ConfigErrorResponse, "description": "Client not connected"},
+    },
+)
+@limiter.limit(RATE_LIMIT_RUNTIME_CONFIG, key_func=get_ip_only)
+async def update_llm_formatting(
+    body: LLMFormattingRequest,
+    request: Request,
+    x_client_uuid: Annotated[str, Header()],
+) -> ConfigSuccessResponse:
+    """Update the LLM formatting configuration for a connected client.
+
+    Simple boolean:
+    - {"enabled": true}: Use LLM formatting
+    - {"enabled": false}: Raw transcription (no LLM)
+
+    Args:
+        body: Request body containing the enabled flag
+        request: FastAPI request object
+        x_client_uuid: Client UUID from X-Client-UUID header
+
+    Returns:
+        Success response with the updated setting
+
+    Raises:
+        HTTPException: 404 if client not connected
+    """
+    client_manager = get_client_manager(request)
+    connection = client_manager.get_connection(x_client_uuid)
+
+    if connection is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "Client not connected", "code": "CLIENT_NOT_FOUND"},
+        )
+
+    if connection.turn_controller is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "Pipeline not ready", "code": "PIPELINE_NOT_READY"},
+        )
+
+    connection.turn_controller.set_llm_formatting_enabled(body.enabled)
+
+    logger.info(f"Set LLM formatting enabled={body.enabled} for client: {x_client_uuid}")
+    return ConfigSuccessResponse(setting="llm-formatting", value=body.enabled)
 
 
 @config_router.put(

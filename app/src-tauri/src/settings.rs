@@ -56,6 +56,8 @@ pub enum StoreKey {
     SttTimeoutSeconds,
     /// Server URL
     ServerUrl,
+    /// LLM formatting enabled (true = format with LLM, false = raw transcription)
+    LlmFormattingEnabled,
 }
 
 impl StoreKey {
@@ -73,6 +75,7 @@ impl StoreKey {
             Self::AutoMuteAudio => "auto_mute_audio",
             Self::SttTimeoutSeconds => "stt_timeout_seconds",
             Self::ServerUrl => "server_url",
+            Self::LlmFormattingEnabled => "llm_formatting_enabled",
         }
     }
 }
@@ -295,6 +298,14 @@ pub struct AppSettings {
     pub auto_mute_audio: bool,
     pub stt_timeout_seconds: Option<f64>,
     pub server_url: String,
+    /// LLM formatting enabled (true = format with LLM, false = raw transcription)
+    #[serde(default = "default_llm_formatting_enabled")]
+    pub llm_formatting_enabled: bool,
+}
+
+/// Default LLM formatting to enabled (true)
+fn default_llm_formatting_enabled() -> bool {
+    true
 }
 
 impl Default for AppSettings {
@@ -311,6 +322,7 @@ impl Default for AppSettings {
             auto_mute_audio: false,
             stt_timeout_seconds: None,
             server_url: DEFAULT_SERVER_URL.to_string(),
+            llm_formatting_enabled: true,
         }
     }
 }

@@ -451,6 +451,23 @@ export function useUpdateServerUrl() {
 	});
 }
 
+// LLM formatting enabled mutation
+export function useUpdateLLMFormattingEnabled() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (enabled: boolean) =>
+			tauriAPI.updateLLMFormattingEnabled(enabled),
+		onSuccess: (_data, enabled) => {
+			queryClient.invalidateQueries({ queryKey: ["settings"] });
+			tauriAPI.emitSettingsChanged();
+			showSettingsSuccess(`LLM formatting ${enabled ? "enabled" : "disabled"}`);
+		},
+		onError: (error) => {
+			showSettingsError(`Failed to update LLM formatting: ${error.message}`);
+		},
+	});
+}
+
 // =============================================================================
 // Provider Mutations with Server Confirmation
 // =============================================================================

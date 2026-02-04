@@ -100,6 +100,31 @@ impl ConfigSyncState {
         log::debug!("Synced STT timeout ({timeout_seconds}) to server");
         Ok(())
     }
+
+    /// Sync LLM formatting enabled setting to server
+    pub async fn sync_llm_formatting_enabled(&self, enabled: bool) -> Result<(), String> {
+        #[derive(Serialize)]
+        struct LlmFormattingBody {
+            enabled: bool,
+        }
+
+        let (Some(url), Some(uuid)) = (&self.server_url, &self.client_uuid) else {
+            return Ok(()); // Not connected, skip silently
+        };
+
+        self.client
+            .put(format!("{url}/api/config/llm-formatting"))
+            .header("X-Client-UUID", uuid)
+            .json(&LlmFormattingBody { enabled })
+            .send()
+            .await
+            .map_err(|e| e.to_string())?
+            .error_for_status()
+            .map_err(|e| e.to_string())?;
+
+        log::debug!("Synced LLM formatting enabled={enabled} to server");
+        Ok(())
+    }
 }
 
 pub type ConfigSync = Arc<RwLock<ConfigSyncState>>;
