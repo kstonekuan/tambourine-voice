@@ -116,6 +116,16 @@ class DictationContextManager:
         )
         logger.debug("Context reset for new recording")
 
+    async def reset_aggregator(self) -> None:
+        """Reset the user aggregator's internal buffer.
+
+        This clears any accumulated transcriptions that haven't been processed.
+        Should be called when starting a new recording to prevent text leakage
+        from previous recordings (especially when LLM was disabled).
+        """
+        await self._aggregator_pair.user().reset()
+        logger.debug("User aggregator buffer reset")
+
     def user_aggregator(self) -> LLMUserAggregator:
         """Get the user aggregator for pipeline placement.
 

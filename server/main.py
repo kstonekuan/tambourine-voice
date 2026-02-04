@@ -277,6 +277,7 @@ async def run_pipeline(
         match parsed:
             case StartRecordingMessage():
                 llm_gate.reset_for_recording()
+                await context_manager.reset_aggregator()
                 await turn_controller.start_recording()
             case StopRecordingMessage():
                 await turn_controller.stop_recording()
