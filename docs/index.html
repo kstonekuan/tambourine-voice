@@ -31,6 +31,31 @@
         href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Instrument+Serif&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
 
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Tambourine",
+        "description": "Open-source AI voice dictation platform that works with any app. Self-hostable with customizable prompts, 10+ STT/LLM providers, or fully local inference with Whisper and Ollama.",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "Windows, macOS",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+        },
+        "license": "https://opensource.org/licenses/AGPL-3.0",
+        "url": "https://kstonekuan.github.io/tambourine-voice/",
+        "downloadUrl": "https://github.com/kstonekuan/tambourine-voice",
+        "author": {
+            "@type": "Person",
+            "name": "kstonekuan",
+            "url": "https://github.com/kstonekuan"
+        }
+    }
+    </script>
+
     <style>
         :root {
             --bg-primary: #000000;
@@ -1036,6 +1061,9 @@
                 <span class="logo-text">Tambourine</span>
             </a>
             <div class="nav-links">
+                <a href="./faq.html" class="nav-link">
+                    FAQ
+                </a>
                 <a href="https://github.com/kstonekuan/tambourine-voice" class="nav-link" target="_blank"
                     rel="noopener">
                     <i data-lucide="github"></i>
@@ -1056,7 +1084,7 @@
                 style="opacity:0.5" />
         </svg>
         <div class="container hero-content">
-            <h1><span>Your Personal Voice Interface for Any App</span></h1>
+            <h1>Your Personal Voice Interface for Any App</h1>
             <p class="hero-subtitle">An open-source platform for AI voice dictation that you can customize and
                 personalize to your exact needs. Choose your models, write your prompts, make it yours.</p>
             <div class="hero-ctas">
@@ -1099,7 +1127,7 @@
             </div>
             <div class="hero-demo">
                 <div class="demo-wrapper">
-                    <img src="./assets/windows_notepad.gif" alt="Tambourine voice dictation demo" loading="lazy">
+                    <img src="./assets/windows_notepad.gif" alt="Demo of Tambourine open source voice dictation: speaking into microphone and text appearing in Windows Notepad" loading="lazy">
                 </div>
             </div>
         </div>

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tambourine vs macOS/Windows Built-in Dictation - AI Voice Dictation Comparison</title>
+    <meta name="description"
+        content="Compare Tambourine with macOS and Windows built-in dictation. Tambourine offers AI formatting that removes filler words, adds punctuation, and supports a personal dictionary.">
+    <meta name="keywords"
+        content="tambourine vs mac dictation, better than windows dictation, ai voice dictation, dictation software comparison, voice typing alternative">
+    <link rel="canonical" href="https://kstonekuan.github.io/tambourine-voice/vs-native-dictation.html">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Tambourine vs Built-in Dictation - AI Voice Comparison">
+    <meta property="og:description"
+        content="Why Tambourine's AI formatting beats raw transcription from macOS and Windows dictation.">
+    <meta property="og:url" content="https://kstonekuan.github.io/tambourine-voice/vs-native-dictation.html">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Tambourine vs Built-in Dictation">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="./assets/icon.png">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Instrument+Serif&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-primary: #000000; --bg-elevated: #0a0a0a; --bg-card: #111111;
+            --border-subtle: #1a1a1a; --border-default: #252525;
+            --text-primary: #ffffff; --text-secondary: #a0a0a0; --text-muted: #5a5a5a;
+            --accent-dim: rgba(255, 255, 255, 0.06); --green: #22c55e;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'DM Sans', -apple-system, sans-serif; background: var(--bg-primary); color: var(--text-primary); line-height: 1.6; }
+        .container { max-width: 900px; margin: 0 auto; padding: 0 24px; }
+
+        nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 20px 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border-subtle); }
+        .nav-inner { max-width: 1200px; margin: 0 auto; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; }
+        .logo { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--text-primary); }
+        .logo svg { width: 32px; height: 32px; }
+        .logo-text { font-family: 'Instrument Serif', serif; font-size: 24px; }
+        .nav-links { display: flex; gap: 8px; }
+        .nav-link { padding: 10px 16px; font-size: 14px; font-weight: 500; color: var(--text-secondary); text-decoration: none; border-radius: 8px; transition: all 0.2s; }
+        .nav-link:hover { color: var(--text-primary); background: var(--accent-dim); }
+        .nav-link.primary { background: var(--text-primary); color: var(--bg-primary); }
+
+        .page-header { padding: 140px 0 60px; text-align: center; }
+        .page-header .badge { display: inline-block; padding: 6px 14px; background: var(--bg-card); border: 1px solid var(--border-default); border-radius: 100px; font-size: 13px; color: var(--text-secondary); margin-bottom: 24px; }
+        .page-header h1 { font-family: 'Instrument Serif', serif; font-size: clamp(32px, 6vw, 48px); font-weight: 400; margin-bottom: 16px; }
+        .page-header p { font-size: 18px; color: var(--text-secondary); max-width: 600px; margin: 0 auto; }
+
+        .summary { padding: 40px 0; }
+        .summary-box { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 16px; padding: 32px; }
+        .summary-box h2 { font-family: 'Instrument Serif', serif; font-size: 24px; font-weight: 400; margin-bottom: 16px; }
+        .summary-box p { color: var(--text-secondary); font-size: 16px; line-height: 1.7; }
+
+        .example-section { padding: 40px 0; }
+        .example-section h2 { font-family: 'Instrument Serif', serif; font-size: 28px; font-weight: 400; margin-bottom: 24px; text-align: center; }
+        .example-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .example-card { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 24px; }
+        .example-card h3 { font-size: 14px; font-weight: 600; color: var(--text-muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .example-card .text { font-size: 16px; line-height: 1.7; color: var(--text-secondary); }
+        .example-card .text .filler { color: var(--text-muted); text-decoration: line-through; }
+        .example-card.tambourine { border-color: var(--green); }
+        .example-card.tambourine h3 { color: var(--green); }
+
+        .comparison { padding: 40px 0; }
+        .comparison h2 { font-family: 'Instrument Serif', serif; font-size: 28px; font-weight: 400; margin-bottom: 24px; text-align: center; }
+        .comparison-table { width: 100%; border-collapse: collapse; background: var(--bg-card); border-radius: 16px; overflow: hidden; border: 1px solid var(--border-subtle); }
+        .comparison-table th, .comparison-table td { padding: 16px 20px; text-align: left; border-bottom: 1px solid var(--border-subtle); }
+        .comparison-table th { background: var(--bg-elevated); font-weight: 600; font-size: 14px; }
+        .comparison-table th:first-child { width: 40%; }
+        .comparison-table td { font-size: 15px; color: var(--text-secondary); }
+        .comparison-table tr:last-child td { border-bottom: none; }
+        .comparison-table .check { color: var(--green); }
+        .comparison-table .cross { color: var(--text-muted); }
+
+        .key-points { padding: 60px 0; border-top: 1px solid var(--border-subtle); }
+        .key-points h2 { font-family: 'Instrument Serif', serif; font-size: 28px; font-weight: 400; margin-bottom: 32px; text-align: center; }
+        .points-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
+        .point-card { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 24px; }
+        .point-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+        .point-card p { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+
+        .cta-section { padding: 80px 0; text-align: center; border-top: 1px solid var(--border-subtle); }
+        .cta-section h2 { font-family: 'Instrument Serif', serif; font-size: 32px; margin-bottom: 16px; }
+        .cta-section p { color: var(--text-secondary); margin-bottom: 24px; }
+        .btn { display: inline-flex; padding: 14px 24px; font-size: 15px; font-weight: 600; text-decoration: none; border-radius: 10px; transition: all 0.25s; }
+        .btn-primary { background: var(--text-primary); color: var(--bg-primary); }
+        .btn-primary:hover { transform: translateY(-2px); }
+        .btn-secondary { background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-default); margin-left: 12px; }
+
+        footer { padding: 40px 0; border-top: 1px solid var(--border-subtle); text-align: center; font-size: 13px; color: var(--text-muted); }
+        footer a { color: var(--text-secondary); text-decoration: none; }
+
+        @media (max-width: 640px) { .nav-links { display: none; } .example-grid { grid-template-columns: 1fr; } .comparison-table th, .comparison-table td { padding: 12px; font-size: 13px; } }
+    </style>
+</head>
+
+<body>
+    <nav>
+        <div class="nav-inner">
+            <a href="./" class="logo">
+                <svg viewBox="0 -24 480 480" fill="currentColor"><path d="M230.986755,289.073059 C210.233383,300.688568 188.942276,310.172607 166.173950,315.793335 C133.176422,323.939240 100.172661,325.088959 67.951645,312.382812 C50.932407,305.671356 37.964565,294.224976 33.314289,275.674530 C29.763798,261.511230 33.032742,247.830490 38.307205,234.694656 C47.399551,212.050507 62.548660,193.439941 78.883392,175.749191 C97.485817,155.602509 118.422501,138.059448 140.444244,121.808708 C146.059555,117.664932 152.161880,114.171448 158.110397,110.492310 C161.970383,108.104927 165.869980,108.171570 168.967560,111.701004 C172.138931,115.314529 171.409409,119.215775 168.403946,122.543785 C163.608093,127.854355 158.624985,132.998657 153.644791,138.139374 C136.579636,155.754547 120.047363,173.855347 107.320084,194.942413 C99.056641,208.633591 91.424454,222.712555 90.768700,239.391159 C90.412613,248.447906 93.288284,253.133423 101.877769,255.835281 C109.899414,258.358521 118.092995,257.799011 126.114601,256.415894 C163.647079,249.944366 195.393204,232.633896 221.525986,204.913666 C238.176849,187.251297 250.275665,166.674591 260.758240,144.978256 C270.314209,125.199829 278.823975,104.825119 291.564819,86.765656 C300.119598,74.639694 309.954010,63.876396 325.404846,60.359566 C344.153076,56.092201 361.531647,62.437016 370.455872,77.058235 C375.790588,85.798492 376.347534,95.420334 374.705963,105.116310 C369.091644,138.277985 354.960724,167.803192 335.695099,195.087708 C316.099670,222.839249 292.088806,246.165329 264.977692,266.499298 C254.160355,274.612579 243.019699,282.162811 230.986755,289.073059z"/><path d="M229.359360,385.380737 C207.744125,404.327789 181.471634,404.126740 161.604126,389.866852 C149.844559,381.426392 142.900467,369.775208 140.639938,355.432861 C139.551575,348.527588 142.139267,344.962921 149.007065,343.893311 C175.695969,339.736816 200.997803,331.379883 224.979813,318.971100 C232.911743,314.866974 237.059967,316.331482 240.869766,324.439514 C250.454269,344.837372 246.030960,368.680237 229.359360,385.380737z"/><path d="M398.960297,106.133690 C401.073456,94.152359 401.022705,82.505424 400.843231,70.849274 C400.705627,61.911732 403.643921,59.621544 412.399597,59.441414 C442.000519,58.832420 470.279358,88.957756 463.002441,122.626236 C459.464996,138.993011 449.978119,151.172562 435.013947,158.908401 C421.931335,165.671555 408.362061,166.683273 394.384613,162.126373 C386.656189,159.606735 385.055573,156.076492 387.975433,148.454056 C393.167175,134.900574 397.366913,121.084885 398.960297,106.133690z"/><path d="M370.138611,237.007446 C384.529114,268.155273 361.368164,304.818115 327.444244,305.392120 C314.198730,305.616211 302.563568,301.673279 292.403534,293.227051 C284.931396,287.015289 284.618622,281.756805 291.956177,275.606018 C311.154694,259.512665 328.957703,242.081131 344.619568,222.480392 C348.986084,217.015671 354.034271,217.027161 359.237213,221.759857 C363.877899,225.981125 367.247498,231.083450 370.138611,237.007446z"/></svg>
+                <span class="logo-text">Tambourine</span>
+            </a>
+            <div class="nav-links">
+                <a href="./" class="nav-link">Home</a>
+                <a href="./faq.html" class="nav-link">FAQ</a>
+                <a href="https://github.com/kstonekuan/tambourine-voice" class="nav-link primary" target="_blank">GitHub</a>
+            </div>
+        </div>
+    </nav>
+
+    <header class="page-header">
+        <div class="container">
+            <span class="badge">Comparison</span>
+            <h1>Tambourine vs Built-in Dictation</h1>
+            <p>Why AI formatting beats raw transcription.</p>
+        </div>
+    </header>
+
+    <section class="summary">
+        <div class="container">
+            <div class="summary-box">
+                <h2>Quick Summary</h2>
+                <p>
+                    <strong>macOS and Windows built-in dictation</strong> transcribes your speech word-for-word, including every "um", "uh", and false start.
+                    <strong>Tambourine</strong> uses AI to clean up your speech: removing filler words, adding proper punctuation,
+                    applying your personal dictionary for technical terms, and producing clean, publication-ready text.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section class="example-section">
+        <div class="container">
+            <h2>See the Difference</h2>
+            <div class="example-grid">
+                <div class="example-card">
+                    <h3>Built-in Dictation</h3>
+                    <p class="text">"so um I think we should uh use the API to like fetch the data and then um parse it"</p>
+                </div>
+                <div class="example-card tambourine">
+                    <h3>Tambourine</h3>
+                    <p class="text">"I think we should use the API to fetch the data and then parse it."</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="comparison">
+        <div class="container">
+            <h2>Feature Comparison</h2>
+            <table class="comparison-table">
+                <thead>
+                    <tr><th>Feature</th><th>Tambourine</th><th>Built-in Dictation</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Removes Filler Words</td><td class="check">Yes (um, uh, like, etc.)</td><td class="cross">No</td></tr>
+                    <tr><td>Auto Punctuation</td><td class="check">AI-powered</td><td class="cross">Basic / voice commands</td></tr>
+                    <tr><td>Personal Dictionary</td><td class="check">Yes (technical terms, names)</td><td class="cross">Limited</td></tr>
+                    <tr><td>Backtrack Corrections</td><td class="check">"actually" / "scratch that"</td><td class="cross">No</td></tr>
+                    <tr><td>Custom Formatting Rules</td><td class="check">Editable prompts</td><td class="cross">No</td></tr>
+                    <tr><td>List Formatting</td><td class="check">Auto-detects lists</td><td class="cross">No</td></tr>
+                    <tr><td>Choose STT Provider</td><td class="check">10+ options</td><td class="cross">System default</td></tr>
+                    <tr><td>Works Offline</td><td class="check">With Whisper + Ollama</td><td class="check">Yes</td></tr>
+                    <tr><td>Open Source</td><td class="check">Yes (AGPL-3.0)</td><td class="cross">No</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="key-points">
+        <div class="container">
+            <h2>Why Choose Tambourine</h2>
+            <div class="points-grid">
+                <div class="point-card">
+                    <h3>Clean Output</h3>
+                    <p>AI removes filler words, false starts, and verbal tics. Get publication-ready text without editing.</p>
+                </div>
+                <div class="point-card">
+                    <h3>Personal Dictionary</h3>
+                    <p>Teach it technical terms, API names, and proper nouns specific to your work.</p>
+                </div>
+                <div class="point-card">
+                    <h3>Customizable Rules</h3>
+                    <p>Edit the formatting prompts to match your writing style and preferences.</p>
+                </div>
+                <div class="point-card">
+                    <h3>Open Source</h3>
+                    <p>Full source code access. Self-host for privacy, or contribute improvements.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>Try Tambourine</h2>
+            <p>Open source and free to self-host.</p>
+            <a href="https://github.com/kstonekuan/tambourine-voice" class="btn btn-primary" target="_blank">View on GitHub</a>
+            <a href="./" class="btn btn-secondary">Back to Home</a>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <p><a href="./">Home</a> · <a href="./faq.html">FAQ</a> · <a href="https://github.com/kstonekuan/tambourine-voice" target="_blank">GitHub</a></p>
+            <p style="margin-top: 12px;">Open source under AGPL-3.0</p>
+        </div>
+    </footer>
+</body>
+
+</html>

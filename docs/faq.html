@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAQ - Tambourine Open Source Voice Dictation</title>
+    <meta name="description"
+        content="Frequently asked questions about Tambourine, the open-source voice dictation platform. Learn about architecture, local inference, customization, and more.">
+    <meta name="keywords"
+        content="tambourine faq, voice dictation questions, open source dictation, whisper ollama, pipecat, self hosted voice">
+    <link rel="canonical" href="https://kstonekuan.github.io/tambourine-voice/faq.html">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="FAQ - Tambourine Open Source Voice Dictation">
+    <meta property="og:description"
+        content="Frequently asked questions about Tambourine, the open-source voice dictation platform.">
+    <meta property="og:url" content="https://kstonekuan.github.io/tambourine-voice/faq.html">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="FAQ - Tambourine Open Source Voice Dictation">
+    <meta name="twitter:description"
+        content="Frequently asked questions about Tambourine, the open-source voice dictation platform.">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="./assets/icon.png">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Instrument+Serif&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+
+    <!-- FAQ Schema -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {
+                "@type": "Question",
+                "name": "What is Tambourine?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Tambourine is an open-source voice dictation platform built on Pipecat. It provides a modular pipeline for speech-to-text with LLM-based formatting, supporting 10+ STT/LLM providers or fully local inference with Whisper and Ollama."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Can I run Tambourine completely offline?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Yes. Use Whisper for local STT and Ollama for local LLM formatting. No API keys or internet required. Set WHISPER_ENABLED=true and OLLAMA_BASE_URL in your .env file."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What is Tambourine's architecture?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Tauri desktop app (Rust + React) connects via WebRTC to a Python server running Pipecat pipelines. The server handles STT → LLM formatting → returns cleaned text. Runtime config via RTVI protocol."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "How do I add a new STT or LLM provider?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Tambourine uses Pipecat's service abstraction. Add any Pipecat-supported provider by implementing the service interface. See the server/ directory for examples with Deepgram, Cartesia, Groq, and more."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "How customizable is the formatting?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Fully customizable. The LLM formatting uses editable prompts stored in settings. Modify filler word removal, punctuation rules, backtracking behavior, or add your own custom logic. Personal dictionary supports technical terms."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What is Tambourine's tech stack?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Desktop: Tauri (Rust) + React + TypeScript. Server: Python + FastAPI + Pipecat. Communication: WebRTC (SmallWebRTC). State: Zustand + XState. Validation: Zod + Pydantic."
+                }
+            }
+        ]
+    }
+    </script>
+
+    <style>
+        :root {
+            --bg-primary: #000000;
+            --bg-elevated: #0a0a0a;
+            --bg-card: #111111;
+            --bg-card-hover: #161616;
+            --border-subtle: #1a1a1a;
+            --border-default: #252525;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --text-muted: #5a5a5a;
+            --accent: #e0e0e0;
+            --accent-dim: rgba(255, 255, 255, 0.06);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Navigation */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 20px 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .nav-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: var(--text-primary);
+        }
+
+        .logo svg {
+            width: 32px;
+            height: 32px;
+        }
+
+        .logo-text {
+            font-family: 'Instrument Serif', serif;
+            font-weight: 400;
+            font-size: 24px;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .nav-link:hover {
+            color: var(--text-primary);
+            background: var(--accent-dim);
+        }
+
+        .nav-link.primary {
+            background: var(--text-primary);
+            color: var(--bg-primary);
+        }
+
+        .nav-link.primary:hover {
+            background: var(--accent);
+        }
+
+        /* Page Header */
+        .page-header {
+            padding: 140px 0 60px;
+            text-align: center;
+        }
+
+        .page-header h1 {
+            font-family: 'Instrument Serif', serif;
+            font-size: clamp(32px, 6vw, 48px);
+            font-weight: 400;
+            margin-bottom: 16px;
+        }
+
+        .page-header p {
+            font-size: 18px;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* FAQ Section */
+        .faq-section {
+            padding: 40px 0 80px;
+        }
+
+        .faq-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+
+        .faq-question {
+            padding: 24px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s ease;
+        }
+
+        .faq-question:hover {
+            background: var(--bg-card-hover);
+        }
+
+        .faq-question h3 {
+            font-family: 'Instrument Serif', serif;
+            font-size: 18px;
+            font-weight: 400;
+            flex: 1;
+            padding-right: 16px;
+        }
+
+        .faq-toggle {
+            width: 24px;
+            height: 24px;
+            color: var(--text-muted);
+            transition: transform 0.2s ease;
+        }
+
+        .faq-item.open .faq-toggle {
+            transform: rotate(45deg);
+        }
+
+        .faq-answer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .faq-item.open .faq-answer {
+            max-height: 500px;
+        }
+
+        .faq-answer-content {
+            padding: 0 24px 24px;
+            color: var(--text-secondary);
+            font-size: 15px;
+            line-height: 1.7;
+        }
+
+        .faq-answer-content code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            background: var(--bg-primary);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        /* Compare Section */
+        .compare-section {
+            padding: 60px 0;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .compare-section h2 {
+            font-family: 'Instrument Serif', serif;
+            font-size: 28px;
+            font-weight: 400;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        .compare-links {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .compare-link {
+            display: block;
+            padding: 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            text-decoration: none;
+            color: var(--text-primary);
+            text-align: center;
+            transition: all 0.2s ease;
+        }
+
+        .compare-link:hover {
+            border-color: var(--border-default);
+            transform: translateY(-2px);
+        }
+
+        .compare-link span {
+            display: block;
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* CTA Section */
+        .cta-section {
+            padding: 80px 0;
+            text-align: center;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .cta-section h2 {
+            font-family: 'Instrument Serif', serif;
+            font-size: 32px;
+            font-weight: 400;
+            margin-bottom: 16px;
+        }
+
+        .cta-section p {
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 24px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 15px;
+            font-weight: 600;
+            text-decoration: none;
+            border-radius: 10px;
+            transition: all 0.25s ease;
+        }
+
+        .btn-primary {
+            background: var(--text-primary);
+            color: var(--bg-primary);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(255, 255, 255, 0.15);
+        }
+
+        /* Footer */
+        footer {
+            padding: 40px 0;
+            border-top: 1px solid var(--border-subtle);
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        footer a {
+            color: var(--text-secondary);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            color: var(--text-primary);
+        }
+
+        @media (max-width: 640px) {
+            .nav-links {
+                display: none;
+            }
+
+            .compare-links {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Navigation -->
+    <nav>
+        <div class="nav-inner">
+            <a href="./" class="logo">
+                <svg viewBox="0 -24 480 480" fill="currentColor">
+                    <path
+                        d="M230.986755,289.073059 C210.233383,300.688568 188.942276,310.172607 166.173950,315.793335 C133.176422,323.939240 100.172661,325.088959 67.951645,312.382812 C50.932407,305.671356 37.964565,294.224976 33.314289,275.674530 C29.763798,261.511230 33.032742,247.830490 38.307205,234.694656 C47.399551,212.050507 62.548660,193.439941 78.883392,175.749191 C97.485817,155.602509 118.422501,138.059448 140.444244,121.808708 C146.059555,117.664932 152.161880,114.171448 158.110397,110.492310 C161.970383,108.104927 165.869980,108.171570 168.967560,111.701004 C172.138931,115.314529 171.409409,119.215775 168.403946,122.543785 C163.608093,127.854355 158.624985,132.998657 153.644791,138.139374 C136.579636,155.754547 120.047363,173.855347 107.320084,194.942413 C99.056641,208.633591 91.424454,222.712555 90.768700,239.391159 C90.412613,248.447906 93.288284,253.133423 101.877769,255.835281 C109.899414,258.358521 118.092995,257.799011 126.114601,256.415894 C163.647079,249.944366 195.393204,232.633896 221.525986,204.913666 C238.176849,187.251297 250.275665,166.674591 260.758240,144.978256 C270.314209,125.199829 278.823975,104.825119 291.564819,86.765656 C300.119598,74.639694 309.954010,63.876396 325.404846,60.359566 C344.153076,56.092201 361.531647,62.437016 370.455872,77.058235 C375.790588,85.798492 376.347534,95.420334 374.705963,105.116310 C369.091644,138.277985 354.960724,167.803192 335.695099,195.087708 C316.099670,222.839249 292.088806,246.165329 264.977692,266.499298 C254.160355,274.612579 243.019699,282.162811 230.986755,289.073059z" />
+                    <path
+                        d="M229.359360,385.380737 C207.744125,404.327789 181.471634,404.126740 161.604126,389.866852 C149.844559,381.426392 142.900467,369.775208 140.639938,355.432861 C139.551575,348.527588 142.139267,344.962921 149.007065,343.893311 C175.695969,339.736816 200.997803,331.379883 224.979813,318.971100 C232.911743,314.866974 237.059967,316.331482 240.869766,324.439514 C250.454269,344.837372 246.030960,368.680237 229.359360,385.380737z" />
+                    <path
+                        d="M398.960297,106.133690 C401.073456,94.152359 401.022705,82.505424 400.843231,70.849274 C400.705627,61.911732 403.643921,59.621544 412.399597,59.441414 C442.000519,58.832420 470.279358,88.957756 463.002441,122.626236 C459.464996,138.993011 449.978119,151.172562 435.013947,158.908401 C421.931335,165.671555 408.362061,166.683273 394.384613,162.126373 C386.656189,159.606735 385.055573,156.076492 387.975433,148.454056 C393.167175,134.900574 397.366913,121.084885 398.960297,106.133690z" />
+                    <path
+                        d="M370.138611,237.007446 C384.529114,268.155273 361.368164,304.818115 327.444244,305.392120 C314.198730,305.616211 302.563568,301.673279 292.403534,293.227051 C284.931396,287.015289 284.618622,281.756805 291.956177,275.606018 C311.154694,259.512665 328.957703,242.081131 344.619568,222.480392 C348.986084,217.015671 354.034271,217.027161 359.237213,221.759857 C363.877899,225.981125 367.247498,231.083450 370.138611,237.007446z" />
+                </svg>
+                <span class="logo-text">Tambourine</span>
+            </a>
+            <div class="nav-links">
+                <a href="./" class="nav-link">Home</a>
+                <a href="https://github.com/kstonekuan/tambourine-voice" class="nav-link" target="_blank"
+                    rel="noopener">GitHub</a>
+                <a href="https://github.com/kstonekuan/tambourine-voice#quick-start" class="nav-link primary"
+                    target="_blank" rel="noopener">Get Started</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Page Header -->
+    <header class="page-header">
+        <div class="container">
+            <h1>Frequently Asked Questions</h1>
+            <p>Technical details about Tambourine's architecture, customization, and capabilities.</p>
+        </div>
+    </header>
+
+    <!-- FAQ Section -->
+    <section class="faq-section">
+        <div class="container">
+            <div class="faq-item open">
+                <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">
+                    <h3>What is Tambourine?</h3>
+                    <svg class="faq-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        Tambourine is an open-source voice dictation platform built on <a
+                            href="https://github.com/pipecat-ai/pipecat" target="_blank">Pipecat</a>. It provides a
+                        modular pipeline for speech-to-text with LLM-based formatting, supporting 10+ STT/LLM providers
+                        or fully local inference with Whisper and Ollama.
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">
+                    <h3>Can I run it completely offline/locally?</h3>
+                    <svg class="faq-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        Yes. Use Whisper for local STT and Ollama for local LLM formatting. No API keys or internet
+                        required. Set <code>WHISPER_ENABLED=true</code> and <code>OLLAMA_BASE_URL</code> in your
+                        <code>.env</code> file.
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">
+                    <h3>What's the architecture?</h3>
+                    <svg class="faq-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        Tauri desktop app (Rust + React) connects via WebRTC to a Python server running Pipecat
+                        pipelines. The server handles STT → LLM formatting → returns cleaned text. Runtime config via
+                        RTVI protocol.
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">
+                    <h3>How do I add a new STT/LLM provider?</h3>
+                    <svg class="faq-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        Tambourine uses Pipecat's service abstraction. Add any <a
+                            href="https://docs.pipecat.ai/server/services/supported-services" target="_blank">Pipecat-supported
+                            provider</a> by implementing the service interface. See <code>server/</code> for examples
+                        with Deepgram, Cartesia, Groq, etc.
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">
+                    <h3>How customizable is the formatting?</h3>
+                    <svg class="faq-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        Fully customizable. The LLM formatting uses editable prompts stored in settings. Modify filler
+                        word removal, punctuation rules, backtracking behavior, or add your own custom logic. Personal
+                        dictionary supports technical terms and proper nouns.
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">
+                    <h3>What's the tech stack?</h3>
+                    <svg class="faq-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <strong>Desktop:</strong> Tauri (Rust) + React + TypeScript<br>
+                        <strong>Server:</strong> Python + FastAPI + Pipecat<br>
+                        <strong>Communication:</strong> WebRTC (SmallWebRTC)<br>
+                        <strong>State:</strong> Zustand + XState<br>
+                        <strong>Validation:</strong> Zod + Pydantic
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Compare Section -->
+    <section class="compare-section">
+        <div class="container">
+            <h2>Compare Tambourine</h2>
+            <div class="compare-links">
+                <a href="./vs-wispr-flow.html" class="compare-link">
+                    vs Wispr Flow
+                    <span>Open source alternative</span>
+                </a>
+                <a href="./vs-superwhisper.html" class="compare-link">
+                    vs Superwhisper
+                    <span>Windows support + open source</span>
+                </a>
+                <a href="./vs-willow.html" class="compare-link">
+                    vs Willow Voice
+                    <span>Self-hostable + customizable</span>
+                </a>
+                <a href="./vs-native-dictation.html" class="compare-link">
+                    vs Native Dictation
+                    <span>AI formatting + personal dictionary</span>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="container">
+            <h2>Ready to try it?</h2>
+            <p>Tambourine is open source and free to self-host.</p>
+            <a href="https://github.com/kstonekuan/tambourine-voice" class="btn btn-primary" target="_blank"
+                rel="noopener">
+                View on GitHub
+            </a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <p>
+                <a href="./">Home</a> · <a href="https://github.com/kstonekuan/tambourine-voice"
+                    target="_blank">GitHub</a> · <a href="https://discord.gg/dUyuXWVJ2a" target="_blank">Discord</a>
+            </p>
+            <p style="margin-top: 12px;">Open source under AGPL-3.0</p>
+        </div>
+    </footer>
+</body>
+
+</html>
