@@ -1,0 +1,63 @@
+name: Welcome First-Time Contributors
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  thank_first_time_contributors:
+    name: Thank first-time contributors
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.pull_request.user.type != 'Bot' &&
+      (
+        github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR' ||
+        github.event.pull_request.author_association == 'FIRST_TIMER'
+      )
+    steps:
+      - name: Comment on pull request
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const thankYouMessage = [
+              `👋 Hi @${context.payload.pull_request.user.login} — thank you so much for your first contribution to Tambourine Voice!`,
+              '',
+              'If you have a minute, we would really appreciate your support:',
+              '- ⭐ Star the repo: https://github.com/kstonekuan/tambourine-voice',
+              '- 💬 Join our Discord: https://discord.gg/dUyuXWVJ2a',
+              '- 📣 Share the project with your network',
+              '',
+              'We are excited to have you here and appreciate your help making the project better! 🙌',
+            ].join('\n');
+
+            const markerText = '<!-- first-time-contributor-welcome -->';
+            const issueNumber = context.issue.number;
+
+            const { data: existingComments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              per_page: 100,
+            });
+
+            const hasExistingWelcomeComment = existingComments.some((comment) =>
+              comment.user?.type === 'Bot' && comment.body?.includes(markerText),
+            );
+
+            if (hasExistingWelcomeComment) {
+              core.info('Welcome comment already exists. Skipping duplicate comment.');
+              return;
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: `${markerText}\n${thankYouMessage}`,
+            });
