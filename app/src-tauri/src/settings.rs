@@ -82,6 +82,10 @@ impl StoreKey {
 
 // ============================================================================
 
+/// Enable boolean field by default (needed for serde)
+fn default_enabled() -> bool {
+    true
+}
 /// Configuration for a hotkey combination
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct HotkeyConfig {
@@ -92,11 +96,6 @@ pub struct HotkeyConfig {
     /// Whether the hotkey is enabled (default: true)
     #[serde(default = "default_enabled")]
     pub enabled: bool,
-}
-
-/// Default value for enabled field (used by serde)
-fn default_enabled() -> bool {
-    true
 }
 
 impl Default for HotkeyConfig {
@@ -299,13 +298,8 @@ pub struct AppSettings {
     pub stt_timeout_seconds: Option<f64>,
     pub server_url: String,
     /// LLM formatting enabled (true = format with LLM, false = raw transcription)
-    #[serde(default = "default_llm_formatting_enabled")]
+    #[serde(default = "default_enabled")]
     pub llm_formatting_enabled: bool,
-}
-
-/// Default LLM formatting to enabled (true)
-fn default_llm_formatting_enabled() -> bool {
-    true
 }
 
 impl Default for AppSettings {
