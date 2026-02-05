@@ -47,3 +47,5 @@ htmlcov/
 .pytype/
 
 **/*.zip
+package-lock.json
+app/package-lock.json
