@@ -157,6 +157,7 @@ export function DataManagementSettings() {
 									size="lg"
 									variant="light"
 									color="gray"
+									aria-label="Export Data"
 								>
 									<Download size={16} />
 								</ActionIcon>
@@ -168,6 +169,7 @@ export function DataManagementSettings() {
 									size="lg"
 									variant="light"
 									color="gray"
+									aria-label="Import Data"
 								>
 									<Upload size={16} />
 								</ActionIcon>
