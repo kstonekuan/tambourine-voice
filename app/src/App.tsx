@@ -232,8 +232,31 @@ function HomeView() {
 }
 
 function SettingsView() {
+	const connectionState = useRecordingStore((s) => s.state);
+	const isRecordingActive =
+		connectionState === "recording" || connectionState === "processing";
+
 	return (
-		<div className="main-content">
+		<div className="main-content" style={{ position: "relative" }}>
+			{isRecordingActive && (
+				<div
+					style={{
+						position: "absolute",
+						inset: 0,
+						zIndex: 10,
+						display: "flex",
+						alignItems: "center",
+						justifyContent: "center",
+						backgroundColor: "rgba(0, 0, 0, 0.6)",
+						backdropFilter: "blur(2px)",
+						borderRadius: 8,
+					}}
+				>
+					<Text c="dimmed" size="sm">
+						Settings are locked while recording
+					</Text>
+				</div>
+			)}
 			<header className="animate-in" style={{ marginBottom: 32 }}>
 				<Title order={1} mb={4}>
 					Settings
