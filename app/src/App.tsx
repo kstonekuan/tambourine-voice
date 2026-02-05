@@ -237,7 +237,15 @@ function SettingsView() {
 		connectionState === "recording" || connectionState === "processing";
 
 	return (
-		<div className="main-content" style={{ position: "relative" }}>
+		<div
+			style={{
+				position: "relative",
+				flex: 1,
+				display: "flex",
+				flexDirection: "column",
+				minWidth: 0,
+			}}
+		>
 			{isRecordingActive && (
 				<div
 					style={{
@@ -249,7 +257,6 @@ function SettingsView() {
 						justifyContent: "center",
 						backgroundColor: "rgba(0, 0, 0, 0.6)",
 						backdropFilter: "blur(2px)",
-						borderRadius: 8,
 					}}
 				>
 					<Text c="dimmed" size="sm">
@@ -257,21 +264,23 @@ function SettingsView() {
 					</Text>
 				</div>
 			)}
-			<header className="animate-in" style={{ marginBottom: 32 }}>
-				<Title order={1} mb={4}>
-					Settings
-				</Title>
-				<Text c="dimmed" size="sm">
-					Configure your preferences
-				</Text>
-			</header>
+			<div className="main-content">
+				<header className="animate-in" style={{ marginBottom: 32 }}>
+					<Title order={1} mb={4}>
+						Settings
+					</Title>
+					<Text c="dimmed" size="sm">
+						Configure your preferences
+					</Text>
+				</header>
 
-			<ProvidersSettings />
-			<AudioSettings />
-			<HotkeySettings />
-			<PromptSettings />
-			<ConnectionSettings />
-			<DataManagementSettings />
+				<ProvidersSettings />
+				<AudioSettings />
+				<HotkeySettings />
+				<PromptSettings />
+				<ConnectionSettings />
+				<DataManagementSettings />
+			</div>
 		</div>
 	);
 }
