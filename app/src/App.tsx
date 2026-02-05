@@ -64,20 +64,17 @@ function ConnectionStatusIndicator() {
 
 	return (
 		<Tooltip label={statusText} position="right" withArrow>
-    <div 
-        className="connection-status"
-        role="status" // aded role="status" so screen readers announce live updates
-        aria-label={statusText}  // added aria-label for screen readers (e.g., "Connected", "Disconnected", "Connecting...")
-    >
-        {isConnecting ? (
-            <Loader size={10} color="gray" />
-        ) : (
-            <span
-                className={`connection-status-dot ${isConnected ? "connected" : "disconnected"}`}
-            />
-        )}
-    </div>
-</Tooltip>
+			{/* biome-ignore lint/a11y/useSemanticElements: status role is semantically correct for dynamic connection status */}
+			<div className="connection-status" role="status" aria-label={statusText}>
+				{isConnecting ? (
+					<Loader size={10} color="gray" />
+				) : (
+					<span
+						className={`connection-status-dot ${isConnected ? "connected" : "disconnected"}`}
+					/>
+				)}
+			</div>
+		</Tooltip>
 	);
 }
 
@@ -95,30 +92,28 @@ function Sidebar({
 					<Logo size={32} />
 				</div>
 			</header>
-
-
 			<nav className="sidebar-nav">
-    <Tooltip label="Home" position="right" withArrow>
-        <NavLink
-            leftSection={<Home size={20} />}
-            active={activeView === "home"}
-            onClick={() => onViewChange("home")}
-            variant="filled"
-            className="sidebar-nav-link"
-            aria-label="Navigate to Home"     // added aria-label to icon-only NavLinks to improve accessibility for screen reader users
-        />
-    </Tooltip>
-    <Tooltip label="Settings" position="right" withArrow>
-        <NavLink
-            leftSection={<Settings size={20} />}
-            active={activeView === "settings"}
-            onClick={() => onViewChange("settings")}
-            variant="filled"
-            className="sidebar-nav-link"
-            aria-label="Navigate to Settings"
-        />
-    </Tooltip>
-</nav>
+				<Tooltip label="Home" position="right" withArrow>
+					<NavLink
+						leftSection={<Home size={20} />}
+						active={activeView === "home"}
+						onClick={() => onViewChange("home")}
+						variant="filled"
+						className="sidebar-nav-link"
+						aria-label="Navigate to Home"
+					/>
+				</Tooltip>
+				<Tooltip label="Settings" position="right" withArrow>
+					<NavLink
+						leftSection={<Settings size={20} />}
+						active={activeView === "settings"}
+						onClick={() => onViewChange("settings")}
+						variant="filled"
+						className="sidebar-nav-link"
+						aria-label="Navigate to Settings"
+					/>
+				</Tooltip>
+			</nav>
 
 			<footer className="sidebar-footer">
 				<ConnectionStatusIndicator />
