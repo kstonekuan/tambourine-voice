@@ -1,10 +1,12 @@
 import type { PipecatClient } from "@pipecat-ai/client-js";
 import { useSelector } from "@xstate/react";
 import { createContext, type ReactNode, useContext, useEffect } from "react";
+import { match } from "ts-pattern";
 import { createActor } from "xstate";
 import { tauriAPI } from "../lib/tauri";
 import {
 	type ConnectionMachineActor,
+	type ConnectionMachineStateValue,
 	connectionMachine,
 } from "../machines/connectionMachine";
 
@@ -74,12 +76,19 @@ export function ConnectionProvider({ children }: ConnectionProviderProps) {
 			const unsubscribeFn = await tauriAPI.onSettingsChanged(async () => {
 				const newServerUrl = await tauriAPI.getServerUrl();
 				const currentState = connectionActor.getSnapshot();
-				const shouldHandleUrlChange =
-					currentState.matches("idle") ||
-					currentState.matches("syncing") ||
-					currentState.matches("recording") ||
-					currentState.matches("processing") ||
-					currentState.matches("retrying");
+				const shouldHandleUrlChange = match(
+					currentState.value as ConnectionMachineStateValue,
+				)
+					.with(
+						"idle",
+						"syncing",
+						"recording",
+						"processing",
+						"retrying",
+						() => true,
+					)
+					.with("disconnected", "initializing", "connecting", () => false)
+					.exhaustive();
 				const serverUrlChanged =
 					newServerUrl && newServerUrl !== currentState.context.serverUrl;
 
@@ -132,7 +141,7 @@ export function useConnectionActor(): ConnectionMachineActor {
  * Hook to get the current connection state value.
  * Automatically re-renders when the state changes.
  */
-export function useConnectionState() {
+export function useConnectionState(): ConnectionMachineStateValue {
 	const actor = useConnectionActor();
 	return useSelector(actor, (state) => state.value);
 }

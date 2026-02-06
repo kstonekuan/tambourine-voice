@@ -8,6 +8,7 @@ import {
 	assign,
 	fromCallback,
 	fromPromise,
+	type StateValueFrom,
 	setup,
 } from "xstate";
 import type { ProviderChangeRequestPayload } from "../lib/events";
@@ -379,6 +380,24 @@ const initialConfigSyncActor = fromPromise<void, { client: PipecatClient }>(
 	},
 );
 
+function assertClient(context: ConnectionContext): PipecatClient {
+	if (!context.client) {
+		throw new Error(
+			"Invariant violation: context.client is null in a state that requires a connected client",
+		);
+	}
+	return context.client;
+}
+
+function assertClientUUID(context: ConnectionContext): string {
+	if (!context.clientUUID) {
+		throw new Error(
+			"Invariant violation: context.clientUUID is null in a state that requires a registered UUID",
+		);
+	}
+	return context.clientUUID;
+}
+
 export const connectionMachine = setup({
 	types: {
 		context: {} as ConnectionContext,
@@ -482,9 +501,9 @@ export const connectionMachine = setup({
 				// Use connect actor which initiates the connection with clientUUID
 				src: "connect",
 				input: ({ context }) => ({
-					client: context.client as PipecatClient,
+					client: assertClient(context),
 					serverUrl: context.serverUrl,
-					clientUUID: context.clientUUID as string,
+					clientUUID: assertClientUUID(context),
 				}),
 			},
 			on: {
@@ -526,13 +545,13 @@ export const connectionMachine = setup({
 					// Monitor for disconnection events during sync
 					src: "disconnectListener",
 					input: ({ context }) => ({
-						client: context.client as PipecatClient,
+						client: assertClient(context),
 					}),
 				},
 				{
 					src: "initialConfigSync",
 					input: ({ context }) => ({
-						client: context.client as PipecatClient,
+						client: assertClient(context),
 					}),
 					onDone: { target: "idle" },
 					onError: { target: "idle" },
@@ -574,14 +593,14 @@ export const connectionMachine = setup({
 					// Monitor for disconnection events
 					src: "disconnectListener",
 					input: ({ context }) => ({
-						client: context.client as PipecatClient,
+						client: assertClient(context),
 					}),
 				},
 				{
 					// Handle provider change requests from main window
 					src: "providerChangeListener",
 					input: ({ context }) => ({
-						client: context.client as PipecatClient,
+						client: assertClient(context),
 					}),
 				},
 			],
@@ -624,7 +643,7 @@ export const connectionMachine = setup({
 				// Use disconnect listener - does NOT call connect()
 				src: "disconnectListener",
 				input: ({ context }) => ({
-					client: context.client as PipecatClient,
+					client: assertClient(context),
 				}),
 			},
 			on: {
@@ -659,7 +678,7 @@ export const connectionMachine = setup({
 				// Use disconnect listener - does NOT call connect()
 				src: "disconnectListener",
 				input: ({ context }) => ({
-					client: context.client as PipecatClient,
+					client: assertClient(context),
 				}),
 			},
 			on: {
@@ -721,4 +740,7 @@ export const connectionMachine = setup({
 
 // Export types for consumers
 export type ConnectionMachineActor = ActorRefFrom<typeof connectionMachine>;
+export type ConnectionMachineStateValue = StateValueFrom<
+	typeof connectionMachine
+>;
 export type { ConnectionContext, ConnectionEvents };

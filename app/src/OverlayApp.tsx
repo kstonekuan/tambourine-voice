@@ -30,6 +30,7 @@ import { useNativeAudioTrack } from "./hooks/useNativeAudioTrack";
 import { useAddHistoryEntry, useSettings, useTypeText } from "./lib/queries";
 import { safeSendClientMessage } from "./lib/safeSendClientMessage";
 import { KNOWN_SETTINGS, tauriAPI } from "./lib/tauri";
+import type { ConnectionMachineStateValue } from "./machines/connectionMachine";
 import "./overlay-global.css";
 
 const SERVER_RESPONSE_TIMEOUT_MS = 10_000;
@@ -193,25 +194,17 @@ type DisplayState =
 	| "recording"
 	| "processing";
 
-/**
- * Helper to convert XState state value to the ConnectionState string type
- * used by the UI and Tauri events.
- */
 function getDisplayState(
-	stateValue: string | Record<string, unknown>,
+	stateValue: ConnectionMachineStateValue,
 ): DisplayState {
-	// XState state values can be strings or objects (for nested states)
-	const state =
-		typeof stateValue === "string" ? stateValue : Object.keys(stateValue)[0];
-
-	return match(state)
+	return match(stateValue)
 		.with("disconnected", () => "disconnected" as const)
 		.with("initializing", "connecting", "syncing", () => "connecting" as const)
 		.with("retrying", () => "reconnecting" as const)
 		.with("idle", () => "idle" as const)
 		.with("recording", () => "recording" as const)
 		.with("processing", () => "processing" as const)
-		.otherwise(() => "disconnected" as const);
+		.exhaustive();
 }
 
 function RecordingControl() {
@@ -758,11 +751,17 @@ function RecordingControl() {
 
 	// Click handler (toggle mode)
 	const handleClick = useCallback(() => {
-		if (displayState === "recording") {
-			onStopRecording();
-		} else if (displayState === "idle") {
-			onStartRecording();
-		}
+		match(displayState)
+			.with("recording", () => onStopRecording())
+			.with("idle", () => onStartRecording())
+			.with(
+				"disconnected",
+				"connecting",
+				"reconnecting",
+				"processing",
+				() => { },
+			)
+			.exhaustive();
 	}, [displayState, onStartRecording, onStopRecording]);
 
 	// Drag handler using @use-gesture/react
@@ -794,14 +793,20 @@ function RecordingControl() {
 	);
 
 	// Determine view state for render
-	const isLoadingState =
-		displayState === "processing" ||
-		displayState === "disconnected" ||
-		displayState === "connecting" ||
-		displayState === "reconnecting" ||
-		isMicAcquiring;
-
-	const viewState = showError ? "error" : isLoadingState ? "loading" : "active";
+	const viewState = showError
+		? ("error" as const)
+		: isMicAcquiring
+			? ("loading" as const)
+			: match(displayState)
+				.with(
+					"processing",
+					"disconnected",
+					"connecting",
+					"reconnecting",
+					() => "loading" as const,
+				)
+				.with("idle", "recording", () => "active" as const)
+				.exhaustive();
 
 	return (
 		<div

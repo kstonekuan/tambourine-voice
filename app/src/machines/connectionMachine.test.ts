@@ -6,7 +6,10 @@ import {
 	fromCallback,
 	fromPromise,
 } from "xstate";
-import { connectionMachine } from "./connectionMachine";
+import {
+	type ConnectionMachineStateValue,
+	connectionMachine,
+} from "./connectionMachine";
 
 // Mock the tauri module to avoid "window is not defined" errors
 // This is needed because the real machine has inline async actions that call tauriAPI
@@ -58,7 +61,7 @@ type DisconnectSendBack = (event: { type: "DISCONNECTED" }) => void;
  */
 async function waitForState(
 	actor: AnyActorRef,
-	stateName: string,
+	stateName: ConnectionMachineStateValue,
 	timeout = 1000,
 ): Promise<void> {
 	const startTime = Date.now();
@@ -246,9 +249,9 @@ describe("connectionMachine", () => {
 			const actor = createActor(machine);
 
 			// Track state transitions to verify syncing is visited
-			const stateHistory: string[] = [];
+			const stateHistory: ConnectionMachineStateValue[] = [];
 			actor.subscribe((snapshot) => {
-				stateHistory.push(snapshot.value as string);
+				stateHistory.push(snapshot.value as ConnectionMachineStateValue);
 			});
 
 			actor.start();
@@ -300,9 +303,9 @@ describe("connectionMachine", () => {
 			const actor = createActor(machine);
 
 			// Track state changes
-			const stateHistory: string[] = [];
+			const stateHistory: ConnectionMachineStateValue[] = [];
 			actor.subscribe((snapshot) => {
-				stateHistory.push(snapshot.value as string);
+				stateHistory.push(snapshot.value as ConnectionMachineStateValue);
 			});
 
 			actor.start();
@@ -524,9 +527,9 @@ describe("connectionMachine", () => {
 			const { actor } = await setupProcessingState();
 
 			// Track state transitions to verify syncing is NOT visited
-			const stateHistory: string[] = [];
+			const stateHistory: ConnectionMachineStateValue[] = [];
 			actor.subscribe((snapshot) => {
-				stateHistory.push(snapshot.value as string);
+				stateHistory.push(snapshot.value as ConnectionMachineStateValue);
 			});
 
 			actor.send({ type: "RESPONSE_RECEIVED" });
