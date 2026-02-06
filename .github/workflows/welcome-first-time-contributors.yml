@@ -1,0 +1,30 @@
+name: welcome
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  thank_first_time_contributors:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.type != 'Bot'
+    steps:
+      - name: Comment on first pull request from a contributor
+        uses: actions/first-interaction@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-message: |
+            👋 Hi @${{ github.event.pull_request.user.login }} — thank you so much for your first contribution to Tambourine Voice!
+
+            If you have a minute, we would really appreciate your support:
+            - ⭐ Star the repo: https://github.com/kstonekuan/tambourine-voice
+            - 💬 Join our Discord: https://discord.gg/dUyuXWVJ2a
+            - 📣 Share the project with your network
+
+            We are excited to have you here and appreciate your help making the project better! 🙌
