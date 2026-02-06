@@ -14,6 +14,9 @@ import {
 import { useRecordingStore } from "../../stores/recordingStore";
 import { StatusIndicator } from "./StatusIndicator";
 
+const HEALTH_CHECK_TIMEOUT_MS = 5000;
+const STATUS_CLEAR_DELAY_MS = 5000;
+
 type PingStatus = "idle" | "loading" | "success" | "error";
 
 // Type-safe color mapping for ping status
@@ -130,7 +133,7 @@ export function ConnectionSettings() {
 
 		try {
 			await ky.get(joinURL(urlToTest, "health"), {
-				timeout: 5000,
+				timeout: HEALTH_CHECK_TIMEOUT_MS,
 				retry: 0,
 			});
 			setPingStatus("success");
@@ -141,7 +144,7 @@ export function ConnectionSettings() {
 		// Auto-clear status after 5 seconds
 		setTimeout(() => {
 			setPingStatus("idle");
-		}, 5000);
+		}, STATUS_CLEAR_DELAY_MS);
 	}, [displayUrl]);
 
 	// Connection state display helpers
