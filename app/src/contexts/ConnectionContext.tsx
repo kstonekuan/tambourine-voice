@@ -76,6 +76,7 @@ export function ConnectionProvider({ children }: ConnectionProviderProps) {
 				const currentState = connectionActor.getSnapshot();
 				const shouldHandleUrlChange =
 					currentState.matches("idle") ||
+					currentState.matches("syncing") ||
 					currentState.matches("recording") ||
 					currentState.matches("processing") ||
 					currentState.matches("retrying");

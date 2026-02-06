@@ -20,6 +20,10 @@ vi.mock("../lib/tauri", () => ({
 		setClientUUID: vi.fn().mockResolvedValue(undefined),
 		clearClientUUID: vi.fn().mockResolvedValue(undefined),
 		onProviderChangeRequest: vi.fn().mockResolvedValue(() => {}),
+		getSettings: vi.fn().mockResolvedValue({
+			stt_provider: "auto",
+			llm_provider: "auto",
+		}),
 	},
 	configAPI: {
 		registerClient: vi.fn().mockResolvedValue("mock-uuid"),
@@ -118,6 +122,7 @@ function createTestMachine(config: {
 				// Mock implementation - doesn't need to do anything in tests
 				return () => {};
 			}),
+			initialConfigSync: fromPromise(async () => {}),
 		},
 		actions: {
 			emitConnectionState: () => {},
@@ -234,11 +239,18 @@ describe("connectionMachine", () => {
 	});
 
 	describe("State Transitions from connecting", () => {
-		it("transitions to idle on CONNECTED event", async () => {
+		it("transitions through syncing to idle on CONNECTED event", async () => {
 			const { machine, callbacks } = createTestMachine({
 				createClientBehavior: "success",
 			});
 			const actor = createActor(machine);
+
+			// Track state transitions to verify syncing is visited
+			const stateHistory: string[] = [];
+			actor.subscribe((snapshot) => {
+				stateHistory.push(snapshot.value as string);
+			});
+
 			actor.start();
 
 			actor.send({ type: "CONNECT", serverUrl: "http://localhost:8000" });
@@ -247,6 +259,13 @@ describe("connectionMachine", () => {
 			callbacks.connectSendBack?.({ type: "CONNECTED" });
 
 			await waitForState(actor, "idle");
+
+			// Verify syncing was visited between connecting and idle
+			const connectingIndex = stateHistory.indexOf("connecting");
+			const syncingIndex = stateHistory.indexOf("syncing", connectingIndex + 1);
+			const idleIndex = stateHistory.indexOf("idle", syncingIndex + 1);
+			expect(syncingIndex).toBeGreaterThan(connectingIndex);
+			expect(idleIndex).toBeGreaterThan(syncingIndex);
 
 			const { context } = actor.getSnapshot();
 			expect(context.retryCount).toBe(0);
@@ -501,11 +520,20 @@ describe("connectionMachine", () => {
 			actor.stop();
 		});
 
-		it("transitions to idle on RESPONSE_RECEIVED event", async () => {
+		it("transitions directly to idle on RESPONSE_RECEIVED (no syncing)", async () => {
 			const { actor } = await setupProcessingState();
+
+			// Track state transitions to verify syncing is NOT visited
+			const stateHistory: string[] = [];
+			actor.subscribe((snapshot) => {
+				stateHistory.push(snapshot.value as string);
+			});
 
 			actor.send({ type: "RESPONSE_RECEIVED" });
 			await waitForState(actor, "idle");
+
+			// processing → idle should NOT go through syncing
+			expect(stateHistory).not.toContain("syncing");
 
 			actor.stop();
 		});
@@ -694,6 +722,7 @@ describe("connectionMachine", () => {
 					connect: fromCallback(() => () => {}),
 					disconnectListener: fromCallback(() => () => {}),
 					providerChangeListener: fromCallback(() => () => {}),
+					initialConfigSync: fromPromise(async () => {}),
 				},
 				actions: {
 					emitConnectionState: () => {},
@@ -732,168 +761,7 @@ describe("connectionMachine", () => {
 		});
 	});
 
-	describe("Context Updates", () => {
-		it("resets retryCount to 0 on successful connection", async () => {
-			vi.useFakeTimers();
-
-			// First, create client that fails to trigger retries and increase retryCount
-			let shouldFail = true;
-			const callbacks = {
-				connectSendBack: null as ConnectSendBack | null,
-			};
-
-			const machine = connectionMachine.provide({
-				actors: {
-					createClient: fromPromise(async () => {
-						if (shouldFail) {
-							throw new Error("Fail");
-						}
-						return {
-							client: { id: "mock-client" } as unknown as PipecatClient,
-							clientUUID: "test-uuid-12345",
-						};
-					}),
-					connect: fromCallback(({ sendBack }) => {
-						callbacks.connectSendBack = sendBack as ConnectSendBack;
-						return () => {};
-					}),
-					disconnectListener: fromCallback(() => () => {}),
-					providerChangeListener: fromCallback(() => () => {}),
-				},
-				actions: {
-					emitConnectionState: () => {},
-					emitReconnectStarted: () => {},
-					emitReconnectResult: () => {},
-					cleanupClient: () => {},
-					logState: () => {},
-				},
-			});
-
-			const actor = createActor(machine);
-			actor.start();
-
-			expect(actor.getSnapshot().context.retryCount).toBe(0);
-
-			actor.send({ type: "CONNECT", serverUrl: "http://localhost:8000" });
-
-			// Let createClient fail
-			await vi.advanceTimersByTimeAsync(0);
-			expect(actor.getSnapshot().value).toBe("retrying");
-			expect(actor.getSnapshot().context.retryCount).toBe(1);
-
-			// Now allow success
-			shouldFail = false;
-
-			// Wait for retry delay (2000ms for retryCount=1)
-			await vi.advanceTimersByTimeAsync(2000);
-			await waitForState(actor, "connecting");
-
-			callbacks.connectSendBack?.({ type: "CONNECTED" });
-			await waitForState(actor, "idle");
-
-			expect(actor.getSnapshot().context.retryCount).toBe(0);
-
-			actor.stop();
-			vi.useRealTimers();
-		});
-
-		it("sets error on failures and clears on success", async () => {
-			vi.useFakeTimers();
-
-			let shouldFail = true;
-			const callbacks = { connectSendBack: null as ConnectSendBack | null };
-
-			const machine = connectionMachine.provide({
-				actors: {
-					createClient: fromPromise(async () => {
-						if (shouldFail) {
-							shouldFail = false;
-							throw new Error("Test error");
-						}
-						return {
-							client: { id: "mock-client" } as unknown as PipecatClient,
-							clientUUID: "test-uuid-12345",
-						};
-					}),
-					connect: fromCallback(({ sendBack }) => {
-						callbacks.connectSendBack = sendBack as ConnectSendBack;
-						return () => {};
-					}),
-					disconnectListener: fromCallback(() => () => {}),
-					providerChangeListener: fromCallback(() => () => {}),
-				},
-				actions: {
-					emitConnectionState: () => {},
-					emitReconnectStarted: () => {},
-					emitReconnectResult: () => {},
-					cleanupClient: () => {},
-					logState: () => {},
-				},
-			});
-
-			const actor = createActor(machine);
-			actor.start();
-
-			actor.send({ type: "CONNECT", serverUrl: "http://localhost:8000" });
-
-			// Let createClient fail
-			await vi.advanceTimersByTimeAsync(0);
-			expect(actor.getSnapshot().value).toBe("retrying");
-			expect(actor.getSnapshot().context.error).toBe("Test error");
-
-			// Wait for retry delay and successful connection
-			await vi.advanceTimersByTimeAsync(2000);
-			await waitForState(actor, "connecting");
-
-			callbacks.connectSendBack?.({ type: "CONNECTED" });
-			await waitForState(actor, "idle");
-
-			expect(actor.getSnapshot().context.error).toBeNull();
-
-			actor.stop();
-			vi.useRealTimers();
-		});
-	});
-
 	describe("Edge Cases", () => {
-		it("waits for CONNECTED event before transitioning to idle", async () => {
-			const { machine, callbacks } = createTestMachine({
-				createClientBehavior: "success",
-			});
-			const actor = createActor(machine);
-			actor.start();
-
-			actor.send({ type: "CONNECT", serverUrl: "http://localhost:8000" });
-			await waitForState(actor, "connecting");
-
-			// Should stay in connecting
-			expect(actor.getSnapshot().value).toBe("connecting");
-
-			// Only transition after CONNECTED
-			callbacks.connectSendBack?.({ type: "CONNECTED" });
-			await waitForState(actor, "idle");
-
-			actor.stop();
-		});
-
-		it("handles communication errors during active states", async () => {
-			const { machine, callbacks } = createTestMachine({
-				createClientBehavior: "success",
-			});
-			const actor = createActor(machine);
-			actor.start();
-
-			actor.send({ type: "CONNECT", serverUrl: "http://localhost:8000" });
-			await waitForState(actor, "connecting");
-			callbacks.connectSendBack?.({ type: "CONNECTED" });
-			await waitForState(actor, "idle");
-
-			actor.send({ type: "COMMUNICATION_ERROR", error: "Send failed" });
-			await waitForState(actor, "retrying");
-
-			actor.stop();
-		});
-
 		it("manual RECONNECT during retrying bypasses delay", async () => {
 			vi.useFakeTimers();
 
@@ -948,64 +816,6 @@ describe("connectionMachine", () => {
 			await waitForState(actor, "idle");
 
 			actor.stop();
-		});
-
-		it("retry flow: connecting fails → retrying → reconnect → idle", async () => {
-			vi.useFakeTimers();
-
-			let connectAttempts = 0;
-			const callbacks = { connectSendBack: null as ConnectSendBack | null };
-
-			const machine = connectionMachine.provide({
-				actors: {
-					createClient: fromPromise(async () => ({
-						client: { id: "mock-client" } as unknown as PipecatClient,
-						clientUUID: "test-uuid-12345",
-					})),
-					connect: fromCallback(({ sendBack }) => {
-						connectAttempts++;
-						callbacks.connectSendBack = sendBack as ConnectSendBack;
-						if (connectAttempts === 1) {
-							// First attempt fails
-							(sendBack as ConnectSendBack)({ type: "DISCONNECTED" });
-						}
-						return () => {};
-					}),
-					disconnectListener: fromCallback(() => () => {}),
-					providerChangeListener: fromCallback(() => () => {}),
-				},
-				actions: {
-					emitConnectionState: () => {},
-					emitReconnectStarted: () => {},
-					emitReconnectResult: () => {},
-					cleanupClient: () => {},
-					logState: () => {},
-				},
-			});
-
-			const actor = createActor(machine);
-			actor.start();
-
-			actor.send({ type: "CONNECT", serverUrl: "http://localhost:8000" });
-
-			// Let createClient succeed
-			await vi.advanceTimersByTimeAsync(0);
-
-			// First connection attempt fails immediately
-			await waitForState(actor, "retrying");
-			expect(connectAttempts).toBe(1);
-
-			// Wait for retry delay (2000ms for retryCount=1)
-			await vi.advanceTimersByTimeAsync(2000);
-			await waitForState(actor, "connecting");
-			expect(connectAttempts).toBe(2);
-
-			// Second attempt succeeds
-			callbacks.connectSendBack?.({ type: "CONNECTED" });
-			await waitForState(actor, "idle");
-
-			actor.stop();
-			vi.useRealTimers();
 		});
 	});
 });

@@ -346,6 +346,39 @@ const providerChangeListenerActor = fromCallback<
 	};
 });
 
+// =============================================================================
+// Initial Config Sync Actor
+// =============================================================================
+
+/**
+ * Fire-and-forget actor that pushes the client's stored STT/LLM provider
+ * selections to the server on connection establishment.
+ *
+ * Without this, a server restart causes the server to fall back to its defaults
+ * because the providerChangeListenerActor only captures *future* user changes.
+ */
+const initialConfigSyncActor = fromPromise<void, { client: PipecatClient }>(
+	async ({ input }) => {
+		const { client } = input;
+
+		const settings = await tauriAPI.getSettings();
+
+		const messages: ConfigMessage[] = [
+			{
+				type: "set-stt-provider",
+				data: { provider: toSTTProviderSelection(settings.stt_provider) },
+			},
+			{
+				type: "set-llm-provider",
+				data: { provider: toLLMProviderSelection(settings.llm_provider) },
+			},
+		];
+
+		sendConfigMessages(client, messages);
+		console.debug("[XState] Initial config sync sent to server");
+	},
+);
+
 export const connectionMachine = setup({
 	types: {
 		context: {} as ConnectionContext,
@@ -356,6 +389,7 @@ export const connectionMachine = setup({
 		connect: connectActor,
 		disconnectListener: disconnectListenerActor,
 		providerChangeListener: providerChangeListenerActor,
+		initialConfigSync: initialConfigSyncActor,
 	},
 	actions: {
 		// Emit connection state to main window via Tauri events
@@ -455,7 +489,7 @@ export const connectionMachine = setup({
 			},
 			on: {
 				CONNECTED: {
-					target: "idle",
+					target: "syncing",
 					actions: assign({ retryCount: 0, error: null }),
 				},
 				DISCONNECTED: "retrying",
@@ -480,6 +514,50 @@ export const connectionMachine = setup({
 				connectionTimeout: {
 					target: "retrying",
 					actions: assign({ error: () => "Connection timeout" }),
+				},
+			},
+		},
+
+		// Push stored provider selections to server after connecting
+		syncing: {
+			entry: [{ type: "logState", params: { state: "syncing" } }],
+			invoke: [
+				{
+					// Monitor for disconnection events during sync
+					src: "disconnectListener",
+					input: ({ context }) => ({
+						client: context.client as PipecatClient,
+					}),
+				},
+				{
+					src: "initialConfigSync",
+					input: ({ context }) => ({
+						client: context.client as PipecatClient,
+					}),
+					onDone: { target: "idle" },
+					onError: { target: "idle" },
+				},
+			],
+			on: {
+				DISCONNECTED: "retrying",
+				RECONNECT: {
+					target: "initializing",
+					actions: [
+						"cleanupClient",
+						"emitReconnectStarted",
+						assign({ client: () => null, retryCount: () => 0 }),
+					],
+				},
+				SERVER_URL_CHANGED: {
+					target: "initializing",
+					actions: [
+						"cleanupClient",
+						assign({
+							serverUrl: ({ event }) => event.serverUrl,
+							client: () => null,
+							retryCount: () => 0,
+						}),
+					],
 				},
 			},
 		},
