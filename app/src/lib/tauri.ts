@@ -780,13 +780,16 @@ export interface AvailableProvidersData {
 	llm: ProviderInfo[];
 }
 
+const API_RETRY_LIMIT= 2;
+const API_TIMEOUT_MS =10000;
+
 // Create ky instance with sensible defaults for API calls
 function createApiClient(serverUrl: string) {
 	return ky.create({
 		prefixUrl: withoutTrailingSlash(serverUrl),
-		timeout: 10000,
+		timeout: API_TIMEOUT_MS,
 		retry: {
-			limit: 2,
+			limit: API_RETRY_LIMIT,
 			methods: ["get", "post"],
 		},
 	});
