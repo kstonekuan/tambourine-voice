@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Final
 # Direct imports from pipecat - type checked at import time
 from pipecat.services.anthropic.llm import AnthropicLLMService
 from pipecat.services.assemblyai.stt import AssemblyAISTTService
+from pipecat.services.aws.llm import AWSBedrockLLMService
 from pipecat.services.aws.stt import AWSTranscribeSTTService
 from pipecat.services.azure.stt import AzureSTTService
 from pipecat.services.cartesia.stt import CartesiaSTTService
@@ -298,6 +299,21 @@ LLM_PROVIDERS: Final[dict[LLMProviderId, LLMProviderConfig]] = {
         display_name="Anthropic Claude",
         service_class=AnthropicLLMService,
         credential_mapper=ApiKeyMapper("anthropic_api_key"),
+    ),
+    LLMProviderId.BEDROCK: LLMProviderConfig(
+        provider_id=LLMProviderId.BEDROCK,
+        display_name="AWS Bedrock",
+        service_class=AWSBedrockLLMService,
+        credential_mapper=NoAuthMapper(
+            availability_fields=("aws_bedrock_model_id",),
+            field_mapping={
+                "aws_bedrock_model_id": "model",
+                "aws_access_key_id": "aws_access_key",
+                "aws_secret_access_key": "aws_secret_key",
+                "aws_session_token": "aws_session_token",
+                "aws_region": "aws_region",
+            },
+        ),
     ),
     LLMProviderId.CEREBRAS: LLMProviderConfig(
         provider_id=LLMProviderId.CEREBRAS,

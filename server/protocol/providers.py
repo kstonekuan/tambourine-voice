@@ -43,6 +43,7 @@ class LLMProviderId(StrEnum):
     """Large Language Model provider identifiers."""
 
     ANTHROPIC = "anthropic"
+    BEDROCK = "bedrock"
     CEREBRAS = "cerebras"
     GEMINI = "gemini"
     GROQ = "groq"

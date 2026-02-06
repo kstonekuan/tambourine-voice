@@ -26,7 +26,10 @@ class Settings(BaseSettings):
     aws_secret_access_key: str | None = Field(
         None, description="AWS secret access key for Transcribe"
     )
-    aws_region: str | None = Field(None, description="AWS region for Transcribe")
+    aws_session_token: str | None = Field(
+        None, description="AWS session token for Bedrock or Transcribe (optional)"
+    )
+    aws_region: str | None = Field(None, description="AWS region for Bedrock or Transcribe")
     azure_speech_key: str | None = Field(None, description="Azure Speech API key")
     azure_speech_region: str | None = Field(None, description="Azure Speech region")
     whisper_enabled: bool = Field(
@@ -55,6 +58,9 @@ class Settings(BaseSettings):
         None, description="Ollama model name (e.g., llama3.2, mistral, qwen2.5)"
     )
     openrouter_api_key: str | None = Field(None, description="OpenRouter API key for LLM")
+    aws_bedrock_model_id: str | None = Field(
+        None, description="AWS Bedrock model ID (required to enable Bedrock)"
+    )
 
     # Auto provider configuration (resolved when client sends "auto")
     auto_stt_provider: str | None = Field(
