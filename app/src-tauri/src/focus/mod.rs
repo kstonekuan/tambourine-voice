@@ -19,6 +19,7 @@ pub use watcher::{start_focus_watcher, FocusWatcherHandle};
 #[cfg_attr(not(any(target_os = "windows", target_os = "macos")), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SupportedBrowser {
+    #[cfg_attr(target_os = "windows", allow(dead_code))]
     Safari,
     GoogleChrome,
     MicrosoftEdge,

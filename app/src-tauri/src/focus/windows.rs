@@ -140,9 +140,11 @@ impl ComApartmentInitializationGuard {
                 should_call_co_uninitialize_on_drop: false,
             })
         } else {
+            let co_initialize_result_as_u32 =
+                u32::from_ne_bytes(co_initialize_result.0.to_ne_bytes());
             log::warn!(
                 "Failed to initialize COM apartment for UI Automation: HRESULT=0x{:08X}",
-                co_initialize_result.0 as u32
+                co_initialize_result_as_u32
             );
             None
         }
@@ -171,8 +173,8 @@ fn is_likely_browser_address_bar_candidate(
     automation_id: Option<&str>,
     control_name: Option<&str>,
 ) -> bool {
-    let normalized_automation_id = automation_id.map(|automation_id| automation_id.to_lowercase());
-    let normalized_control_name = control_name.map(|control_name| control_name.to_lowercase());
+    let normalized_automation_id = automation_id.map(str::to_lowercase);
+    let normalized_control_name = control_name.map(str::to_lowercase);
 
     let automation_id_contains_address_bar_marker = normalized_automation_id
         .as_deref()
