@@ -274,7 +274,11 @@ async def run_pipeline(
         # Handle the typed message with exhaustive pattern matching
         match parsed:
             case StartRecordingMessage():
-                context_manager.set_focus_context(parsed.focus_context_for_recording())
+                focus_context_for_recording = parsed.focus_context_for_recording()
+                logger.info(
+                    f"Start-recording received focus context: {focus_context_for_recording}"
+                )
+                context_manager.set_focus_context(focus_context_for_recording)
                 llm_gate.reset_for_recording()
                 await context_manager.reset_aggregator()
                 await turn_controller.start_recording()

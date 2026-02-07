@@ -186,7 +186,6 @@ export function ConnectionSettings() {
 		<div className="settings-section animate-in animate-in-delay-4">
 			<h3 className="settings-section-title">Connection</h3>
 
-			{/* Status Row */}
 			<div className="settings-card">
 				<div
 					className="settings-row"
@@ -235,10 +234,6 @@ export function ConnectionSettings() {
 						</ActionIcon>
 					</Tooltip>
 				</div>
-			</div>
-
-			{/* Server URL Row */}
-			<div className="settings-card" style={{ marginTop: 12 }}>
 				<div
 					className="settings-row"
 					style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}
@@ -315,10 +310,6 @@ export function ConnectionSettings() {
 						)}
 					</div>
 				</div>
-			</div>
-
-			{/* Client ID Row */}
-			<div className="settings-card" style={{ marginTop: 12 }}>
 				<div
 					className="settings-row"
 					style={{ justifyContent: "space-between", alignItems: "center" }}

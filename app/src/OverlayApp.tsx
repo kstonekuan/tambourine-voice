@@ -358,6 +358,10 @@ function RecordingControl() {
 					!latestFocusContextRef.current
 						? {}
 						: { focus_context: latestFocusContextRef.current };
+				console.debug(
+					"[Focus Context] Sending start-recording payload:",
+					startRecordingData,
+				);
 				safeSendClientMessage(
 					client,
 					"start-recording",

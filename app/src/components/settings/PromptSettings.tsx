@@ -242,9 +242,6 @@ export function PromptSettings() {
 						color="gray"
 					/>
 				</div>
-			</div>
-
-			<div className="settings-card" style={{ marginBottom: 16 }}>
 				<div className="settings-row">
 					<div>
 						<div style={{ display: "flex", alignItems: "center", gap: 8 }}>

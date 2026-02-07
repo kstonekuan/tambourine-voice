@@ -49,6 +49,8 @@ def test_reset_context_for_new_recording_injects_focus_block_for_old_timestamp()
     messages_with_focus_context = context_manager._context.get_messages()
     assert len(messages_with_focus_context) == 2
     assert any("Focus Context" in str(message) for message in messages_with_focus_context)
+    focus_context_message_content = extract_focus_context_message_content(context_manager)
+    assert "Browser Tab:" not in focus_context_message_content
 
 
 def test_reset_context_for_new_recording_injects_focus_block_for_invalid_timestamp() -> None:

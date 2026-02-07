@@ -136,7 +136,6 @@ export function DataManagementSettings() {
 			<div className="settings-section animate-in animate-in-delay-5">
 				<h3 className="settings-section-title">Data Management</h3>
 
-				{/* Export/Import Row */}
 				<div className="settings-card">
 					<div
 						className="settings-row"
@@ -176,10 +175,6 @@ export function DataManagementSettings() {
 							</Tooltip>
 						</Group>
 					</div>
-				</div>
-
-				{/* Factory Reset Row */}
-				<div className="settings-card" style={{ marginTop: 12 }}>
 					<div
 						className="settings-row"
 						style={{ justifyContent: "space-between", alignItems: "center" }}
