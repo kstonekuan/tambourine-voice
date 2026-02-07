@@ -208,8 +208,8 @@ class ConfigurationHandler:
         The value is a selection type (AutoProvider or Known*Provider) that
         matches the format sent by the client, ensuring symmetric serialization.
         """
-        message = ConfigUpdatedMessage(setting=setting, value=value.model_dump(by_alias=True))
-        frame = RTVIServerMessageFrame(data=message.model_dump())
+        message = ConfigUpdatedMessage(setting=setting, value=value)
+        frame = RTVIServerMessageFrame(data=message.model_dump(by_alias=True))
         await self._rtvi.push_frame(frame)
 
     async def _send_config_error(self, setting: SettingName, error: str) -> None:

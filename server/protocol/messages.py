@@ -10,8 +10,9 @@ Message flow:
 - Server → Client: ServerMessage (via RTVIServerMessageFrame)
 """
 
+from collections.abc import Mapping
 from enum import StrEnum
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, RootModel, ValidationError
@@ -197,10 +198,47 @@ class UnknownClientMessage(BaseModel):
     """
 
     type: str  # The actual unknown type string
-    raw: dict[str, Any]  # Full original message for debugging
+    raw: dict[str, object]  # Full original message for debugging
 
 
-def parse_client_message(raw: dict[str, Any]) -> _ClientMessageUnion | UnknownClientMessage:
+class RTVIClientMessageEnvelope(BaseModel):
+    """Raw RTVI client message envelope.
+
+    Validates message shape from object attributes to avoid untyped attribute access
+    in event callbacks.
+    """
+
+    model_config = ConfigDict(extra="ignore", from_attributes=True)
+
+    type: str
+    data: object | None = None
+
+    def to_client_message_payload(self) -> dict[str, object]:
+        """Normalize envelope fields into parser-ready payload."""
+        normalized_data = (
+            {str(key): value for key, value in self.data.items()}
+            if isinstance(self.data, Mapping)
+            else {}
+        )
+        return {
+            "type": self.type,
+            "data": normalized_data,
+        }
+
+
+def parse_rtvi_client_message_payload(raw_message: object) -> dict[str, object] | None:
+    """Parse a raw RTVI message object into a normalized payload.
+
+    Returns None for invalid envelope shapes.
+    """
+    try:
+        envelope = RTVIClientMessageEnvelope.model_validate(raw_message)
+    except ValidationError:
+        return None
+    return envelope.to_client_message_payload()
+
+
+def parse_client_message(raw: Mapping[str, object]) -> _ClientMessageUnion | UnknownClientMessage:
     """Parse client message with forward compatibility.
 
     Returns UnknownClientMessage for unknown types (never None).
@@ -211,8 +249,10 @@ def parse_client_message(raw: dict[str, Any]) -> _ClientMessageUnion | UnknownCl
         wrapper = ClientMessage.model_validate(raw)
         return wrapper.root  # Return the actual message, not the wrapper
     except ValidationError:
-        logger.debug(f"Unknown client message type: {raw.get('type')}")
-        return UnknownClientMessage(type=raw.get("type", ""), raw=raw)
+        raw_message_type = raw.get("type")
+        unknown_message_type = raw_message_type if isinstance(raw_message_type, str) else ""
+        logger.debug(f"Unknown client message type: {unknown_message_type}")
+        return UnknownClientMessage(type=unknown_message_type, raw=dict(raw))
 
 
 # =============================================================================
@@ -243,7 +283,7 @@ class ConfigUpdatedMessage(BaseModel):
 
     type: Literal["config-updated"] = "config-updated"
     setting: SettingName
-    value: Any
+    value: STTProviderSelection | LLMProviderSelection
     success: Literal[True] = True
 
 

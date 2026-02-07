@@ -280,17 +280,6 @@ export function getProviderIdFromSelection(
 // Setting Names (Forward-Compatible)
 // =============================================================================
 
-/**
- * Known setting names matching server's SettingName enum.
- * Used for type-safe handling of config responses.
- */
-export const KNOWN_SETTINGS = [
-	"stt-provider",
-	"llm-provider",
-	"prompt-sections",
-	"stt-timeout",
-] as const;
-
 export type {
 	ConfigResponse,
 	ConnectionState,

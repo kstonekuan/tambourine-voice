@@ -203,7 +203,8 @@ pub struct PromptSection {
     pub prompt_mode: PromptMode,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum PromptSectionType {
     Main,
     Advanced,

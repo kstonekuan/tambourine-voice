@@ -30,7 +30,7 @@ import { useNativeAudioTrack } from "./hooks/useNativeAudioTrack";
 import type { FocusContextSnapshot } from "./lib/focus";
 import { useAddHistoryEntry, useSettings, useTypeText } from "./lib/queries";
 import { safeSendClientMessage } from "./lib/safeSendClientMessage";
-import { KNOWN_SETTINGS, tauriAPI } from "./lib/tauri";
+import { tauriAPI } from "./lib/tauri";
 import type { ConnectionMachineStateValue } from "./machines/connectionMachine";
 import "./overlay-global.css";
 
@@ -51,13 +51,13 @@ const KnownServerMessageSchema = z.discriminatedUnion("type", [
 	// z.enum() validates known settings; unknown settings become UnknownServerMessage
 	z.object({
 		type: z.literal("config-updated"),
-		setting: z.enum(KNOWN_SETTINGS),
+		setting: z.string(),
 		value: z.unknown(),
 		success: z.literal(true),
 	}),
 	z.object({
 		type: z.literal("config-error"),
-		setting: z.enum(KNOWN_SETTINGS),
+		setting: z.string(),
 		error: z.string(),
 	}),
 ]);
@@ -530,16 +530,37 @@ function RecordingControl() {
 	// Listen for focus context updates from Rust
 	useEffect(() => {
 		let unlisten: (() => void) | undefined;
+		let shouldIgnoreSetupResults = false;
 
 		const setup = async () => {
 			unlisten = await tauriAPI.onFocusContextChanged((payload) => {
 				latestFocusContextRef.current = payload;
 			});
+
+			try {
+				const seededFocusContextSnapshot =
+					await tauriAPI.focusGetCurrentContext();
+				if (shouldIgnoreSetupResults) {
+					return;
+				}
+
+				// Seed startup focus context only when no live event has populated it yet.
+				// Keep startup behavior simple and best-effort without recency comparisons.
+				if (!latestFocusContextRef.current) {
+					latestFocusContextRef.current = seededFocusContextSnapshot;
+				}
+			} catch (error) {
+				console.warn(
+					"[Focus Context] Failed to fetch startup focus snapshot:",
+					error,
+				);
+			}
 		};
 
 		setup();
 
 		return () => {
+			shouldIgnoreSetupResults = true;
 			unlisten?.();
 		};
 	}, []);

@@ -71,7 +71,8 @@ impl EventName {
 // =============================================================================
 
 /// Type-safe config setting names for config sync responses.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum ConfigSetting {
     PromptSections,
     SttTimeout,
@@ -100,22 +101,22 @@ impl ConfigSetting {
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum ConfigResponse<T: Serialize> {
     #[serde(rename = "config-updated")]
-    Updated { setting: String, value: T },
+    Updated { setting: ConfigSetting, value: T },
     #[serde(rename = "config-error")]
-    Error { setting: String, error: String },
+    Error {
+        setting: ConfigSetting,
+        error: String,
+    },
 }
 
 impl<T: Serialize> ConfigResponse<T> {
     pub fn updated(setting: ConfigSetting, value: T) -> Self {
-        Self::Updated {
-            setting: setting.as_str().to_string(),
-            value,
-        }
+        Self::Updated { setting, value }
     }
 
     pub fn error(setting: ConfigSetting, error: impl ToString) -> ConfigResponse<()> {
         ConfigResponse::Error {
-            setting: setting.as_str().to_string(),
+            setting,
             error: error.to_string(),
         }
     }

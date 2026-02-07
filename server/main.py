@@ -11,9 +11,10 @@ Usage:
 
 import asyncio
 import re
+from collections.abc import Coroutine
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Annotated, Any, Final, cast
+from typing import Annotated, Final, cast
 
 import typer
 import uvicorn
@@ -57,6 +58,7 @@ from protocol.messages import (
     StopRecordingMessage,
     UnknownClientMessage,
     parse_client_message,
+    parse_rtvi_client_message_payload,
 )
 from services.providers import (
     LLMProviderId,
@@ -92,12 +94,12 @@ MDNS_CANDIDATE_PATTERN: Final[re.Pattern[str]] = re.compile(
 )
 
 # Set to hold background tasks to prevent garbage collection before completion
-_background_tasks: set[asyncio.Task[Any]] = set()
+_background_tasks: set[asyncio.Task[None]] = set()
 
 
-def create_background_task(coro: Any) -> asyncio.Task[Any]:
+def create_background_task(coroutine: Coroutine[object, object, None]) -> asyncio.Task[None]:
     """Create a background task that won't be garbage collected before completion."""
-    task = asyncio.create_task(coro)
+    task = asyncio.create_task(coroutine)
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     return task
@@ -258,17 +260,12 @@ async def run_pipeline(
 
     # Register event handler for client messages on the RTVI processor
     @task.rtvi.event_handler("on_client_message")
-    async def on_client_message(processor: RTVIProcessor, message: Any) -> None:
+    async def on_client_message(processor: RTVIProcessor, message: object) -> None:
         """Handle RTVI client messages for configuration and recording control."""
         _ = processor  # Unused, required by event handler signature
 
-        # Parse the raw RTVI message into a typed Pydantic model
-        # This converts the message.type + message.data structure into a discriminated union
-        raw_data = {
-            "type": message.type if hasattr(message, "type") else None,
-            "data": message.data if hasattr(message, "data") else {},
-        }
-        if raw_data["type"] is None:
+        raw_data = parse_rtvi_client_message_payload(message)
+        if raw_data is None:
             return
 
         # Use forward-compatible parser (never returns None)
@@ -290,11 +287,11 @@ async def run_pipeline(
 
     # Set up event handlers
     @transport.event_handler("on_client_connected")
-    async def on_client_connected(_transport: Any, client: Any) -> None:
+    async def on_client_connected(_transport: object, client: object) -> None:
         logger.success(f"Client connected via WebRTC: {client}")
 
     @transport.event_handler("on_client_disconnected")
-    async def on_client_disconnected(_transport: Any, client: Any) -> None:
+    async def on_client_disconnected(_transport: object, client: object) -> None:
         logger.info(f"Client disconnected: {client}")
         await task.cancel()
 

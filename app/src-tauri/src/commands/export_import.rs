@@ -169,7 +169,9 @@ pub fn generate_history_export(app: AppHandle) -> Result<String, String> {
 /// Returns a `HashMap` of section name -> markdown content (always 3 files with state markers).
 #[cfg(desktop)]
 #[tauri::command]
-pub fn generate_prompt_exports(app: AppHandle) -> Result<HashMap<String, String>, String> {
+pub fn generate_prompt_exports(
+    app: AppHandle,
+) -> Result<HashMap<PromptSectionType, String>, String> {
     use super::settings::get_settings;
 
     let settings = get_settings(app)?;
@@ -200,7 +202,7 @@ pub fn generate_prompt_exports(app: AppHandle) -> Result<HashMap<String, String>
 
         for section_type in PromptSectionType::ALL {
             prompts.insert(
-                section_type.as_str().to_string(),
+                section_type,
                 format_prompt(section_type.as_str(), sections.get(section_type)),
             );
         }
@@ -211,14 +213,16 @@ pub fn generate_prompt_exports(app: AppHandle) -> Result<HashMap<String, String>
 
 #[cfg(not(desktop))]
 #[tauri::command]
-pub fn generate_prompt_exports(_app: AppHandle) -> Result<HashMap<String, String>, String> {
+pub fn generate_prompt_exports(
+    _app: AppHandle,
+) -> Result<HashMap<PromptSectionType, String>, String> {
     Ok(HashMap::new())
 }
 
 /// Parse a prompt file content and extract the section name from the HTML comment.
 /// Returns (`section_name`, content) if valid, or an error message.
 #[tauri::command]
-pub fn parse_prompt_file(content: String) -> Result<(String, String), String> {
+pub fn parse_prompt_file(content: String) -> Result<(PromptSectionType, String), String> {
     let trimmed = content.trim();
 
     // Check for HTML comment header
@@ -235,14 +239,13 @@ pub fn parse_prompt_file(content: String) -> Result<(String, String), String> {
     let section_name = after_prefix[..suffix_pos].trim();
 
     // Validate section name by parsing as PromptSectionType
-    section_name.parse::<PromptSectionType>()?;
-    let section_name = section_name.to_string();
+    let section_type = section_name.parse::<PromptSectionType>()?;
 
     // Extract content after the comment
     let content_start = PROMPT_COMMENT_PREFIX.len() + suffix_pos + PROMPT_COMMENT_SUFFIX.len();
     let prompt_content = trimmed[content_start..].trim().to_string();
 
-    Ok((section_name, prompt_content))
+    Ok((section_type, prompt_content))
 }
 
 /// Import a prompt into the specified section.
@@ -250,14 +253,11 @@ pub fn parse_prompt_file(content: String) -> Result<(String, String), String> {
 #[tauri::command]
 pub async fn import_prompt(
     app: AppHandle,
-    section: String,
+    section: PromptSectionType,
     content: String,
     config_sync: tauri::State<'_, ConfigSync>,
 ) -> Result<(), String> {
     use super::settings::get_setting_from_store;
-
-    // Validate and parse section name
-    let section_type: PromptSectionType = section.parse()?;
 
     // Get current prompt sections or use default
     let mut sections: CleanupPromptSections = get_setting_from_store(
@@ -300,7 +300,7 @@ pub async fn import_prompt(
         prompt_mode,
     };
 
-    sections.set(section_type, new_section);
+    sections.set(section, new_section);
 
     // Save updated sections
     crate::save_setting_to_store(&app, StoreKey::CleanupPromptSections, &sections)?;
@@ -313,7 +313,7 @@ pub async fn import_prompt(
         }
     }
 
-    log::info!("Imported prompt for section: {}", section_type.as_str());
+    log::info!("Imported prompt for section: {}", section.as_str());
     Ok(())
 }
 
@@ -321,7 +321,7 @@ pub async fn import_prompt(
 #[tauri::command]
 pub async fn import_prompt(
     _app: AppHandle,
-    _section: String,
+    _section: PromptSectionType,
     _content: String,
     _config_sync: tauri::State<'_, ConfigSync>,
 ) -> Result<(), String> {

@@ -66,12 +66,27 @@ export type ConnectionState =
 	| "processing";
 
 /**
+ * Known config setting names.
+ * Unknown strings are still allowed for forward compatibility.
+ */
+export const KNOWN_CONFIG_SETTING_NAMES = [
+	"stt-provider",
+	"llm-provider",
+	"prompt-sections",
+	"stt-timeout",
+] as const;
+
+export type KnownConfigSettingName =
+	(typeof KNOWN_CONFIG_SETTING_NAMES)[number];
+export type ConfigSettingName = KnownConfigSettingName | (string & {});
+
+/**
  * Config response for successful updates.
  * Value is parsed at runtime using Zod schemas in tauri.ts.
  */
 export type ConfigUpdatedResponse = {
 	type: "config-updated";
-	setting: string;
+	setting: ConfigSettingName;
 	value: unknown;
 };
 
@@ -80,7 +95,7 @@ export type ConfigUpdatedResponse = {
  */
 export type ConfigErrorResponse = {
 	type: "config-error";
-	setting: string;
+	setting: ConfigSettingName;
 	error: string;
 };
 
@@ -132,11 +147,9 @@ export function emitEvent<K extends keyof EventPayloads>(
  */
 export function listenEvent<K extends keyof EventPayloads>(
 	event: K,
-	callback: EventPayloads[K] extends undefined
-		? () => void
-		: (payload: EventPayloads[K]) => void,
+	callback: (payload: EventPayloads[K]) => void,
 ): Promise<UnlistenFn> {
-	return listen<EventPayloads[K]>(event, (e) => {
-		(callback as (payload: EventPayloads[K]) => void)(e.payload);
-	});
+	return listen<EventPayloads[K]>(event, (eventPayload) =>
+		callback(eventPayload.payload),
+	);
 }
