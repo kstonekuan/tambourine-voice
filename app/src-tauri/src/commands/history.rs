@@ -8,7 +8,9 @@ pub async fn add_history_entry(
     raw_text: String,
     history: State<'_, HistoryStorage>,
 ) -> Result<HistoryEntry, String> {
-    history.add_entry(text, raw_text)
+    history
+        .add_entry(text, raw_text)
+        .map_err(|error| error.to_string())
 }
 
 /// Get dictation history entries
@@ -17,7 +19,7 @@ pub async fn get_history(
     limit: Option<usize>,
     history: State<'_, HistoryStorage>,
 ) -> Result<Vec<HistoryEntry>, String> {
-    history.get_all(limit)
+    history.get_all(limit).map_err(|error| error.to_string())
 }
 
 /// Delete a history entry by ID
@@ -26,11 +28,11 @@ pub async fn delete_history_entry(
     id: String,
     history: State<'_, HistoryStorage>,
 ) -> Result<bool, String> {
-    history.delete(&id)
+    history.delete(&id).map_err(|error| error.to_string())
 }
 
 /// Clear all history entries
 #[tauri::command]
 pub async fn clear_history(history: State<'_, HistoryStorage>) -> Result<(), String> {
-    history.clear()
+    history.clear().map_err(|error| error.to_string())
 }

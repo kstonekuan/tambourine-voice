@@ -508,7 +508,9 @@ pub fn import_history(
     }
 
     let history_storage = app.state::<HistoryStorage>();
-    let result = history_storage.import_entries(export.data, strategy)?;
+    let result = history_storage
+        .import_entries(export.data, strategy)
+        .map_err(|error| error.to_string())?;
 
     log::info!(
         "Imported history: {} entries imported, {} skipped (strategy: {:?})",
@@ -539,7 +541,7 @@ pub async fn factory_reset(
 
     // Clear history
     let history_storage = app.state::<HistoryStorage>();
-    history_storage.clear()?;
+    history_storage.clear().map_err(|error| error.to_string())?;
 
     // Re-initialize with default settings
     let default_settings = AppSettings::default();

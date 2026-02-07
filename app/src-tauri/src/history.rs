@@ -1,7 +1,9 @@
+use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::RwLock;
 use uuid::Uuid;
@@ -70,7 +72,18 @@ impl HistoryStorage {
             let _ = fs::create_dir_all(parent);
         }
 
-        let data = Self::load_from_file(&file_path).unwrap_or_default();
+        let data = match Self::load_from_file(&file_path) {
+            Ok(history_data) => history_data,
+            Err(error) => {
+                if file_path.exists() {
+                    log::warn!(
+                        "Failed to load history from {}: {error}",
+                        file_path.display()
+                    );
+                }
+                HistoryData::default()
+            }
+        };
 
         Self {
             data: RwLock::new(data),
@@ -79,72 +92,79 @@ impl HistoryStorage {
     }
 
     /// Load history from the JSON file
-    fn load_from_file(file_path: &PathBuf) -> Option<HistoryData> {
-        let content = fs::read_to_string(file_path).ok()?;
-        serde_json::from_str(&content).ok()
+    fn load_from_file(file_path: &Path) -> Result<HistoryData> {
+        let file_content = fs::read_to_string(file_path)
+            .with_context(|| format!("Failed to read history file {}", file_path.display()))?;
+
+        serde_json::from_str(&file_content)
+            .with_context(|| format!("Failed to parse history file {}", file_path.display()))
     }
 
     /// Save current history to disk
-    fn save(&self) -> Result<(), String> {
-        let data = self
-            .data
-            .read()
-            .map_err(|e| format!("Failed to read history: {e}"))?;
+    fn save(&self) -> Result<()> {
+        let history_data = self.data.read().map_err(|error| {
+            anyhow::anyhow!("Failed to acquire history read lock for save: {error}")
+        })?;
 
-        let content = serde_json::to_string_pretty(&*data)
-            .map_err(|e| format!("Failed to serialize history: {e}"))?;
+        let serialized_history_content = serde_json::to_string_pretty(&*history_data)
+            .context("Failed to serialize history data to JSON")?;
 
-        fs::write(&self.file_path, content)
-            .map_err(|e| format!("Failed to write history file: {e}"))?;
+        fs::write(&self.file_path, serialized_history_content).with_context(|| {
+            format!("Failed to write history file {}", self.file_path.display())
+        })?;
 
         Ok(())
     }
 
     /// Add a new entry to the history
-    pub fn add_entry(&self, text: String, raw_text: String) -> Result<HistoryEntry, String> {
-        let entry = HistoryEntry::new(text, raw_text);
+    pub fn add_entry(&self, text: String, raw_text: String) -> Result<HistoryEntry> {
+        let new_history_entry = HistoryEntry::new(text, raw_text);
         {
-            let mut data = self
-                .data
-                .write()
-                .map_err(|e| format!("Failed to write history: {e}"))?;
+            let mut history_data = self.data.write().map_err(|error| {
+                anyhow::anyhow!("Failed to acquire history write lock when adding entry: {error}")
+            })?;
 
-            data.entries.insert(0, entry.clone());
+            history_data.entries.insert(0, new_history_entry.clone());
 
-            if data.entries.len() > MAX_HISTORY_ENTRIES {
-                data.entries.truncate(MAX_HISTORY_ENTRIES);
+            if history_data.entries.len() > MAX_HISTORY_ENTRIES {
+                history_data.entries.truncate(MAX_HISTORY_ENTRIES);
             }
         }
         self.save()?;
-        Ok(entry)
+        Ok(new_history_entry)
     }
 
     /// Get all history entries (newest first), optionally limited
-    pub fn get_all(&self, limit: Option<usize>) -> Result<Vec<HistoryEntry>, String> {
-        let data = self
-            .data
-            .read()
-            .map_err(|e| format!("Failed to read history: {e}"))?;
+    pub fn get_all(&self, limit: Option<usize>) -> Result<Vec<HistoryEntry>> {
+        let history_data = self.data.read().map_err(|error| {
+            anyhow::anyhow!("Failed to acquire history read lock when getting entries: {error}")
+        })?;
 
-        let entries = match limit {
-            Some(n) => data.entries.iter().take(n).cloned().collect(),
-            None => data.entries.clone(),
+        let history_entries = match limit {
+            Some(entry_limit) => history_data
+                .entries
+                .iter()
+                .take(entry_limit)
+                .cloned()
+                .collect(),
+            None => history_data.entries.clone(),
         };
 
-        Ok(entries)
+        Ok(history_entries)
     }
 
     /// Delete an entry by ID
-    pub fn delete(&self, id: &str) -> Result<bool, String> {
+    pub fn delete(&self, id: &str) -> Result<bool> {
         let deleted = {
-            let mut data = self
-                .data
-                .write()
-                .map_err(|e| format!("Failed to write history: {e}"))?;
+            let mut history_data = self.data.write().map_err(|error| {
+                anyhow::anyhow!(
+                    "Failed to acquire history write lock when deleting entry {id}: {error}"
+                )
+            })?;
 
-            let initial_len = data.entries.len();
-            data.entries.retain(|e| e.id != id);
-            data.entries.len() < initial_len
+            let initial_entry_count = history_data.entries.len();
+            history_data.entries.retain(|entry| entry.id != id);
+            history_data.entries.len() < initial_entry_count
         };
 
         if deleted {
@@ -155,13 +175,14 @@ impl HistoryStorage {
     }
 
     /// Clear all history
-    pub fn clear(&self) -> Result<(), String> {
+    pub fn clear(&self) -> Result<()> {
         {
-            let mut data = self
-                .data
-                .write()
-                .map_err(|e| format!("Failed to write history: {e}"))?;
-            data.entries.clear();
+            let mut history_data = self.data.write().map_err(|error| {
+                anyhow::anyhow!(
+                    "Failed to acquire history write lock when clearing history: {error}"
+                )
+            })?;
+            history_data.entries.clear();
         }
         self.save()
     }
@@ -171,63 +192,73 @@ impl HistoryStorage {
         &self,
         mut entries: Vec<HistoryEntry>,
         strategy: HistoryImportStrategy,
-    ) -> Result<HistoryImportResult, String> {
+    ) -> Result<HistoryImportResult> {
         let imported_count;
         let skipped_count;
 
         {
-            let mut data = self
-                .data
-                .write()
-                .map_err(|e| format!("Failed to write history: {e}"))?;
+            let mut history_data = self.data.write().map_err(|error| {
+                anyhow::anyhow!(
+                    "Failed to acquire history write lock when importing entries: {error}"
+                )
+            })?;
 
             match strategy {
                 HistoryImportStrategy::Replace => {
                     // Sort imported entries by timestamp (newest first)
-                    entries.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+                    entries.sort_by(|left_entry, right_entry| {
+                        right_entry.timestamp.cmp(&left_entry.timestamp)
+                    });
                     imported_count = entries.len();
                     skipped_count = 0;
-                    data.entries = entries;
+                    history_data.entries = entries;
                 }
                 HistoryImportStrategy::MergeAppend => {
                     // Prepend imported entries (imported are considered newer)
                     // Sort imported entries by timestamp (newest first)
-                    entries.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+                    entries.sort_by(|left_entry, right_entry| {
+                        right_entry.timestamp.cmp(&left_entry.timestamp)
+                    });
                     imported_count = entries.len();
                     skipped_count = 0;
 
                     // Prepend imported entries to existing
-                    let mut combined = entries;
-                    combined.append(&mut data.entries);
-                    data.entries = combined;
+                    let mut combined_entries = entries;
+                    combined_entries.append(&mut history_data.entries);
+                    history_data.entries = combined_entries;
                 }
                 HistoryImportStrategy::MergeDeduplicate => {
                     // Collect existing IDs
-                    let existing_ids: HashSet<String> =
-                        data.entries.iter().map(|e| e.id.clone()).collect();
+                    let existing_entry_ids: HashSet<String> = history_data
+                        .entries
+                        .iter()
+                        .map(|entry| entry.id.clone())
+                        .collect();
 
                     // Filter out entries that already exist
                     let new_entries: Vec<HistoryEntry> = entries
                         .into_iter()
-                        .filter(|e| !existing_ids.contains(&e.id))
+                        .filter(|entry| !existing_entry_ids.contains(&entry.id))
                         .collect();
 
                     imported_count = new_entries.len();
                     skipped_count = 0; // We'll calculate this from the original count
 
                     // Prepend new entries
-                    let mut combined = new_entries;
-                    combined.append(&mut data.entries);
+                    let mut combined_entries = new_entries;
+                    combined_entries.append(&mut history_data.entries);
 
                     // Sort by timestamp (newest first)
-                    combined.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
-                    data.entries = combined;
+                    combined_entries.sort_by(|left_entry, right_entry| {
+                        right_entry.timestamp.cmp(&left_entry.timestamp)
+                    });
+                    history_data.entries = combined_entries;
                 }
             }
 
             // Truncate to max entries
-            if data.entries.len() > MAX_HISTORY_ENTRIES {
-                data.entries.truncate(MAX_HISTORY_ENTRIES);
+            if history_data.entries.len() > MAX_HISTORY_ENTRIES {
+                history_data.entries.truncate(MAX_HISTORY_ENTRIES);
             }
         }
 
