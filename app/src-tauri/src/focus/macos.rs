@@ -1,19 +1,19 @@
-use objc2::rc::Id;
+use objc2::rc::Retained;
 use objc2_app_kit::{NSRunningApplication, NSWorkspace};
-use objc2_foundation::{NSObjectProtocol, NSString};
+use objc2_foundation::NSString;
 
 use crate::focus::{
     FocusConfidenceLevel, FocusContextSnapshot, FocusEventSource, FocusTrackingCapabilities,
     FocusedApplication, FocusedBrowserTab,
 };
 
-fn get_frontmost_application() -> Option<Id<NSRunningApplication>> {
+fn get_frontmost_application() -> Option<Retained<NSRunningApplication>> {
     let workspace = NSWorkspace::sharedWorkspace();
     workspace.frontmostApplication()
 }
 
-fn nsstring_to_string(value: &NSString) -> String {
-    value.to_string()
+fn nsstring_to_string(retained_string: &Retained<NSString>) -> String {
+    retained_string.to_string()
 }
 
 pub fn get_current_focus_context() -> FocusContextSnapshot {
@@ -23,8 +23,7 @@ pub fn get_current_focus_context() -> FocusContextSnapshot {
         let display_name = application
             .localizedName()
             .as_ref()
-            .map(nsstring_to_string)
-            .unwrap_or_else(|| "Unknown".to_string());
+            .map_or_else(|| "Unknown".to_string(), nsstring_to_string);
         let bundle_id = application
             .bundleIdentifier()
             .as_ref()

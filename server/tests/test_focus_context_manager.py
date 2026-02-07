@@ -82,6 +82,46 @@ def test_reset_context_for_new_recording_omits_focus_block_after_explicit_clear(
     )
 
 
+def test_reset_context_for_new_recording_omits_focus_block_when_everything_is_unknown() -> None:
+    context_manager = DictationContextManager()
+    context_manager.set_focus_context(
+        FocusContextSnapshot(
+            focused_application=None,
+            focused_window=None,
+            focused_browser_tab=None,
+            event_source=FocusEventSource.POLLING,
+            confidence_level=FocusConfidenceLevel.LOW,
+            privacy_filtered=True,
+            captured_at="2024-01-01T00:00:00+00:00",
+        )
+    )
+    context_manager.reset_context_for_new_recording()
+
+    messages_without_focus_context = context_manager._context.get_messages()
+    assert len(messages_without_focus_context) == 1
+    assert all("Focus Context" not in str(message) for message in messages_without_focus_context)
+
+
+def test_focus_context_block_omits_window_line_when_window_is_unknown() -> None:
+    context_manager = DictationContextManager()
+    context_manager.set_focus_context(
+        FocusContextSnapshot(
+            focused_application=FocusedApplication(display_name="Code"),
+            focused_window=None,
+            focused_browser_tab=None,
+            event_source=FocusEventSource.POLLING,
+            confidence_level=FocusConfidenceLevel.HIGH,
+            privacy_filtered=True,
+            captured_at="2024-01-01T00:00:00+00:00",
+        )
+    )
+    context_manager.reset_context_for_new_recording()
+
+    focus_context_message_content = extract_focus_context_message_content(context_manager)
+    assert 'Application: "Code"' in focus_context_message_content
+    assert "Window:" not in focus_context_message_content
+
+
 def test_focus_context_block_sanitizes_newlines_and_control_characters() -> None:
     context_manager = DictationContextManager()
     context_manager.set_focus_context(

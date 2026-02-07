@@ -393,14 +393,14 @@ fn focus_get_current_context(app: AppHandle) -> focus::FocusContextSnapshot {
             return fallback_focus_context_snapshot();
         }
 
-        return snapshot_receiver
+        snapshot_receiver
             .recv_timeout(Duration::from_millis(150))
             .unwrap_or_else(|error| {
                 log::warn!(
                     "Timed out waiting for macOS focus snapshot on main thread: {error}. Returning fallback focus context."
                 );
                 fallback_focus_context_snapshot()
-            });
+            })
     }
 
     #[cfg(not(target_os = "macos"))]
