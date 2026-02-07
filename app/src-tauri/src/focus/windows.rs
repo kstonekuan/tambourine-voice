@@ -2,9 +2,10 @@ use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
 use std::path::Path;
 
-use windows::Win32::Foundation::{CloseHandle, HWND, MAX_PATH};
+use windows::core::PWSTR;
+use windows::Win32::Foundation::{CloseHandle, HWND};
 use windows::Win32::System::Threading::{
-    OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
+    OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT, PROCESS_QUERY_LIMITED_INFORMATION,
 };
 use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowTextW};
 
@@ -15,7 +16,7 @@ use crate::focus::{
 
 fn get_foreground_window() -> Option<HWND> {
     let hwnd = unsafe { GetForegroundWindow() };
-    if hwnd.0 == 0 {
+    if hwnd.0.is_null() {
         None
     } else {
         Some(hwnd)
@@ -32,6 +33,8 @@ fn get_window_title(hwnd: HWND) -> Option<String> {
 }
 
 fn get_process_path(hwnd: HWND) -> Option<String> {
+    const MAX_PROCESS_PATH_UTF16_LENGTH: usize = 32_768;
+
     let mut process_id: u32 = 0;
     unsafe {
         windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId(
@@ -46,13 +49,24 @@ fn get_process_path(hwnd: HWND) -> Option<String> {
     let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_id) };
     let handle = handle.ok()?;
 
-    let mut buffer = vec![0u16; MAX_PATH as usize];
+    let mut buffer = vec![0u16; MAX_PROCESS_PATH_UTF16_LENGTH];
     let mut size = buffer.len() as u32;
-    let success = unsafe { QueryFullProcessImageNameW(handle, 0, &mut buffer, &mut size) };
-    unsafe {
-        CloseHandle(handle).ok();
+    let process_path_result = unsafe {
+        QueryFullProcessImageNameW(
+            handle,
+            PROCESS_NAME_FORMAT(0),
+            PWSTR(buffer.as_mut_ptr()),
+            &mut size,
+        )
+    };
+    let close_process_handle_result = unsafe { CloseHandle(handle) };
+    if let Err(close_process_handle_error) = close_process_handle_result {
+        log::warn!(
+            "Failed to close focused-window process handle after reading process path: {}",
+            close_process_handle_error
+        );
     }
-    if !success.as_bool() {
+    if process_path_result.is_err() || size == 0 {
         return None;
     }
 
