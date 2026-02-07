@@ -11,6 +11,7 @@ mod windows;
 
 pub use watcher::{start_focus_watcher, FocusWatcherHandle};
 
+#[cfg_attr(not(any(target_os = "windows", target_os = "macos")), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SupportedBrowser {
     Safari,
@@ -24,6 +25,7 @@ pub enum SupportedBrowser {
     Chromium,
 }
 
+#[cfg_attr(not(any(target_os = "windows", target_os = "macos")), allow(dead_code))]
 impl SupportedBrowser {
     pub fn display_name(self) -> &'static str {
         match self {

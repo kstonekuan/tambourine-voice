@@ -156,7 +156,7 @@ fn infer_browser_tab_title_from_window_title(
 }
 
 fn bstr_to_non_empty_focus_text(raw_bstr: BSTR) -> Option<String> {
-    let bstr_as_string = raw_bstr.to_string().ok()?;
+    let bstr_as_string = String::try_from(raw_bstr).ok()?;
     normalize_non_empty_focus_text(&bstr_as_string)
 }
 
@@ -203,7 +203,7 @@ fn extract_normalized_origin_from_edit_control(
     edit_control_element: &IUIAutomationElement,
 ) -> Option<String> {
     let value_pattern: IUIAutomationValuePattern =
-        unsafe { edit_control_element.GetCurrentPatternAs(UIA_ValuePatternId.0) }.ok()?;
+        unsafe { edit_control_element.GetCurrentPatternAs(UIA_ValuePatternId) }.ok()?;
     let raw_current_value = value_pattern.CurrentValue().ok()?;
     let address_bar_value = bstr_to_non_empty_focus_text(raw_current_value)?;
     normalize_browser_document_origin(&address_bar_value)
