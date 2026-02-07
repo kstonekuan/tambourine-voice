@@ -25,6 +25,9 @@ import {
 } from "../../lib/queries";
 import type { HistoryImportStrategy } from "../../lib/tauri";
 
+// Notification timeout constants
+const NOTIFICATION_WARNING_TIMEOUT_MS = 5000;
+
 type ImportModalState =
 	| { type: "closed" }
 	| { type: "strategy"; historyFile: ParsedExportFile };
