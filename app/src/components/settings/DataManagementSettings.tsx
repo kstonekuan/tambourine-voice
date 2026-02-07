@@ -71,6 +71,7 @@ export function DataManagementSettings() {
 				title: "Unknown File Format",
 				message: `Could not recognize: ${unknownFiles.map((f) => f.filename).join(", ")}`,
 				color: "yellow",
+				// TODO: Extract this hardcoded timeout to a named constant (#108)
 				autoClose: 5000,
 			});
 		}
