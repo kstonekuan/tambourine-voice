@@ -71,11 +71,11 @@ pub struct FocusTrackingCapabilities {
 pub fn get_current_focus_context() -> FocusContextSnapshot {
     #[cfg(target_os = "windows")]
     {
-        return windows::get_current_focus_context();
+        windows::get_current_focus_context()
     }
     #[cfg(target_os = "macos")]
     {
-        return macos::get_current_focus_context();
+        macos::get_current_focus_context()
     }
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
@@ -94,11 +94,11 @@ pub fn get_current_focus_context() -> FocusContextSnapshot {
 pub fn get_focus_capabilities() -> FocusTrackingCapabilities {
     #[cfg(target_os = "windows")]
     {
-        return windows::get_focus_capabilities();
+        windows::get_focus_capabilities()
     }
     #[cfg(target_os = "macos")]
     {
-        return macos::get_focus_capabilities();
+        macos::get_focus_capabilities()
     }
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {

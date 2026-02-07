@@ -34,8 +34,7 @@ impl WindowsAudioController {
             let enumerator: IMMDeviceEnumerator =
                 CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(|e| {
                     AudioControlError::InitializationFailed(format!(
-                        "Failed to create device enumerator: {}",
-                        e
+                        "Failed to create device enumerator: {e}"
                     ))
                 })?;
 
@@ -44,8 +43,7 @@ impl WindowsAudioController {
                 .GetDefaultAudioEndpoint(eRender, eConsole)
                 .map_err(|e| {
                     AudioControlError::InitializationFailed(format!(
-                        "Failed to get default audio endpoint: {}",
-                        e
+                        "Failed to get default audio endpoint: {e}"
                     ))
                 })?;
 
@@ -54,8 +52,7 @@ impl WindowsAudioController {
                 .Activate::<IAudioEndpointVolume>(CLSCTX_ALL, None)
                 .map_err(|e| {
                     AudioControlError::InitializationFailed(format!(
-                        "Failed to activate endpoint volume: {}",
-                        e
+                        "Failed to activate endpoint volume: {e}"
                     ))
                 })?;
 
@@ -69,8 +66,8 @@ impl SystemAudioControl for WindowsAudioController {
         unsafe {
             self.endpoint_volume
                 .GetMute()
-                .map(|m| m.as_bool())
-                .map_err(|e| AudioControlError::GetPropertyFailed(format!("GetMute: {}", e)))
+                .map(windows::core::BOOL::as_bool)
+                .map_err(|e| AudioControlError::GetPropertyFailed(format!("GetMute: {e}")))
         }
     }
 
@@ -78,7 +75,7 @@ impl SystemAudioControl for WindowsAudioController {
         unsafe {
             self.endpoint_volume
                 .SetMute(muted, std::ptr::null())
-                .map_err(|e| AudioControlError::SetPropertyFailed(format!("SetMute: {}", e)))
+                .map_err(|e| AudioControlError::SetPropertyFailed(format!("SetMute: {e}")))
         }
     }
 }

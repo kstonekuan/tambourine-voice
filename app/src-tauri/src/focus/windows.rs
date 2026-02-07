@@ -25,11 +25,12 @@ fn get_foreground_window() -> Option<HWND> {
 
 fn get_window_title(hwnd: HWND) -> Option<String> {
     let mut buffer = [0u16; 512];
-    let len = unsafe { GetWindowTextW(hwnd, &mut buffer) } as usize;
-    if len == 0 {
+    let window_title_length = unsafe { GetWindowTextW(hwnd, &mut buffer) };
+    if window_title_length <= 0 {
         return None;
     }
-    Some(String::from_utf16_lossy(&buffer[..len]))
+    let window_title_length = usize::try_from(window_title_length).ok()?;
+    Some(String::from_utf16_lossy(&buffer[..window_title_length]))
 }
 
 fn get_process_path(hwnd: HWND) -> Option<String> {
@@ -39,7 +40,7 @@ fn get_process_path(hwnd: HWND) -> Option<String> {
     unsafe {
         windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId(
             hwnd,
-            Some(&mut process_id),
+            Some(&raw mut process_id),
         );
     }
     if process_id == 0 {
@@ -50,28 +51,28 @@ fn get_process_path(hwnd: HWND) -> Option<String> {
     let handle = handle.ok()?;
 
     let mut buffer = vec![0u16; MAX_PROCESS_PATH_UTF16_LENGTH];
-    let mut size = buffer.len() as u32;
+    let mut size = u32::try_from(buffer.len()).ok()?;
     let process_path_result = unsafe {
         QueryFullProcessImageNameW(
             handle,
             PROCESS_NAME_FORMAT(0),
             PWSTR(buffer.as_mut_ptr()),
-            &mut size,
+            &raw mut size,
         )
     };
     let close_process_handle_result = unsafe { CloseHandle(handle) };
     if let Err(close_process_handle_error) = close_process_handle_result {
         log::warn!(
-            "Failed to close focused-window process handle after reading process path: {}",
-            close_process_handle_error
+            "Failed to close focused-window process handle after reading process path: {close_process_handle_error}"
         );
     }
     if process_path_result.is_err() || size == 0 {
         return None;
     }
 
+    let process_path_length = usize::try_from(size).ok()?;
     Some(
-        OsString::from_wide(&buffer[..size as usize])
+        OsString::from_wide(&buffer[..process_path_length])
             .to_string_lossy()
             .to_string(),
     )
@@ -118,19 +119,16 @@ fn infer_browser_tab(window_title: &str, application_name: &str) -> Option<Focus
 pub fn get_current_focus_context() -> FocusContextSnapshot {
     let captured_at = chrono::Utc::now().to_rfc3339();
 
-    let hwnd = match get_foreground_window() {
-        Some(hwnd) => hwnd,
-        None => {
-            return FocusContextSnapshot {
-                focused_application: None,
-                focused_window: None,
-                focused_browser_tab: None,
-                event_source: FocusEventSource::Polling,
-                confidence_level: FocusConfidenceLevel::Low,
-                privacy_filtered: true,
-                captured_at,
-            };
-        }
+    let Some(hwnd) = get_foreground_window() else {
+        return FocusContextSnapshot {
+            focused_application: None,
+            focused_window: None,
+            focused_browser_tab: None,
+            event_source: FocusEventSource::Polling,
+            confidence_level: FocusConfidenceLevel::Low,
+            privacy_filtered: true,
+            captured_at,
+        };
     };
 
     let window_title = get_window_title(hwnd);
@@ -139,7 +137,7 @@ pub fn get_current_focus_context() -> FocusContextSnapshot {
     let focused_application = process_path.as_ref().map(|path| FocusedApplication {
         display_name: get_application_display_name(path),
         bundle_id: None,
-        process_path: Some(path.to_string()),
+        process_path: Some(path.clone()),
     });
 
     let focused_window = window_title.as_ref().map(|title| FocusedWindow {
