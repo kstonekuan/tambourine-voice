@@ -93,7 +93,7 @@ fn infer_browser_tab_title_from_window_title(
     Some(focused_window_title)
 }
 
-fn normalize_browser_document_url(raw_document_url: &str) -> Option<String> {
+fn normalize_browser_document_origin(raw_document_url: &str) -> Option<String> {
     let trimmed_document_url = normalize_non_empty_focus_text(raw_document_url)?;
     let scheme_separator_index = trimmed_document_url.find("://")?;
     let (url_scheme, url_remainder_with_separator) =
@@ -111,21 +111,7 @@ fn normalize_browser_document_url(raw_document_url: &str) -> Option<String> {
         return None;
     }
 
-    let path_with_possible_query_or_fragment = if authority_end_index < url_remainder.len()
-        && url_remainder.as_bytes()[authority_end_index] == b'/'
-    {
-        &url_remainder[authority_end_index..]
-    } else {
-        ""
-    };
-    let path_without_query_or_fragment = path_with_possible_query_or_fragment
-        .split(['?', '#'])
-        .next()
-        .unwrap_or("");
-
-    Some(format!(
-        "{url_scheme}://{authority_component}{path_without_query_or_fragment}"
-    ))
+    Some(format!("{url_scheme}://{authority_component}"))
 }
 
 fn is_accessibility_api_trusted() -> bool {
@@ -296,9 +282,9 @@ fn get_frontmost_window_title_from_core_graphics(
 fn determine_focus_confidence_level(
     focused_window_is_present: bool,
     focused_browser_tab_is_present: bool,
-    focused_browser_url_is_present: bool,
+    focused_browser_origin_is_present: bool,
 ) -> FocusConfidenceLevel {
-    if focused_window_is_present && focused_browser_url_is_present {
+    if focused_window_is_present && focused_browser_origin_is_present {
         FocusConfidenceLevel::High
     } else if focused_window_is_present || focused_browser_tab_is_present {
         FocusConfidenceLevel::Medium
@@ -374,18 +360,18 @@ fn build_focused_browser_tab(
                 .as_deref()
                 .and_then(browser_name_from_bundle_identifier)
         })?;
-    let normalized_browser_document_url = accessibility_focused_window_details
+    let normalized_browser_document_origin = accessibility_focused_window_details
         .and_then(|focused_window_details| focused_window_details.focused_document_url.as_deref())
-        .and_then(normalize_browser_document_url);
+        .and_then(normalize_browser_document_origin);
     let inferred_browser_tab_title =
         infer_browser_tab_title_from_window_title(focused_window_title, browser_name);
-    if inferred_browser_tab_title.is_none() && normalized_browser_document_url.is_none() {
+    if inferred_browser_tab_title.is_none() && normalized_browser_document_origin.is_none() {
         return None;
     }
 
     Some(FocusedBrowserTab {
         title: inferred_browser_tab_title,
-        url: normalized_browser_document_url,
+        origin: normalized_browser_document_origin,
         browser: Some(browser_name.to_string()),
     })
 }
@@ -412,9 +398,9 @@ pub fn get_current_focus_context() -> FocusContextSnapshot {
         focused_window_title.as_deref(),
         accessibility_focused_window_details.as_ref(),
     );
-    let focused_browser_url_is_present = focused_browser_tab
+    let focused_browser_origin_is_present = focused_browser_tab
         .as_ref()
-        .and_then(|focused_browser_tab| focused_browser_tab.url.as_ref())
+        .and_then(|focused_browser_tab| focused_browser_tab.origin.as_ref())
         .is_some();
     let event_source = if accessibility_focused_window_details.is_some() {
         FocusEventSource::Accessibility
@@ -424,7 +410,7 @@ pub fn get_current_focus_context() -> FocusContextSnapshot {
     let confidence_level = determine_focus_confidence_level(
         focused_window.is_some(),
         focused_browser_tab.is_some(),
-        focused_browser_url_is_present,
+        focused_browser_origin_is_present,
     );
 
     FocusContextSnapshot {

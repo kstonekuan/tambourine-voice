@@ -13,7 +13,7 @@ export type FocusedWindow = {
 
 export type FocusedBrowserTab = {
 	title?: string | null;
-	url?: string | null;
+	origin?: string | null;
 	browser?: string | null;
 };
 

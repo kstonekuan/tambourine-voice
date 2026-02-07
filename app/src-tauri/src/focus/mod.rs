@@ -43,7 +43,7 @@ pub struct FocusedWindow {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FocusedBrowserTab {
     pub title: Option<String>,
-    pub url: Option<String>,
+    pub origin: Option<String>,
     pub browser: Option<String>,
 }
 

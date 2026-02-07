@@ -73,7 +73,7 @@ class FocusedBrowserTab(BaseModel):
     """Focused browser tab details (best-effort)."""
 
     title: str | None = None
-    url: str | None = None
+    origin: str | None = None
     browser: str | None = None
 
 

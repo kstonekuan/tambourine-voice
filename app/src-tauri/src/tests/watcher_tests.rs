@@ -9,7 +9,7 @@ fn build_focus_context_snapshot_for_test(
     application_name: &str,
     window_title: &str,
     browser_tab_title: Option<&str>,
-    browser_tab_url: Option<&str>,
+    browser_tab_origin: Option<&str>,
     confidence_level: FocusConfidenceLevel,
     captured_at: &str,
 ) -> FocusContextSnapshot {
@@ -24,7 +24,7 @@ fn build_focus_context_snapshot_for_test(
         }),
         focused_browser_tab: Some(FocusedBrowserTab {
             title: browser_tab_title.map(str::to_string),
-            url: browser_tab_url.map(str::to_string),
+            origin: browser_tab_origin.map(str::to_string),
             browser: None,
         }),
         event_source: FocusEventSource::Polling,
@@ -40,7 +40,7 @@ fn comparable_focus_context_is_stable_for_identical_snapshots() {
         "Code",
         "notes.md",
         Some("Pull Request"),
-        Some("https://example.com/pr/123"),
+        Some("https://example.com"),
         FocusConfidenceLevel::High,
         "2026-01-01T00:00:00Z",
     );
@@ -57,7 +57,7 @@ fn comparable_focus_context_ignores_captured_at_changes() {
         "Code",
         "notes.md",
         Some("Pull Request"),
-        Some("https://example.com/pr/123"),
+        Some("https://example.com"),
         FocusConfidenceLevel::High,
         "2026-01-01T00:00:00Z",
     );
@@ -65,7 +65,7 @@ fn comparable_focus_context_ignores_captured_at_changes() {
         "Code",
         "notes.md",
         Some("Pull Request"),
-        Some("https://example.com/pr/123"),
+        Some("https://example.com"),
         FocusConfidenceLevel::High,
         "2026-01-01T00:01:00Z",
     );
@@ -82,7 +82,7 @@ fn comparable_focus_context_changes_when_semantic_fields_change() {
         "Code",
         "notes.md",
         Some("Pull Request"),
-        Some("https://example.com/pr/123"),
+        Some("https://example.com"),
         FocusConfidenceLevel::High,
         "2026-01-01T00:00:00Z",
     );
@@ -90,7 +90,7 @@ fn comparable_focus_context_changes_when_semantic_fields_change() {
         "Code",
         "notes.md",
         Some("Issue"),
-        Some("https://example.com/issues/456"),
+        Some("https://example.org"),
         FocusConfidenceLevel::High,
         "2026-01-01T00:00:00Z",
     );
@@ -110,7 +110,7 @@ fn initial_observed_focus_snapshot_emits_after_debounce_window() {
         "Code",
         "notes.md",
         Some("Pull Request"),
-        Some("https://example.com/pr/123"),
+        Some("https://example.com"),
         FocusConfidenceLevel::High,
         "2026-01-01T00:00:00Z",
     );
@@ -141,7 +141,7 @@ fn debounce_timer_resets_only_when_comparable_context_changes() {
         "Code",
         "notes.md",
         Some("Pull Request"),
-        Some("https://example.com/pr/123"),
+        Some("https://example.com"),
         FocusConfidenceLevel::High,
         "2026-01-01T00:00:00Z",
     );
@@ -195,7 +195,7 @@ fn stable_emitted_state_does_not_reemit_identical_context() {
         "Code",
         "notes.md",
         Some("Pull Request"),
-        Some("https://example.com/pr/123"),
+        Some("https://example.com"),
         FocusConfidenceLevel::High,
         "2026-01-01T00:00:00Z",
     );
@@ -206,7 +206,7 @@ fn stable_emitted_state_does_not_reemit_identical_context() {
         "Code",
         "notes.md",
         Some("Pull Request"),
-        Some("https://example.com/pr/123"),
+        Some("https://example.com"),
         FocusConfidenceLevel::High,
         "2026-01-01T00:10:00Z",
     );

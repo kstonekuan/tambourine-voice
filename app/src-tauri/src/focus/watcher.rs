@@ -34,7 +34,7 @@ struct ComparableFocusContext {
     focused_application_display_name: Option<String>,
     focused_window_title: Option<String>,
     focused_browser_tab_title: Option<String>,
-    focused_browser_tab_url: Option<String>,
+    focused_browser_tab_origin: Option<String>,
     confidence_level: FocusConfidenceLevel,
 }
 
@@ -53,10 +53,10 @@ impl From<&FocusContextSnapshot> for ComparableFocusContext {
                 .focused_browser_tab
                 .as_ref()
                 .and_then(|browser_tab| browser_tab.title.clone()),
-            focused_browser_tab_url: snapshot
+            focused_browser_tab_origin: snapshot
                 .focused_browser_tab
                 .as_ref()
-                .and_then(|browser_tab| browser_tab.url.clone()),
+                .and_then(|browser_tab| browser_tab.origin.clone()),
             confidence_level: snapshot.confidence_level,
         }
     }

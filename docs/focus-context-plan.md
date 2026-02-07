@@ -1,7 +1,7 @@
 # Focus Context Capture + Prompt Injection (Windows + macOS)
 
 ## Summary
-Add a cross-platform, best-effort focus context snapshot in the Tauri backend. The backend continuously pushes the newest focus context to the TypeScript frontend. The frontend only sends focus context to the Python server when recording starts. The server injects focus context into the LLM system prompt at the start of each recording. Browser tab metadata is best-effort: Windows infers tab title from window title and attempts URL extraction via UIA for Chromium-family browsers.
+Add a cross-platform, best-effort focus context snapshot in the Tauri backend. The backend continuously pushes the newest focus context to the TypeScript frontend. The frontend only sends focus context to the Python server when recording starts. The server injects focus context into the LLM system prompt at the start of each recording. Browser tab metadata is best-effort: Windows infers tab title from window title and attempts origin extraction via UIA for Chromium-family browsers.
 
 ## High-Level Flow
 - [x] Tauri focus watcher emits `focus-context-changed` to the frontend.
@@ -74,8 +74,8 @@ Allows graceful shutdown and later extensions.
 Title inference trims `" - "` suffix when present.
 - [x] UI Automation (UIA) for URL extraction.
 Use `IUIAutomation` to locate Chromium-family address bar controls and read `ValuePattern` data.
-- [x] URL privacy filtering (origin + path, no query).
-Strip query parameters and fragments before sending to the server.
+- [x] URL privacy filtering (origin only).
+Drop path, query parameters, and fragments before sending to the server.
 
 ### macOS Focus Capture
 - [x] Frontmost app via `NSWorkspace.sharedWorkspace.frontmostApplication`.

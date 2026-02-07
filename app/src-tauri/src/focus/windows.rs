@@ -109,7 +109,7 @@ fn normalize_non_empty_focus_text(raw_focus_text: &str) -> Option<String> {
     }
 }
 
-fn normalize_browser_document_url(raw_document_url: &str) -> Option<String> {
+fn normalize_browser_document_origin(raw_document_url: &str) -> Option<String> {
     let trimmed_document_url = normalize_non_empty_focus_text(raw_document_url)?;
     let scheme_separator_index = trimmed_document_url.find("://")?;
     let (url_scheme, url_remainder_with_separator) =
@@ -127,21 +127,7 @@ fn normalize_browser_document_url(raw_document_url: &str) -> Option<String> {
         return None;
     }
 
-    let path_with_possible_query_or_fragment = if authority_end_index < url_remainder.len()
-        && url_remainder.as_bytes()[authority_end_index] == b'/'
-    {
-        &url_remainder[authority_end_index..]
-    } else {
-        ""
-    };
-    let path_without_query_or_fragment = path_with_possible_query_or_fragment
-        .split(['?', '#'])
-        .next()
-        .unwrap_or("");
-
-    Some(format!(
-        "{url_scheme}://{authority_component}{path_without_query_or_fragment}"
-    ))
+    Some(format!("{url_scheme}://{authority_component}"))
 }
 
 fn browser_process_metadata_from_application_name(
@@ -245,17 +231,17 @@ fn is_likely_browser_address_bar_candidate(
         })
 }
 
-fn extract_normalized_url_from_edit_control(
+fn extract_normalized_origin_from_edit_control(
     edit_control_element: &IUIAutomationElement,
 ) -> Option<String> {
     let value_pattern: IUIAutomationValuePattern =
         unsafe { edit_control_element.GetCurrentPatternAs(UIA_ValuePatternId.0) }.ok()?;
     let raw_current_value = value_pattern.CurrentValue().ok()?;
     let address_bar_value = bstr_to_non_empty_focus_text(raw_current_value)?;
-    normalize_browser_document_url(&address_bar_value)
+    normalize_browser_document_origin(&address_bar_value)
 }
 
-fn extract_browser_document_url_from_uia(hwnd: HWND) -> Option<String> {
+fn extract_browser_document_origin_from_uia(hwnd: HWND) -> Option<String> {
     let ui_automation_client = create_ui_automation_client()?;
     let focused_window_automation_element =
         unsafe { ui_automation_client.ElementFromHandle(hwnd) }.ok()?;
@@ -288,10 +274,10 @@ fn extract_browser_document_url_from_uia(hwnd: HWND) -> Option<String> {
             continue;
         }
 
-        if let Some(normalized_document_url) =
-            extract_normalized_url_from_edit_control(&edit_control_element)
+        if let Some(normalized_document_origin) =
+            extract_normalized_origin_from_edit_control(&edit_control_element)
         {
-            return Some(normalized_document_url);
+            return Some(normalized_document_origin);
         }
     }
 
@@ -301,9 +287,9 @@ fn extract_browser_document_url_from_uia(hwnd: HWND) -> Option<String> {
 fn determine_focus_confidence_level(
     focused_window_is_present: bool,
     focused_browser_tab_is_present: bool,
-    focused_browser_url_is_present: bool,
+    focused_browser_origin_is_present: bool,
 ) -> FocusConfidenceLevel {
-    if focused_window_is_present && focused_browser_url_is_present {
+    if focused_window_is_present && focused_browser_origin_is_present {
         FocusConfidenceLevel::High
     } else if focused_window_is_present || focused_browser_tab_is_present {
         FocusConfidenceLevel::Medium
@@ -349,23 +335,23 @@ pub fn get_current_focus_context() -> FocusContextSnapshot {
             browser_process_metadata.browser_display_name,
         )
     });
-    let browser_document_url = browser_process_metadata
+    let browser_document_origin = browser_process_metadata
         .filter(|browser_process_metadata| browser_process_metadata.supports_uia_address_bar)
-        .and_then(|_| extract_browser_document_url_from_uia(hwnd));
+        .and_then(|_| extract_browser_document_origin_from_uia(hwnd));
     let focused_browser_tab = browser_process_metadata.and_then(|browser_process_metadata| {
-        if browser_tab_title.is_none() && browser_document_url.is_none() {
+        if browser_tab_title.is_none() && browser_document_origin.is_none() {
             return None;
         }
 
         Some(FocusedBrowserTab {
             title: browser_tab_title,
-            url: browser_document_url,
+            origin: browser_document_origin,
             browser: Some(browser_process_metadata.browser_display_name.to_string()),
         })
     });
     let event_source = if focused_browser_tab
         .as_ref()
-        .and_then(|focused_browser_tab| focused_browser_tab.url.as_ref())
+        .and_then(|focused_browser_tab| focused_browser_tab.origin.as_ref())
         .is_some()
     {
         FocusEventSource::Uia
@@ -377,7 +363,7 @@ pub fn get_current_focus_context() -> FocusContextSnapshot {
         focused_browser_tab.is_some(),
         focused_browser_tab
             .as_ref()
-            .and_then(|focused_browser_tab| focused_browser_tab.url.as_ref())
+            .and_then(|focused_browser_tab| focused_browser_tab.origin.as_ref())
             .is_some(),
     );
 

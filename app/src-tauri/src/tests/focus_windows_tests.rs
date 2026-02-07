@@ -1,24 +1,24 @@
 use super::{
     browser_process_metadata_from_application_name, infer_browser_tab_title_from_window_title,
-    is_likely_browser_address_bar_candidate, normalize_browser_document_url,
+    is_likely_browser_address_bar_candidate, normalize_browser_document_origin,
 };
 
 #[test]
-fn normalize_browser_document_url_removes_query_and_fragment() {
+fn normalize_browser_document_origin_removes_path_query_and_fragment() {
     let raw_document_url = "https://example.com/path/to/page?token=abc#section";
-    let normalized_document_url = normalize_browser_document_url(raw_document_url);
+    let normalized_document_origin = normalize_browser_document_origin(raw_document_url);
     assert_eq!(
-        normalized_document_url.as_deref(),
-        Some("https://example.com/path/to/page")
+        normalized_document_origin.as_deref(),
+        Some("https://example.com")
     );
 }
 
 #[test]
-fn normalize_browser_document_url_keeps_origin_when_path_is_missing() {
+fn normalize_browser_document_origin_keeps_origin_when_path_is_missing() {
     let raw_document_url = "https://example.com?token=abc";
-    let normalized_document_url = normalize_browser_document_url(raw_document_url);
+    let normalized_document_origin = normalize_browser_document_origin(raw_document_url);
     assert_eq!(
-        normalized_document_url.as_deref(),
+        normalized_document_origin.as_deref(),
         Some("https://example.com")
     );
 }

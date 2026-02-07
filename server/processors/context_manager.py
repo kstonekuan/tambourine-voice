@@ -37,7 +37,7 @@ FOCUS_TEXT_CONTROL_CHARACTER_PATTERN = re.compile(r"[\x00-\x1F\x7F]")
 FOCUS_TEXT_WHITESPACE_PATTERN = re.compile(r"\s+")
 
 MAX_FOCUS_TEXT_FIELD_LENGTH = 300
-MAX_FOCUS_URL_FIELD_LENGTH = 500
+MAX_FOCUS_ORIGIN_FIELD_LENGTH = 500
 
 
 class SanitizedFocusText:
@@ -192,25 +192,23 @@ class DictationContextManager:
             return None
         return sanitized_focus_text.as_json_prompt_literal()
 
-    def _sanitize_focus_url(self, raw_focus_url: str | None) -> SanitizedFocusText | None:
-        sanitized_focus_url = SanitizedFocusText.from_untrusted_text(
-            raw_focus_url,
-            max_field_length=MAX_FOCUS_URL_FIELD_LENGTH,
+    def _sanitize_focus_origin(self, raw_focus_origin: str | None) -> SanitizedFocusText | None:
+        sanitized_focus_origin = SanitizedFocusText.from_untrusted_text(
+            raw_focus_origin,
+            max_field_length=MAX_FOCUS_ORIGIN_FIELD_LENGTH,
         )
-        if sanitized_focus_url is None:
+        if sanitized_focus_origin is None:
             return None
 
-        parsed_focus_url = urlparse(sanitized_focus_url.value)
-        if parsed_focus_url.scheme and parsed_focus_url.netloc:
-            normalized_focus_url = (
-                f"{parsed_focus_url.scheme}://{parsed_focus_url.netloc}{parsed_focus_url.path}"
-            )
+        parsed_focus_origin = urlparse(sanitized_focus_origin.value)
+        if parsed_focus_origin.scheme and parsed_focus_origin.netloc:
+            normalized_focus_origin = f"{parsed_focus_origin.scheme}://{parsed_focus_origin.netloc}"
             return SanitizedFocusText.from_untrusted_text(
-                normalized_focus_url,
-                max_field_length=MAX_FOCUS_URL_FIELD_LENGTH,
+                normalized_focus_origin,
+                max_field_length=MAX_FOCUS_ORIGIN_FIELD_LENGTH,
             )
 
-        return sanitized_focus_url
+        return sanitized_focus_origin
 
     def _is_entire_focus_context_unknown(self, focus_context: FocusContextSnapshot) -> bool:
         return (
@@ -260,11 +258,15 @@ class DictationContextManager:
             title_part = (
                 f"title={formatted_browser_title}" if formatted_browser_title is not None else None
             )
-            formatted_browser_url = self._format_untrusted_focus_value(
-                self._sanitize_focus_url(focused_browser_tab.url)
+            formatted_browser_origin = self._format_untrusted_focus_value(
+                self._sanitize_focus_origin(focused_browser_tab.origin)
             )
-            url_part = f"url={formatted_browser_url}" if formatted_browser_url is not None else None
-            browser_parts = [part for part in [title_part, url_part] if part]
+            origin_part = (
+                f"origin={formatted_browser_origin}"
+                if formatted_browser_origin is not None
+                else None
+            )
+            browser_parts = [part for part in [title_part, origin_part] if part]
             if browser_parts:
                 formatted_focus_context_lines.append(f"- Browser Tab: {', '.join(browser_parts)}")
 
