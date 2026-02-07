@@ -243,7 +243,7 @@ pub async fn update_cleanup_prompt_sections(
     if let Some(ref s) = sections {
         if let Err(e) = config_sync.read().await.sync_prompt_sections(s).await {
             log::warn!("Failed to sync prompt sections to server: {e}");
-            return Err(e);
+            return Err(e.to_string());
         }
     }
 
@@ -320,7 +320,7 @@ pub async fn update_stt_timeout(
     if let Some(timeout) = timeout_seconds {
         if let Err(e) = config_sync.read().await.sync_stt_timeout(timeout).await {
             log::warn!("Failed to sync STT timeout to server: {e}");
-            return Err(e);
+            return Err(e.to_string());
         }
     }
 
@@ -377,7 +377,7 @@ pub async fn update_llm_formatting_enabled(
         .await
     {
         log::warn!("Failed to sync LLM formatting to server: {e}");
-        return Err(e);
+        return Err(e.to_string());
     }
 
     Ok(())

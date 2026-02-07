@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use serde::Serialize;
 use std::sync::Arc;
 use std::time::Duration;
@@ -54,73 +55,87 @@ impl ConfigSyncState {
     }
 
     /// Sync prompt sections to server (best-effort, logs errors)
-    pub async fn sync_prompt_sections(
-        &self,
-        sections: &CleanupPromptSections,
-    ) -> Result<(), String> {
-        let (Some(url), Some(uuid)) = (&self.server_url, &self.client_uuid) else {
+    pub async fn sync_prompt_sections(&self, sections: &CleanupPromptSections) -> Result<()> {
+        let (Some(server_url), Some(client_uuid)) = (&self.server_url, &self.client_uuid) else {
             return Ok(()); // Not connected, skip silently
         };
 
+        let endpoint_url = format!("{server_url}/api/config/prompts");
         self.client
-            .put(format!("{url}/api/config/prompts"))
-            .header("X-Client-UUID", uuid)
+            .put(&endpoint_url)
+            .header("X-Client-UUID", client_uuid)
             .json(sections)
             .send()
             .await
-            .map_err(|e| e.to_string())?
+            .with_context(|| {
+                format!("Failed to send prompt sections sync request to {endpoint_url}")
+            })?
             .error_for_status()
-            .map_err(|e| e.to_string())?;
+            .with_context(|| {
+                format!(
+                    "Server returned an error for prompt sections sync request to {endpoint_url}"
+                )
+            })?;
 
         log::debug!("Synced prompt sections to server");
         Ok(())
     }
 
     /// Sync STT timeout to server
-    pub async fn sync_stt_timeout(&self, timeout_seconds: f64) -> Result<(), String> {
+    pub async fn sync_stt_timeout(&self, timeout_seconds: f64) -> Result<()> {
         #[derive(Serialize)]
         struct TimeoutBody {
             timeout_seconds: f64,
         }
 
-        let (Some(url), Some(uuid)) = (&self.server_url, &self.client_uuid) else {
+        let (Some(server_url), Some(client_uuid)) = (&self.server_url, &self.client_uuid) else {
             return Ok(()); // Not connected, skip silently
         };
 
+        let endpoint_url = format!("{server_url}/api/config/stt-timeout");
         self.client
-            .put(format!("{url}/api/config/stt-timeout"))
-            .header("X-Client-UUID", uuid)
+            .put(&endpoint_url)
+            .header("X-Client-UUID", client_uuid)
             .json(&TimeoutBody { timeout_seconds })
             .send()
             .await
-            .map_err(|e| e.to_string())?
+            .with_context(|| format!("Failed to send STT timeout sync request to {endpoint_url}"))?
             .error_for_status()
-            .map_err(|e| e.to_string())?;
+            .with_context(|| {
+                format!("Server returned an error for STT timeout sync request to {endpoint_url}")
+            })?;
 
         log::debug!("Synced STT timeout ({timeout_seconds}) to server");
         Ok(())
     }
 
     /// Sync LLM formatting enabled setting to server
-    pub async fn sync_llm_formatting_enabled(&self, enabled: bool) -> Result<(), String> {
+    pub async fn sync_llm_formatting_enabled(&self, enabled: bool) -> Result<()> {
         #[derive(Serialize)]
         struct LlmFormattingBody {
             enabled: bool,
         }
 
-        let (Some(url), Some(uuid)) = (&self.server_url, &self.client_uuid) else {
+        let (Some(server_url), Some(client_uuid)) = (&self.server_url, &self.client_uuid) else {
             return Ok(()); // Not connected, skip silently
         };
 
+        let endpoint_url = format!("{server_url}/api/config/llm-formatting");
         self.client
-            .put(format!("{url}/api/config/llm-formatting"))
-            .header("X-Client-UUID", uuid)
+            .put(&endpoint_url)
+            .header("X-Client-UUID", client_uuid)
             .json(&LlmFormattingBody { enabled })
             .send()
             .await
-            .map_err(|e| e.to_string())?
+            .with_context(|| {
+                format!("Failed to send LLM formatting sync request to {endpoint_url}")
+            })?
             .error_for_status()
-            .map_err(|e| e.to_string())?;
+            .with_context(|| {
+                format!(
+                    "Server returned an error for LLM formatting sync request to {endpoint_url}"
+                )
+            })?;
 
         log::debug!("Synced LLM formatting enabled={enabled} to server");
         Ok(())
