@@ -321,6 +321,8 @@ export function HotkeyInput({
 				onClick={handleClick}
 				disabled={disabled}
 				className={`hotkey-display ${isRecording ? "capturing" : ""}`}
+				aria-label={isRecording ? "Recording shortcut; Press keys or Escape to cancel" : "Click to record a new shortcut"}
+				aria-pressed={isRecording}
 				style={{
 					width: "100%",
 					marginTop: 8,

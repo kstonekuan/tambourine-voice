@@ -143,17 +143,20 @@ On macOS, Tambourine needs accessibility permissions to type text at your cursor
 
 ### 1. Get API Keys
 
-Sign up and get API keys for the providers you want to use. Some providers with generous free tiers as of this writing:
-- Cartesia: https://cartesia.ai (STT)
-- Cerebras: https://cloud.cerebras.ai (LLM)
-- Gemini: https://aistudio.google.com (LLM)
-- Groq: https://console.groq.com (STT/LLM)
+ Choose your providers (at least one STT and one LLM required):
 
-**Or run fully local:**
-```bash
-ollama run llama3.2
-```
-Then in your `.env` file, set `OLLAMA_BASE_URL=http://localhost:11434` and `OLLAMA_MODEL=llama3.2` for local LLM, and `WHISPER_ENABLED=true` for local STT.
+ > **Note:** The following are examples of providers with generous free tiers. Tambourine supports many more providers with paid API keys—see `server/.env.example` for the full list.
+
+| Provider | Type | Free Tier | Sign Up |
+|----------|------|-----------|---------|
+| Cartesia | STT | 3 hours/month | [cartesia.ai](https://cartesia.ai ) |
+| Cerebras | LLM | 10K tokens/day | [cloud.cerebras.ai](https://cloud.cerebras.ai ) |
+| Gemini | LLM | 1,500 requests/day (1M tokens/min burst) | [aistudio.google.com](https://aistudio.google.com ) |
+| Groq | Both | Model-specific (100K-500K tokens/day) | [console.groq.com](https://console.groq.com ) |
+
+**For fully local deployment:**
+- Set `OLLAMA_BASE_URL=http://localhost:11434` in `.env`
+- Set `WHISPER_ENABLED=true` for local STT
 
 ### 2. Set Up the Server
 
