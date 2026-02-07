@@ -19,6 +19,10 @@ use windows::Win32::UI::Accessibility::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowTextW};
 
+use super::shared::{
+    determine_focus_confidence_level, infer_browser_tab_title_from_window_title,
+    normalize_browser_document_origin, normalize_non_empty_focus_text,
+};
 use crate::focus::{
     FocusConfidenceLevel, FocusContextSnapshot, FocusEventSource, FocusedApplication,
     FocusedBrowserTab, FocusedWindow, SupportedBrowser,
@@ -96,36 +100,6 @@ fn get_application_display_name(process_path: &str) -> String {
         .to_string()
 }
 
-fn normalize_non_empty_focus_text(raw_focus_text: &str) -> Option<String> {
-    let trimmed_focus_text = raw_focus_text.trim();
-    if trimmed_focus_text.is_empty() {
-        None
-    } else {
-        Some(trimmed_focus_text.to_string())
-    }
-}
-
-fn normalize_browser_document_origin(raw_document_url: &str) -> Option<String> {
-    let trimmed_document_url = normalize_non_empty_focus_text(raw_document_url)?;
-    let scheme_separator_index = trimmed_document_url.find("://")?;
-    let (url_scheme, url_remainder_with_separator) =
-        trimmed_document_url.split_at(scheme_separator_index);
-    let url_remainder = &url_remainder_with_separator[3..];
-    if url_scheme.is_empty() || url_remainder.is_empty() {
-        return None;
-    }
-
-    let authority_end_index = url_remainder
-        .find(['/', '?', '#'])
-        .unwrap_or(url_remainder.len());
-    let authority_component = &url_remainder[..authority_end_index];
-    if authority_component.is_empty() {
-        return None;
-    }
-
-    Some(format!("{url_scheme}://{authority_component}"))
-}
-
 fn supported_browser_from_application_name(application_name: &str) -> Option<SupportedBrowser> {
     let normalized_application_name = application_name.to_lowercase();
     match normalized_application_name.as_str() {
@@ -141,22 +115,6 @@ fn supported_browser_from_application_name(application_name: &str) -> Option<Sup
     }
 }
 
-fn infer_browser_tab_title_from_window_title(
-    focused_window_title: Option<&str>,
-    browser_name: &str,
-) -> Option<String> {
-    let focused_window_title = normalize_non_empty_focus_text(focused_window_title?)?;
-    for title_separator in [" - ", " — "] {
-        let browser_suffix = format!("{title_separator}{browser_name}");
-        if let Some(raw_tab_title) = focused_window_title.strip_suffix(&browser_suffix) {
-            return normalize_non_empty_focus_text(raw_tab_title)
-                .or_else(|| Some(focused_window_title.clone()));
-        }
-    }
-
-    Some(focused_window_title)
-}
-
 fn bstr_to_non_empty_focus_text(raw_bstr: BSTR) -> Option<String> {
     let bstr_as_string = String::try_from(raw_bstr).ok()?;
     normalize_non_empty_focus_text(&bstr_as_string)
@@ -170,23 +128,23 @@ impl ComApartmentInitializationGuard {
     fn initialize_single_threaded() -> Option<Self> {
         // SAFETY: CoInitializeEx is called once for this access path. The returned guard
         // tracks whether this call succeeded and should be balanced by CoUninitialize.
-        match unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) } {
-            Ok(()) => Some(Self {
+        let co_initialize_result = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+        if co_initialize_result.is_ok() {
+            Some(Self {
                 should_call_co_uninitialize_on_drop: true,
-            }),
-            Err(initialization_error) if initialization_error.code() == RPC_E_CHANGED_MODE => {
-                // COM is already initialized on this thread with another apartment model.
-                // We can still use existing COM initialization, but must not uninitialize it here.
-                Some(Self {
-                    should_call_co_uninitialize_on_drop: false,
-                })
-            }
-            Err(initialization_error) => {
-                log::warn!(
-                    "Failed to initialize COM apartment for UI Automation: {initialization_error}"
-                );
-                None
-            }
+            })
+        } else if co_initialize_result == RPC_E_CHANGED_MODE {
+            // COM is already initialized on this thread with another apartment model.
+            // We can still use existing COM initialization, but must not uninitialize it here.
+            Some(Self {
+                should_call_co_uninitialize_on_drop: false,
+            })
+        } else {
+            log::warn!(
+                "Failed to initialize COM apartment for UI Automation: HRESULT=0x{:08X}",
+                co_initialize_result.0 as u32
+            );
+            None
         }
     }
 }
@@ -352,20 +310,6 @@ fn extract_browser_document_origin_from_uia(hwnd: HWND) -> Option<String> {
     }
 
     None
-}
-
-fn determine_focus_confidence_level(
-    focused_window_is_present: bool,
-    focused_browser_tab_is_present: bool,
-    focused_browser_origin_is_present: bool,
-) -> FocusConfidenceLevel {
-    if focused_window_is_present && focused_browser_origin_is_present {
-        FocusConfidenceLevel::High
-    } else if focused_window_is_present || focused_browser_tab_is_present {
-        FocusConfidenceLevel::Medium
-    } else {
-        FocusConfidenceLevel::Low
-    }
 }
 
 pub fn get_current_focus_context() -> FocusContextSnapshot {

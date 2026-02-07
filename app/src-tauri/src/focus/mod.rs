@@ -1,6 +1,11 @@
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
+#[cfg_attr(
+    not(any(target_os = "windows", target_os = "macos", test)),
+    allow(dead_code)
+)]
+mod shared;
 mod watcher;
 
 #[cfg(target_os = "macos")]
@@ -115,3 +120,7 @@ pub fn get_current_focus_context() -> FocusContextSnapshot {
 pub fn start_focus_watcher_in_app(app: &AppHandle) -> FocusWatcherHandle {
     start_focus_watcher(app.clone())
 }
+
+#[cfg(test)]
+#[path = "../tests/focus_shared_tests.rs"]
+mod focus_shared_tests;

@@ -6,6 +6,8 @@
 use std::fmt;
 use std::sync::Mutex;
 
+mod shared;
+
 // Platform-specific implementations
 #[cfg(target_os = "macos")]
 mod macos;
@@ -103,15 +105,33 @@ pub struct AudioMuteManager {
 impl AudioMuteManager {
     pub fn new() -> Option<Self> {
         match create_controller() {
-            Ok(controller) => Some(Self {
-                controller,
-                state: Mutex::new(MuteState::NotMuting),
-            }),
+            Ok(controller) => Some(Self::from_controller(controller)),
             Err(e) => {
                 log::warn!("Audio mute not available: {e}");
                 None
             }
         }
+    }
+
+    pub fn from_controller(controller: Box<dyn SystemAudioControl>) -> Self {
+        Self {
+            controller,
+            state: Mutex::new(MuteState::NotMuting),
+        }
+    }
+
+    fn apply_mute_transition_decision(
+        &self,
+        state: &mut MuteState,
+        transition_decision: shared::MuteTransitionDecision,
+    ) -> Result<(), AudioControlError> {
+        if let shared::MuteTransitionAction::SetMuted(next_mute_value) = transition_decision.action
+        {
+            self.controller.set_muted(next_mute_value)?;
+        }
+
+        *state = transition_decision.next_state;
+        Ok(())
     }
 
     pub fn mute(&self) -> Result<(), AudioControlError> {
@@ -122,13 +142,17 @@ impl AudioMuteManager {
         }
 
         let audio_is_already_muted = self.controller.is_muted().unwrap_or(false);
-        if audio_is_already_muted {
-            log::info!("System audio already muted, skipping");
-            *state = MuteState::AudioWasAlreadyMutedByUser;
-        } else {
-            self.controller.set_muted(true)?;
-            log::info!("System audio muted for recording");
-            *state = MuteState::MutedByUs;
+        let transition_decision = shared::decide_mute_transition(*state, audio_is_already_muted);
+        self.apply_mute_transition_decision(&mut state, transition_decision)?;
+
+        match transition_decision.next_state {
+            MuteState::AudioWasAlreadyMutedByUser => {
+                log::info!("System audio already muted, skipping");
+            }
+            MuteState::MutedByUs => {
+                log::info!("System audio muted for recording");
+            }
+            MuteState::NotMuting => {}
         }
 
         Ok(())
@@ -136,21 +160,21 @@ impl AudioMuteManager {
 
     pub fn unmute(&self) -> Result<(), AudioControlError> {
         let mut state = self.state.lock().unwrap();
+        let previous_mute_state = *state;
+        let transition_decision = shared::decide_unmute_transition(*state);
+        self.apply_mute_transition_decision(&mut state, transition_decision)?;
 
-        match *state {
-            MuteState::NotMuting => Ok(()),
+        match previous_mute_state {
             MuteState::MutedByUs => {
-                self.controller.set_muted(false)?;
                 log::info!("System audio unmuted after recording");
-                *state = MuteState::NotMuting;
-                Ok(())
             }
             MuteState::AudioWasAlreadyMutedByUser => {
                 log::info!("System audio was already muted, leaving muted");
-                *state = MuteState::NotMuting;
-                Ok(())
             }
+            MuteState::NotMuting => {}
         }
+
+        Ok(())
     }
 }
 
@@ -164,3 +188,7 @@ impl Drop for AudioMuteManager {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/audio_mute_tests.rs"]
+mod audio_mute_tests;

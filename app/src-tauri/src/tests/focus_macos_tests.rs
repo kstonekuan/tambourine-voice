@@ -1,28 +1,5 @@
-use super::{
-    infer_browser_tab_title_from_window_title, normalize_browser_document_origin,
-    supported_browser_from_bundle_identifier,
-};
+use super::supported_browser_from_bundle_identifier;
 use crate::focus::SupportedBrowser;
-
-#[test]
-fn normalize_browser_document_origin_removes_path_query_and_fragment() {
-    let raw_document_url = "https://example.com/path/to/page?token=abc#section";
-    let normalized_document_origin = normalize_browser_document_origin(raw_document_url);
-    assert_eq!(
-        normalized_document_origin.as_deref(),
-        Some("https://example.com")
-    );
-}
-
-#[test]
-fn normalize_browser_document_origin_keeps_origin_when_path_is_missing() {
-    let raw_document_url = "https://example.com?token=abc";
-    let normalized_document_origin = normalize_browser_document_origin(raw_document_url);
-    assert_eq!(
-        normalized_document_origin.as_deref(),
-        Some("https://example.com")
-    );
-}
 
 #[test]
 fn supported_browser_from_bundle_identifier_supports_v1_browser_set() {
@@ -71,12 +48,4 @@ fn supported_browser_from_bundle_identifier_supports_v1_browser_set() {
             .map(SupportedBrowser::display_name),
         Some("Chromium")
     );
-}
-
-#[test]
-fn infer_browser_tab_title_from_window_title_strips_browser_suffix() {
-    let focused_window_title = Some("Focus Context Plan - Google Chrome");
-    let inferred_tab_title =
-        infer_browser_tab_title_from_window_title(focused_window_title, "Google Chrome");
-    assert_eq!(inferred_tab_title.as_deref(), Some("Focus Context Plan"));
 }
