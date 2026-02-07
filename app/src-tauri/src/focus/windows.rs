@@ -143,8 +143,7 @@ impl ComApartmentInitializationGuard {
             let co_initialize_result_as_u32 =
                 u32::from_ne_bytes(co_initialize_result.0.to_ne_bytes());
             log::warn!(
-                "Failed to initialize COM apartment for UI Automation: HRESULT=0x{:08X}",
-                co_initialize_result_as_u32
+                "Failed to initialize COM apartment for UI Automation: HRESULT=0x{co_initialize_result_as_u32:08X}"
             );
             None
         }
