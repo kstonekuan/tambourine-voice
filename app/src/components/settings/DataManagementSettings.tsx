@@ -75,6 +75,8 @@ export function DataManagementSettings() {
 				message: `Could not recognize: ${unknownFiles.map((f) => f.filename).join(", ")}`,
 				color: "yellow",
 				autoClose: NOTIFICATION_WARNING_TIMEOUT_MS,
+				// Note: This file only has one notification timeout value
+				// Other files may have similar hardcoded values that could be extracted
 			});
 		}
 
