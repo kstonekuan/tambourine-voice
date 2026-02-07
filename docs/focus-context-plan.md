@@ -1,7 +1,7 @@
 # Focus Context Capture + Prompt Injection (Windows + macOS)
 
 ## Summary
-Add a cross-platform, best-effort focus context snapshot in the Tauri backend. The backend continuously pushes the newest focus context to the TypeScript frontend. The frontend only sends focus context to the Python server when recording starts. The server injects focus context into the LLM system prompt at the start of each recording. Browser tab metadata is best-effort: Windows infers tab title from window title and attempts origin extraction via UIA for Chromium-family browsers.
+Add a cross-platform, best-effort focus context snapshot in the Tauri backend. The backend continuously pushes the newest focus context to the TypeScript frontend. The frontend only sends focus context to the Python server when recording starts. The server injects focus context into the LLM system prompt at the start of each recording. Browser tab metadata is best-effort: Windows infers tab title from window title and attempts origin extraction via UIA for Chromium-family browsers plus Firefox.
 
 ## High-Level Flow
 - [x] Tauri focus watcher emits `focus-context-changed` to the frontend.
@@ -22,7 +22,7 @@ Add a cross-platform, best-effort focus context snapshot in the Tauri backend. T
   - `GetWindowThreadProcessId`, `OpenProcess`, `QueryFullProcessImageNameW`
 - UI Automation:
   - `IUIAutomation` to traverse the accessibility tree (no screenshots)
-  - Chromium family adapters first (Chrome, Edge, Brave, Opera)
+  - Chromium family adapters first (Chrome, Edge, Brave, Opera), with best-effort Firefox support
 
 ### macOS APIs and Crates
 - Crates:
@@ -82,7 +82,7 @@ Drop path, query parameters, and fragments before sending to the server.
 - [x] Focused window title via Accessibility (`AXUIElement`).
 Use AX focused window or focused UI element when available.
 - [x] Browser tab title/URL via Accessibility tree.
-Attempt Safari/Chrome/Edge/Brave with AXURL and active tab title.
+Attempt Safari/Chrome/Edge/Brave/Firefox with AXURL and active tab title.
 - [x] Accessibility permission check with low-confidence fallback.
 If permission missing, return `privacy_filtered=true` with low confidence.
 
@@ -117,5 +117,5 @@ Injects when focus context is present, but skips injection when the snapshot is 
 - [x] `send_focus_context_enabled` default: true.
 
 ## Outstanding Work
-- [ ] Expand browser coverage for direct URL extraction beyond Chromium family on Windows.
+- [ ] Harden Firefox/other non-Chromium URL extraction robustness on Windows across locales and browser versions.
 - [ ] Improve browser tab title extraction on Windows by querying UIA tab controls where available instead of only window-title inference.

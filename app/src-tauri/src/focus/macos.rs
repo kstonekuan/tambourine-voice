@@ -15,7 +15,7 @@ use objc2_foundation::NSString;
 
 use crate::focus::{
     FocusConfidenceLevel, FocusContextSnapshot, FocusEventSource, FocusedApplication,
-    FocusedBrowserTab, FocusedWindow,
+    FocusedBrowserTab, FocusedWindow, SupportedBrowser,
 };
 
 type AccessibilityUiElementRef = *const c_void;
@@ -66,13 +66,17 @@ fn normalize_non_empty_focus_text(raw_focus_text: &str) -> Option<String> {
     }
 }
 
-fn browser_name_from_bundle_identifier(bundle_identifier: &str) -> Option<&'static str> {
+fn supported_browser_from_bundle_identifier(bundle_identifier: &str) -> Option<SupportedBrowser> {
     match bundle_identifier {
-        "com.apple.Safari" => Some("Safari"),
-        "com.google.Chrome" => Some("Google Chrome"),
-        "com.microsoft.edgemac" => Some("Microsoft Edge"),
-        "com.brave.Browser" => Some("Brave Browser"),
-        "company.thebrowser.Browser" => Some("Arc"),
+        "com.apple.Safari" => Some(SupportedBrowser::Safari),
+        "com.google.Chrome" => Some(SupportedBrowser::GoogleChrome),
+        "com.microsoft.edgemac" => Some(SupportedBrowser::MicrosoftEdge),
+        "com.brave.Browser" => Some(SupportedBrowser::BraveBrowser),
+        "company.thebrowser.Browser" => Some(SupportedBrowser::Arc),
+        "org.mozilla.firefox" => Some(SupportedBrowser::Firefox),
+        "com.operasoftware.Opera" => Some(SupportedBrowser::Opera),
+        "com.vivaldi.Vivaldi" => Some(SupportedBrowser::Vivaldi),
+        "org.chromium.Chromium" => Some(SupportedBrowser::Chromium),
         _ => None,
     }
 }
@@ -353,18 +357,20 @@ fn build_focused_browser_tab(
     focused_window_title: Option<&str>,
     accessibility_focused_window_details: Option<&AccessibilityFocusedWindowDetails>,
 ) -> Option<FocusedBrowserTab> {
-    let browser_name =
+    let supported_browser =
         frontmost_application_metadata.and_then(|frontmost_application_metadata| {
             frontmost_application_metadata
                 .bundle_identifier
                 .as_deref()
-                .and_then(browser_name_from_bundle_identifier)
+                .and_then(supported_browser_from_bundle_identifier)
         })?;
     let normalized_browser_document_origin = accessibility_focused_window_details
         .and_then(|focused_window_details| focused_window_details.focused_document_url.as_deref())
         .and_then(normalize_browser_document_origin);
-    let inferred_browser_tab_title =
-        infer_browser_tab_title_from_window_title(focused_window_title, browser_name);
+    let inferred_browser_tab_title = infer_browser_tab_title_from_window_title(
+        focused_window_title,
+        supported_browser.display_name(),
+    );
     if inferred_browser_tab_title.is_none() && normalized_browser_document_origin.is_none() {
         return None;
     }
@@ -372,7 +378,7 @@ fn build_focused_browser_tab(
     Some(FocusedBrowserTab {
         title: inferred_browser_tab_title,
         origin: normalized_browser_document_origin,
-        browser: Some(browser_name.to_string()),
+        browser: Some(supported_browser.display_name().to_string()),
     })
 }
 

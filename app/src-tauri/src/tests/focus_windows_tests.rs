@@ -1,6 +1,6 @@
 use super::{
-    browser_process_metadata_from_application_name, infer_browser_tab_title_from_window_title,
-    is_likely_browser_address_bar_candidate, normalize_browser_document_origin,
+    infer_browser_tab_title_from_window_title, is_likely_browser_address_bar_candidate,
+    normalize_browser_document_origin, supported_browser_from_application_name,
 };
 
 #[test]
@@ -24,18 +24,16 @@ fn normalize_browser_document_origin_keeps_origin_when_path_is_missing() {
 }
 
 #[test]
-fn browser_process_metadata_from_application_name_supports_chromium_and_firefox() {
-    let chrome_metadata = browser_process_metadata_from_application_name("chrome")
+fn supported_browser_from_application_name_supports_chromium_and_firefox() {
+    let supported_chrome_browser = supported_browser_from_application_name("chrome")
         .expect("chrome should be recognized as a browser");
-    assert_eq!(chrome_metadata.browser_display_name, "Google Chrome");
-    assert!(chrome_metadata.supports_uia_address_bar);
+    assert_eq!(supported_chrome_browser.display_name(), "Google Chrome");
 
-    let firefox_metadata = browser_process_metadata_from_application_name("firefox")
+    let supported_firefox_browser = supported_browser_from_application_name("firefox")
         .expect("firefox should be recognized as a browser");
-    assert_eq!(firefox_metadata.browser_display_name, "Firefox");
-    assert!(!firefox_metadata.supports_uia_address_bar);
+    assert_eq!(supported_firefox_browser.display_name(), "Firefox");
 
-    assert!(browser_process_metadata_from_application_name("code").is_none());
+    assert!(supported_browser_from_application_name("code").is_none());
 }
 
 #[test]
@@ -55,6 +53,10 @@ fn is_likely_browser_address_bar_candidate_uses_automation_id_or_name_markers() 
     assert!(is_likely_browser_address_bar_candidate(
         None,
         Some("Address and search bar")
+    ));
+    assert!(is_likely_browser_address_bar_candidate(
+        Some("urlbar-input"),
+        Some("Search with Google or enter address")
     ));
     assert!(!is_likely_browser_address_bar_candidate(
         Some("searchResult"),

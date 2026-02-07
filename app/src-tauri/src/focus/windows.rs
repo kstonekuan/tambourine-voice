@@ -19,14 +19,8 @@ use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowText
 
 use crate::focus::{
     FocusConfidenceLevel, FocusContextSnapshot, FocusEventSource, FocusedApplication,
-    FocusedBrowserTab, FocusedWindow,
+    FocusedBrowserTab, FocusedWindow, SupportedBrowser,
 };
-
-#[derive(Debug, Clone, Copy)]
-struct BrowserProcessMetadata {
-    browser_display_name: &'static str,
-    supports_uia_address_bar: bool,
-}
 
 fn get_foreground_window() -> Option<HWND> {
     let hwnd = unsafe { GetForegroundWindow() };
@@ -130,43 +124,17 @@ fn normalize_browser_document_origin(raw_document_url: &str) -> Option<String> {
     Some(format!("{url_scheme}://{authority_component}"))
 }
 
-fn browser_process_metadata_from_application_name(
-    application_name: &str,
-) -> Option<BrowserProcessMetadata> {
+fn supported_browser_from_application_name(application_name: &str) -> Option<SupportedBrowser> {
     let normalized_application_name = application_name.to_lowercase();
     match normalized_application_name.as_str() {
-        "chrome" => Some(BrowserProcessMetadata {
-            browser_display_name: "Google Chrome",
-            supports_uia_address_bar: true,
-        }),
-        "msedge" | "edge" => Some(BrowserProcessMetadata {
-            browser_display_name: "Microsoft Edge",
-            supports_uia_address_bar: true,
-        }),
-        "brave" => Some(BrowserProcessMetadata {
-            browser_display_name: "Brave Browser",
-            supports_uia_address_bar: true,
-        }),
-        "opera" | "opera_gx" => Some(BrowserProcessMetadata {
-            browser_display_name: "Opera",
-            supports_uia_address_bar: true,
-        }),
-        "arc" => Some(BrowserProcessMetadata {
-            browser_display_name: "Arc",
-            supports_uia_address_bar: true,
-        }),
-        "vivaldi" => Some(BrowserProcessMetadata {
-            browser_display_name: "Vivaldi",
-            supports_uia_address_bar: true,
-        }),
-        "chromium" => Some(BrowserProcessMetadata {
-            browser_display_name: "Chromium",
-            supports_uia_address_bar: true,
-        }),
-        "firefox" => Some(BrowserProcessMetadata {
-            browser_display_name: "Firefox",
-            supports_uia_address_bar: false,
-        }),
+        "chrome" => Some(SupportedBrowser::GoogleChrome),
+        "msedge" | "edge" => Some(SupportedBrowser::MicrosoftEdge),
+        "brave" => Some(SupportedBrowser::BraveBrowser),
+        "opera" | "opera_gx" => Some(SupportedBrowser::Opera),
+        "arc" => Some(SupportedBrowser::Arc),
+        "vivaldi" => Some(SupportedBrowser::Vivaldi),
+        "chromium" => Some(SupportedBrowser::Chromium),
+        "firefox" => Some(SupportedBrowser::Firefox),
         _ => None,
     }
 }
@@ -326,19 +294,20 @@ pub fn get_current_focus_context() -> FocusContextSnapshot {
         title: title.clone(),
     });
 
-    let browser_process_metadata = focused_application.as_ref().and_then(|application| {
-        browser_process_metadata_from_application_name(&application.display_name)
-    });
-    let browser_tab_title = browser_process_metadata.and_then(|browser_process_metadata| {
+    let supported_browser = focused_application
+        .as_ref()
+        .and_then(|focused_application| {
+            supported_browser_from_application_name(&focused_application.display_name)
+        });
+    let browser_tab_title = supported_browser.and_then(|supported_browser| {
         infer_browser_tab_title_from_window_title(
             window_title.as_deref(),
-            browser_process_metadata.browser_display_name,
+            supported_browser.display_name(),
         )
     });
-    let browser_document_origin = browser_process_metadata
-        .filter(|browser_process_metadata| browser_process_metadata.supports_uia_address_bar)
-        .and_then(|_| extract_browser_document_origin_from_uia(hwnd));
-    let focused_browser_tab = browser_process_metadata.and_then(|browser_process_metadata| {
+    let browser_document_origin =
+        supported_browser.and_then(|_| extract_browser_document_origin_from_uia(hwnd));
+    let focused_browser_tab = supported_browser.and_then(|supported_browser| {
         if browser_tab_title.is_none() && browser_document_origin.is_none() {
             return None;
         }
@@ -346,7 +315,7 @@ pub fn get_current_focus_context() -> FocusContextSnapshot {
         Some(FocusedBrowserTab {
             title: browser_tab_title,
             origin: browser_document_origin,
-            browser: Some(browser_process_metadata.browser_display_name.to_string()),
+            browser: Some(supported_browser.display_name().to_string()),
         })
     });
     let event_source = if focused_browser_tab

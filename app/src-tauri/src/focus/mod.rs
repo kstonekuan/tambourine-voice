@@ -11,6 +11,35 @@ mod windows;
 
 pub use watcher::{start_focus_watcher, FocusWatcherHandle};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SupportedBrowser {
+    Safari,
+    GoogleChrome,
+    MicrosoftEdge,
+    BraveBrowser,
+    Arc,
+    Firefox,
+    Opera,
+    Vivaldi,
+    Chromium,
+}
+
+impl SupportedBrowser {
+    pub fn display_name(self) -> &'static str {
+        match self {
+            SupportedBrowser::Safari => "Safari",
+            SupportedBrowser::GoogleChrome => "Google Chrome",
+            SupportedBrowser::MicrosoftEdge => "Microsoft Edge",
+            SupportedBrowser::BraveBrowser => "Brave Browser",
+            SupportedBrowser::Arc => "Arc",
+            SupportedBrowser::Firefox => "Firefox",
+            SupportedBrowser::Opera => "Opera",
+            SupportedBrowser::Vivaldi => "Vivaldi",
+            SupportedBrowser::Chromium => "Chromium",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FocusEventSource {
