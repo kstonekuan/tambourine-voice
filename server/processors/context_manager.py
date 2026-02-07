@@ -9,7 +9,6 @@ with the dictation-specific requirements:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
@@ -148,25 +147,6 @@ class DictationContextManager:
             ]
         )
 
-    def _parse_captured_at(self, captured_at: str) -> datetime | None:
-        if captured_at.isdigit():
-            return datetime.fromtimestamp(int(captured_at), tz=UTC)
-        normalized = captured_at.replace("Z", "+00:00")
-        try:
-            parsed = datetime.fromisoformat(normalized)
-        except ValueError:
-            return None
-        if parsed.tzinfo is None:
-            return parsed.replace(tzinfo=UTC)
-        return parsed
-
-    def _is_focus_context_fresh(self, focus_context: FocusContextSnapshot) -> bool:
-        captured_at = self._parse_captured_at(focus_context.captured_at)
-        if captured_at is None:
-            return False
-        age_seconds = (datetime.now(tz=UTC) - captured_at).total_seconds()
-        return age_seconds <= 5.0
-
     def reset_context_for_new_recording(self) -> None:
         """Reset the context for a new recording session.
 
@@ -178,9 +158,14 @@ class DictationContextManager:
             ChatCompletionSystemMessageParam(role="system", content=self.system_prompt),
         ]
 
-        if self._focus_context and self._is_focus_context_fresh(self._focus_context):
-            focus_block = self._format_focus_context_block(self._focus_context)
-            messages.append(ChatCompletionSystemMessageParam(role="system", content=focus_block))
+        match self._focus_context:
+            case FocusContextSnapshot() as latest_focus_context:
+                focus_block = self._format_focus_context_block(latest_focus_context)
+                messages.append(
+                    ChatCompletionSystemMessageParam(role="system", content=focus_block)
+                )
+            case None:
+                pass
 
         self._context.set_messages(messages)
         logger.debug("Context reset for new recording")

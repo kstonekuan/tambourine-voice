@@ -90,6 +90,14 @@ cd app && pnpm cargo:test
 # or: cd app/src-tauri && cargo test
 ```
 
+### Test Writing Standards
+
+- Prioritize **business behavior** and user-visible outcomes over implementation details.
+- Test our own domain logic (state transitions, message parsing, defaults, fallbacks), not third-party library internals.
+- Prefer real typed inputs/outputs and avoid mocking behavior by default.
+- Use mocks only when truly necessary, primarily at unstable boundaries (network, filesystem, time, OS integrations) for determinism.
+- Keep tests resilient to refactors: assert on externally meaningful behavior, not private call sequences.
+
 ## Commit Conventions
 
 Use descriptive commit messages with a type prefix:

@@ -374,8 +374,53 @@ fn list_native_mic_devices(state: tauri::State<'_, MicCaptureManager>) -> Vec<Au
 
 /// Get current focus context snapshot
 #[tauri::command]
-fn focus_get_current_context() -> focus::FocusContextSnapshot {
-    get_current_focus_context()
+fn focus_get_current_context(app: AppHandle) -> focus::FocusContextSnapshot {
+    #[cfg(target_os = "macos")]
+    {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let (snapshot_sender, snapshot_receiver) =
+            mpsc::sync_channel::<focus::FocusContextSnapshot>(1);
+
+        if let Err(error) = app.run_on_main_thread(move || {
+            let snapshot = get_current_focus_context();
+            let _ = snapshot_sender.send(snapshot);
+        }) {
+            log::warn!(
+                "Failed to dispatch focus snapshot to macOS main thread: {error}. Returning fallback focus context."
+            );
+            return fallback_focus_context_snapshot();
+        }
+
+        return snapshot_receiver
+            .recv_timeout(Duration::from_millis(150))
+            .unwrap_or_else(|error| {
+                log::warn!(
+                    "Timed out waiting for macOS focus snapshot on main thread: {error}. Returning fallback focus context."
+                );
+                fallback_focus_context_snapshot()
+            });
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app;
+        get_current_focus_context()
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn fallback_focus_context_snapshot() -> focus::FocusContextSnapshot {
+    focus::FocusContextSnapshot {
+        focused_application: None,
+        focused_window: None,
+        focused_browser_tab: None,
+        event_source: focus::FocusEventSource::Unknown,
+        confidence_level: focus::FocusConfidenceLevel::Low,
+        privacy_filtered: true,
+        captured_at: chrono::Utc::now().to_rfc3339(),
+    }
 }
 
 /// Get focus tracking capabilities

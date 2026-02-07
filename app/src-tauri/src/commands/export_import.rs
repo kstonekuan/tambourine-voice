@@ -31,6 +31,7 @@ const PROMPT_COMMENT_SUFFIX: &str = " -->";
 
 /// Settings data for export (excludes prompts - they're exported as .md files)
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct SettingsExportData {
     pub toggle_hotkey: crate::settings::HotkeyConfig,
     pub hold_hotkey: crate::settings::HotkeyConfig,
@@ -44,6 +45,12 @@ pub struct SettingsExportData {
     pub stt_timeout_seconds: Option<f64>,
     pub server_url: String,
     pub send_focus_context_enabled: bool,
+}
+
+impl Default for SettingsExportData {
+    fn default() -> Self {
+        AppSettings::default().into()
+    }
 }
 
 impl From<AppSettings> for SettingsExportData {

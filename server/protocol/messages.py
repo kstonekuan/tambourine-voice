@@ -112,6 +112,12 @@ class StartRecordingMessage(BaseModel):
     type: Literal["start-recording"]
     data: StartRecordingData | None = None
 
+    def focus_context_for_recording(self) -> FocusContextSnapshot | None:
+        """Return focus context for this recording, or None to explicitly clear it."""
+        if self.data is None:
+            return None
+        return self.data.focus_context
+
 
 class StopRecordingMessage(BaseModel):
     """Client request to stop recording and process audio."""
