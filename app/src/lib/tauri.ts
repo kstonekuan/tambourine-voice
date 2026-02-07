@@ -5,7 +5,7 @@ import { Store } from "@tauri-apps/plugin-store";
 import ky from "ky";
 import { withoutTrailingSlash } from "ufo";
 import { z } from "zod";
-import type { FocusContextSnapshot, FocusTrackingCapabilities } from "./focus";
+import type { FocusContextSnapshot } from "./focus";
 
 export * from "./focus";
 
@@ -708,10 +708,6 @@ export const tauriAPI = {
 
 	async focusGetCurrentContext(): Promise<FocusContextSnapshot> {
 		return invoke("focus_get_current_context");
-	},
-
-	async focusGetCapabilities(): Promise<FocusTrackingCapabilities> {
-		return invoke("focus_get_capabilities");
 	},
 
 	// Server connection state management (for Rust-side config syncing)

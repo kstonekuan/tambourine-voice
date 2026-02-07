@@ -58,16 +58,6 @@ pub struct FocusContextSnapshot {
     pub captured_at: String,
 }
 
-#[allow(clippy::struct_excessive_bools)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FocusTrackingCapabilities {
-    pub supports_focused_application_detection: bool,
-    pub supports_focused_window_detection: bool,
-    pub supports_focused_browser_tab_detection: bool,
-    pub supports_realtime_event_streaming: bool,
-    pub supports_private_browsing_detection: bool,
-}
-
 pub fn get_current_focus_context() -> FocusContextSnapshot {
     #[cfg(target_os = "windows")]
     {
@@ -87,27 +77,6 @@ pub fn get_current_focus_context() -> FocusContextSnapshot {
             confidence_level: FocusConfidenceLevel::Low,
             privacy_filtered: true,
             captured_at: chrono::Utc::now().to_rfc3339(),
-        }
-    }
-}
-
-pub fn get_focus_capabilities() -> FocusTrackingCapabilities {
-    #[cfg(target_os = "windows")]
-    {
-        windows::get_focus_capabilities()
-    }
-    #[cfg(target_os = "macos")]
-    {
-        macos::get_focus_capabilities()
-    }
-    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    {
-        FocusTrackingCapabilities {
-            supports_focused_application_detection: false,
-            supports_focused_window_detection: false,
-            supports_focused_browser_tab_detection: false,
-            supports_realtime_event_streaming: false,
-            supports_private_browsing_detection: false,
         }
     }
 }

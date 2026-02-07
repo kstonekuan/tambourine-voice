@@ -26,11 +26,3 @@ export type FocusContextSnapshot = {
 	privacy_filtered: boolean;
 	captured_at: string;
 };
-
-export type FocusTrackingCapabilities = {
-	supports_focused_application_detection: boolean;
-	supports_focused_window_detection: boolean;
-	supports_focused_browser_tab_detection: boolean;
-	supports_realtime_event_streaming: boolean;
-	supports_private_browsing_detection: boolean;
-};

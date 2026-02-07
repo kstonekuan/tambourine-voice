@@ -1,7 +1,7 @@
 # Focus Context Capture + Prompt Injection (Windows + macOS)
 
 ## Summary
-Add a cross-platform, best-effort focus context snapshot in the Tauri backend. The backend continuously pushes the newest focus context to the TypeScript frontend. The frontend only sends focus context to the Python server when recording starts. The server injects focus context into the LLM system prompt at the start of each recording. Browser tab URL/title are best-effort and privacy-filtered.
+Add a cross-platform, best-effort focus context snapshot in the Tauri backend. The backend continuously pushes the newest focus context to the TypeScript frontend. The frontend only sends focus context to the Python server when recording starts. The server injects focus context into the LLM system prompt at the start of each recording. Browser tab metadata is best-effort: Windows currently infers tab title from the window title and does not extract URL yet.
 
 ## High-Level Flow
 - [x] Tauri focus watcher emits `focus-context-changed` to the frontend.
@@ -11,7 +11,6 @@ Add a cross-platform, best-effort focus context snapshot in the Tauri backend. T
 
 ## Public API / Interface Changes
 - [x] `focus_get_current_context` Tauri command.
-- [x] `focus_get_capabilities` Tauri command.
 - [x] `focus-context-changed` event with `FocusContextSnapshot` payload.
 - [x] `start-recording` carries optional `data.focus_context`.
 - [x] Privacy setting `send_focus_context_enabled` with warning.
@@ -36,12 +35,6 @@ Add a cross-platform, best-effort focus context snapshot in the Tauri backend. T
 ### Capability + Quality Model
 - `FocusEventSource`: `polling | accessibility | uia | unknown`
 - `FocusConfidenceLevel`: `high | medium | low`
-- `FocusTrackingCapabilities` flags:
-  - `supports_focused_application_detection`
-  - `supports_focused_window_detection`
-  - `supports_focused_browser_tab_detection`
-  - `supports_realtime_event_streaming`
-  - `supports_private_browsing_detection`
 
 ### Design Decisions Made During Implementation
 - Focus context is sent inside `start-recording` payload to avoid message ordering issues.
@@ -57,9 +50,7 @@ Add a cross-platform, best-effort focus context snapshot in the Tauri backend. T
 Focus context includes app, window, and tab fields plus `event_source`, `confidence_level`, `privacy_filtered`, and `captured_at`.
 - [x] Rust `FocusEventSource`, `FocusConfidenceLevel`.
 Event sources: `polling | accessibility | uia | unknown`. Confidence: `high | medium | low`.
-- [x] Rust `FocusTrackingCapabilities`.
-Capabilities include app/window/tab detection, realtime streaming, and private browsing detection flags.
-- [x] TS `FocusContextSnapshot` and `FocusTrackingCapabilities`.
+- [x] TS `FocusContextSnapshot`.
 Types live in `app/src/lib/focus.ts` and are re-used by events and APIs.
 - [x] Server `FocusContextSnapshot` and related models.
 Server accepts focus context on `start-recording` with forward-compatible parsing.
@@ -70,8 +61,6 @@ Server accepts focus context on `start-recording` with forward-compatible parsin
 Polls every 250ms, debounces 75ms, and dedupes on semantic key (app/window/tab + confidence).
 - [x] `focus_get_current_context` command.
 Returns a snapshot directly for diagnostics or on-demand use.
-- [x] `focus_get_capabilities` command.
-Returns capability flags for UI to adapt.
 - [x] Watcher started in `.setup()` and emits `focus-context-changed`.
 Event payload is `FocusContextSnapshot`.
 - [x] `AppState` stores watcher handle.
@@ -112,8 +101,8 @@ Modal warns about dictation quality impact when disabling.
 `StartRecordingData` and `FocusContextSnapshot` accept extra fields.
 - [x] Store focus context on `DictationContextManager`.
 Snapshot is stored per connection before `reset_context_for_new_recording`.
-- [x] Prompt injection with freshness window.
-Only injects when captured within 5 seconds.
+- [x] Prompt injection with unknown-context guard.
+Injects when focus context is present, but skips injection when the snapshot is entirely unknown (no app/window/tab).
 - [x] Forward-compat parsing for focus context data.
 `ConfigDict(extra=\"ignore\")` used in Pydantic models.
 
@@ -125,7 +114,6 @@ Only injects when captured within 5 seconds.
 ## Defaults
 - [x] Focus poll interval: 250ms.
 - [x] Debounce: 75ms.
-- [x] Focus freshness window: 5s.
 - [x] `send_focus_context_enabled` default: true.
 
 ## Outstanding Work

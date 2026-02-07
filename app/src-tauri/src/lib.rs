@@ -14,7 +14,7 @@ mod focus;
 mod history;
 
 use events::EventName;
-use focus::{get_current_focus_context, get_focus_capabilities, start_focus_watcher_in_app};
+use focus::{get_current_focus_context, start_focus_watcher_in_app};
 mod mic_capture;
 mod settings;
 mod state;
@@ -423,12 +423,6 @@ fn fallback_focus_context_snapshot() -> focus::FocusContextSnapshot {
     }
 }
 
-/// Get focus tracking capabilities
-#[tauri::command]
-fn focus_get_capabilities() -> focus::FocusTrackingCapabilities {
-    get_focus_capabilities()
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 #[allow(clippy::too_many_lines)]
 pub fn run() {
@@ -498,7 +492,6 @@ pub fn run() {
             resume_native_mic,
             list_native_mic_devices,
             focus_get_current_context,
-            focus_get_capabilities,
         ])
         .setup(|app| {
             // Initialize history storage

@@ -10,8 +10,8 @@ use windows::Win32::System::Threading::{
 use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowTextW};
 
 use crate::focus::{
-    FocusConfidenceLevel, FocusContextSnapshot, FocusEventSource, FocusTrackingCapabilities,
-    FocusedApplication, FocusedBrowserTab, FocusedWindow,
+    FocusConfidenceLevel, FocusContextSnapshot, FocusEventSource, FocusedApplication,
+    FocusedBrowserTab, FocusedWindow,
 };
 
 fn get_foreground_window() -> Option<HWND> {
@@ -157,15 +157,5 @@ pub fn get_current_focus_context() -> FocusContextSnapshot {
         confidence_level: FocusConfidenceLevel::High,
         privacy_filtered: true,
         captured_at,
-    }
-}
-
-pub fn get_focus_capabilities() -> FocusTrackingCapabilities {
-    FocusTrackingCapabilities {
-        supports_focused_application_detection: true,
-        supports_focused_window_detection: true,
-        supports_focused_browser_tab_detection: true,
-        supports_realtime_event_streaming: true,
-        supports_private_browsing_detection: false,
     }
 }
