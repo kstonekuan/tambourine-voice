@@ -3,17 +3,19 @@ use std::os::windows::ffi::OsStringExt;
 use std::path::Path;
 
 use windows::core::{BSTR, PWSTR};
-use windows::Win32::Foundation::{CloseHandle, HWND};
+use windows::Win32::Foundation::{CloseHandle, HWND, RPC_E_CHANGED_MODE};
 use windows::Win32::System::Com::{
-    CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED,
+    CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER,
+    COINIT_APARTMENTTHREADED,
 };
 use windows::Win32::System::Threading::{
     OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT, PROCESS_QUERY_LIMITED_INFORMATION,
 };
 use windows::Win32::System::Variant::VARIANT;
 use windows::Win32::UI::Accessibility::{
-    CUIAutomation8, IUIAutomation, IUIAutomationElement, IUIAutomationValuePattern,
-    TreeScope_Subtree, UIA_ControlTypePropertyId, UIA_EditControlTypeId, UIA_ValuePatternId,
+    CUIAutomation8, IUIAutomation, IUIAutomationCondition, IUIAutomationElement,
+    IUIAutomationElementArray, IUIAutomationValuePattern, TreeScope_Subtree,
+    UIA_ControlTypePropertyId, UIA_EditControlTypeId, UIA_ValuePatternId,
 };
 use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowTextW};
 
@@ -160,11 +162,51 @@ fn bstr_to_non_empty_focus_text(raw_bstr: BSTR) -> Option<String> {
     normalize_non_empty_focus_text(&bstr_as_string)
 }
 
-fn create_ui_automation_client() -> Option<IUIAutomation> {
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
-        CoCreateInstance(&CUIAutomation8, None, CLSCTX_INPROC_SERVER).ok()
+struct ComApartmentInitializationGuard {
+    should_call_co_uninitialize_on_drop: bool,
+}
+
+impl ComApartmentInitializationGuard {
+    fn initialize_single_threaded() -> Option<Self> {
+        // SAFETY: CoInitializeEx is called once for this access path. The returned guard
+        // tracks whether this call succeeded and should be balanced by CoUninitialize.
+        match unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) } {
+            Ok(()) => Some(Self {
+                should_call_co_uninitialize_on_drop: true,
+            }),
+            Err(initialization_error) if initialization_error.code() == RPC_E_CHANGED_MODE => {
+                // COM is already initialized on this thread with another apartment model.
+                // We can still use existing COM initialization, but must not uninitialize it here.
+                Some(Self {
+                    should_call_co_uninitialize_on_drop: false,
+                })
+            }
+            Err(initialization_error) => {
+                log::warn!(
+                    "Failed to initialize COM apartment for UI Automation: {initialization_error}"
+                );
+                None
+            }
+        }
     }
+}
+
+impl Drop for ComApartmentInitializationGuard {
+    fn drop(&mut self) {
+        if self.should_call_co_uninitialize_on_drop {
+            // SAFETY: This exactly balances a successful CoInitializeEx call made by this guard.
+            unsafe { CoUninitialize() };
+        }
+    }
+}
+
+fn create_ui_automation_client() -> Option<(ComApartmentInitializationGuard, IUIAutomation)> {
+    let com_apartment_initialization_guard =
+        ComApartmentInitializationGuard::initialize_single_threaded()?;
+    // SAFETY: COM has been initialized for this thread (or was already initialized).
+    let ui_automation_client =
+        unsafe { CoCreateInstance(&CUIAutomation8, None, CLSCTX_INPROC_SERVER) }.ok()?;
+    Some((com_apartment_initialization_guard, ui_automation_client))
 }
 
 fn is_likely_browser_address_bar_candidate(
@@ -199,42 +241,102 @@ fn is_likely_browser_address_bar_candidate(
         })
 }
 
+fn get_automation_element_for_window(
+    ui_automation_client: &IUIAutomation,
+    window_handle: HWND,
+) -> Option<IUIAutomationElement> {
+    // SAFETY: The HWND is obtained from the OS. If it becomes invalid before this call,
+    // UI Automation returns an error that we convert into None.
+    unsafe { ui_automation_client.ElementFromHandle(window_handle) }.ok()
+}
+
+fn create_edit_control_type_condition(
+    ui_automation_client: &IUIAutomation,
+) -> Option<IUIAutomationCondition> {
+    let edit_control_type_variant = VARIANT::from(UIA_EditControlTypeId.0);
+    // SAFETY: The VARIANT points to stack data that remains valid for the duration of the call.
+    unsafe {
+        ui_automation_client
+            .CreatePropertyCondition(UIA_ControlTypePropertyId, &edit_control_type_variant)
+    }
+    .ok()
+}
+
+fn find_subtree_elements_matching_condition(
+    root_automation_element: &IUIAutomationElement,
+    target_condition: &IUIAutomationCondition,
+) -> Option<IUIAutomationElementArray> {
+    // SAFETY: Both COM interfaces are owned, valid references provided by UI Automation.
+    unsafe { root_automation_element.FindAll(TreeScope_Subtree, target_condition) }.ok()
+}
+
+fn get_automation_element_array_length(
+    automation_element_array: &IUIAutomationElementArray,
+) -> Option<i32> {
+    // SAFETY: The element array interface comes directly from a successful UIA FindAll call.
+    unsafe { automation_element_array.Length() }.ok()
+}
+
+fn get_automation_element_at_index(
+    automation_element_array: &IUIAutomationElementArray,
+    element_index: i32,
+) -> Option<IUIAutomationElement> {
+    // SAFETY: Index is bounded by a prior successful Length() result in caller iteration.
+    unsafe { automation_element_array.GetElement(element_index) }.ok()
+}
+
+fn get_element_current_automation_id(automation_element: &IUIAutomationElement) -> Option<String> {
+    // SAFETY: Reading a property from a valid UIA element; UIA enforces COM invariants.
+    unsafe { automation_element.CurrentAutomationId() }
+        .ok()
+        .and_then(bstr_to_non_empty_focus_text)
+}
+
+fn get_element_current_name(automation_element: &IUIAutomationElement) -> Option<String> {
+    // SAFETY: Reading a property from a valid UIA element; UIA enforces COM invariants.
+    unsafe { automation_element.CurrentName() }
+        .ok()
+        .and_then(bstr_to_non_empty_focus_text)
+}
+
+fn get_value_pattern_for_edit_control(
+    edit_control_element: &IUIAutomationElement,
+) -> Option<IUIAutomationValuePattern> {
+    // SAFETY: Pattern retrieval is performed on a UIA element returned by UIA enumeration.
+    unsafe { edit_control_element.GetCurrentPatternAs(UIA_ValuePatternId) }.ok()
+}
+
+fn get_value_pattern_current_value(value_pattern: &IUIAutomationValuePattern) -> Option<String> {
+    // SAFETY: Value pattern interface is obtained from a successful GetCurrentPatternAs call.
+    unsafe { value_pattern.CurrentValue() }
+        .ok()
+        .and_then(bstr_to_non_empty_focus_text)
+}
+
 fn extract_normalized_origin_from_edit_control(
     edit_control_element: &IUIAutomationElement,
 ) -> Option<String> {
-    let value_pattern: IUIAutomationValuePattern =
-        unsafe { edit_control_element.GetCurrentPatternAs(UIA_ValuePatternId) }.ok()?;
-    let raw_current_value = unsafe { value_pattern.CurrentValue() }.ok()?;
-    let address_bar_value = bstr_to_non_empty_focus_text(raw_current_value)?;
+    let value_pattern = get_value_pattern_for_edit_control(edit_control_element)?;
+    let address_bar_value = get_value_pattern_current_value(&value_pattern)?;
     normalize_browser_document_origin(&address_bar_value)
 }
 
 fn extract_browser_document_origin_from_uia(hwnd: HWND) -> Option<String> {
-    let ui_automation_client = create_ui_automation_client()?;
+    let (_com_apartment_initialization_guard, ui_automation_client) =
+        create_ui_automation_client()?;
     let focused_window_automation_element =
-        unsafe { ui_automation_client.ElementFromHandle(hwnd) }.ok()?;
-    let edit_control_type_variant = VARIANT::from(UIA_EditControlTypeId.0);
-    let edit_control_type_condition = unsafe {
-        ui_automation_client
-            .CreatePropertyCondition(UIA_ControlTypePropertyId, &edit_control_type_variant)
-    }
-    .ok()?;
-    let edit_control_elements = unsafe {
-        focused_window_automation_element.FindAll(TreeScope_Subtree, &edit_control_type_condition)
-    }
-    .ok()?;
-    let edit_control_count = edit_control_elements.Length().ok()?;
+        get_automation_element_for_window(&ui_automation_client, hwnd)?;
+    let edit_control_type_condition = create_edit_control_type_condition(&ui_automation_client)?;
+    let edit_control_elements = find_subtree_elements_matching_condition(
+        &focused_window_automation_element,
+        &edit_control_type_condition,
+    )?;
+    let edit_control_count = get_automation_element_array_length(&edit_control_elements)?;
     for edit_control_index in 0..edit_control_count {
         let edit_control_element =
-            unsafe { edit_control_elements.GetElement(edit_control_index) }.ok()?;
-        let automation_id = edit_control_element
-            .CurrentAutomationId()
-            .ok()
-            .and_then(bstr_to_non_empty_focus_text);
-        let control_name = edit_control_element
-            .CurrentName()
-            .ok()
-            .and_then(bstr_to_non_empty_focus_text);
+            get_automation_element_at_index(&edit_control_elements, edit_control_index)?;
+        let automation_id = get_element_current_automation_id(&edit_control_element);
+        let control_name = get_element_current_name(&edit_control_element);
         if !is_likely_browser_address_bar_candidate(
             automation_id.as_deref(),
             control_name.as_deref(),
