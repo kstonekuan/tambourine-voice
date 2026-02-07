@@ -1,7 +1,7 @@
 # Focus Context Capture + Prompt Injection (Windows + macOS)
 
 ## Summary
-Add a cross-platform, best-effort focus context snapshot in the Tauri backend. The backend continuously pushes the newest focus context to the TypeScript frontend. The frontend only sends focus context to the Python server when recording starts. The server injects focus context into the LLM system prompt at the start of each recording. Browser tab metadata is best-effort: Windows currently infers tab title from the window title and does not extract URL yet.
+Add a cross-platform, best-effort focus context snapshot in the Tauri backend. The backend continuously pushes the newest focus context to the TypeScript frontend. The frontend only sends focus context to the Python server when recording starts. The server injects focus context into the LLM system prompt at the start of each recording. Browser tab metadata is best-effort: Windows infers tab title from window title and attempts URL extraction via UIA for Chromium-family browsers.
 
 ## High-Level Flow
 - [x] Tauri focus watcher emits `focus-context-changed` to the frontend.
@@ -20,7 +20,7 @@ Add a cross-platform, best-effort focus context snapshot in the Tauri backend. T
 - Win32 window + process:
   - `GetForegroundWindow`, `GetWindowTextW`
   - `GetWindowThreadProcessId`, `OpenProcess`, `QueryFullProcessImageNameW`
-- UI Automation (pending):
+- UI Automation:
   - `IUIAutomation` to traverse the accessibility tree (no screenshots)
   - Chromium family adapters first (Chrome, Edge, Brave, Opera)
 
@@ -72,18 +72,18 @@ Allows graceful shutdown and later extensions.
 - [x] App display name from process path.
 - [x] Browser tab title inferred from window title.
 Title inference trims `" - "` suffix when present.
-- [ ] UI Automation (UIA) for URL + tab title.
-Use `IUIAutomation` to locate address bar and active tab title for Chromium browsers.
-- [ ] URL privacy filtering (origin + path, no query).
+- [x] UI Automation (UIA) for URL extraction.
+Use `IUIAutomation` to locate Chromium-family address bar controls and read `ValuePattern` data.
+- [x] URL privacy filtering (origin + path, no query).
 Strip query parameters and fragments before sending to the server.
 
 ### macOS Focus Capture
 - [x] Frontmost app via `NSWorkspace.sharedWorkspace.frontmostApplication`.
-- [ ] Focused window title via Accessibility (`AXUIElement`).
+- [x] Focused window title via Accessibility (`AXUIElement`).
 Use AX focused window or focused UI element when available.
-- [ ] Browser tab title/URL via Accessibility tree.
+- [x] Browser tab title/URL via Accessibility tree.
 Attempt Safari/Chrome/Edge/Brave with AXURL and active tab title.
-- [ ] Accessibility permission check with low-confidence fallback.
+- [x] Accessibility permission check with low-confidence fallback.
 If permission missing, return `privacy_filtered=true` with low confidence.
 
 ### Frontend
@@ -117,9 +117,5 @@ Injects when focus context is present, but skips injection when the snapshot is 
 - [x] `send_focus_context_enabled` default: true.
 
 ## Outstanding Work
-- [ ] Windows UIA-based tab URL/title extraction.
-Implement `IUIAutomation` adapter for Chromium browsers to extract address bar URL and active tab title.
-- [ ] macOS Accessibility-based window + tab extraction.
-Use `AXUIElement` to read focused window title and `AXURL`/tab title where exposed.
-- [ ] URL privacy filter when URLs are available.
-Normalize URLs to origin + path, drop query and fragment before sending to server.
+- [ ] Expand browser coverage for direct URL extraction beyond Chromium family on Windows.
+- [ ] Improve browser tab title extraction on Windows by querying UIA tab controls where available instead of only window-title inference.

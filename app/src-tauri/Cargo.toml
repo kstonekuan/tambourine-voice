@@ -66,6 +66,7 @@ windows = { version = "0.62.2", features = [
     "Win32",
     "Win32_Devices",
     "Win32_Devices_FunctionDiscovery",
+    "Win32_UI_Accessibility",
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_Shell_PropertiesSystem",
     "Win32_Foundation",
