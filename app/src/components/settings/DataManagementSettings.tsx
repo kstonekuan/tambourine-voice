@@ -25,7 +25,10 @@ import {
 } from "../../lib/queries";
 import type { HistoryImportStrategy } from "../../lib/tauri";
 
-// Notification timeout constants
+/**
+ * Timeout duration for warning notifications before auto-close
+ * @constant {number} NOTIFICATION_WARNING_TIMEOUT_MS - Duration in milliseconds (5 seconds)
+ */
 const NOTIFICATION_WARNING_TIMEOUT_MS = 5000;
 
 type ImportModalState =
