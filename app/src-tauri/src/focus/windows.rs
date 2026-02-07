@@ -204,7 +204,7 @@ fn extract_normalized_origin_from_edit_control(
 ) -> Option<String> {
     let value_pattern: IUIAutomationValuePattern =
         unsafe { edit_control_element.GetCurrentPatternAs(UIA_ValuePatternId) }.ok()?;
-    let raw_current_value = value_pattern.CurrentValue().ok()?;
+    let raw_current_value = unsafe { value_pattern.CurrentValue() }.ok()?;
     let address_bar_value = bstr_to_non_empty_focus_text(raw_current_value)?;
     normalize_browser_document_origin(&address_bar_value)
 }
@@ -213,12 +213,12 @@ fn extract_browser_document_origin_from_uia(hwnd: HWND) -> Option<String> {
     let ui_automation_client = create_ui_automation_client()?;
     let focused_window_automation_element =
         unsafe { ui_automation_client.ElementFromHandle(hwnd) }.ok()?;
-    let edit_control_type_condition = ui_automation_client
-        .CreatePropertyCondition(
-            UIA_ControlTypePropertyId,
-            VARIANT::from(UIA_EditControlTypeId.0),
-        )
-        .ok()?;
+    let edit_control_type_variant = VARIANT::from(UIA_EditControlTypeId.0);
+    let edit_control_type_condition = unsafe {
+        ui_automation_client
+            .CreatePropertyCondition(UIA_ControlTypePropertyId, &edit_control_type_variant)
+    }
+    .ok()?;
     let edit_control_elements = unsafe {
         focused_window_automation_element.FindAll(TreeScope_Subtree, &edit_control_type_condition)
     }
