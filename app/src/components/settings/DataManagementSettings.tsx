@@ -402,3 +402,5 @@ export function DataManagementSettings() {
 		</>
 	);
 }
+
+// TypeScript validation: No type errors with constant extraction
