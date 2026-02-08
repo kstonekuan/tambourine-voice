@@ -260,6 +260,7 @@ function RecordingControl() {
 	// Bypasses browser's getUserMedia() which has ~300-400ms latency on macOS
 	const {
 		track: nativeAudioTrack,
+		getCurrentTrack: getCurrentNativeAudioTrack,
 		waitUntilReady: waitUntilNativeAudioReady,
 		start: startNativeCapture,
 		stop: stopNativeCapture,
@@ -376,7 +377,8 @@ function RecordingControl() {
 				}
 			}
 
-			if (!nativeAudioTrack) {
+			const nativeAudioTrackForRecording = getCurrentNativeAudioTrack();
+			if (!nativeAudioTrackForRecording) {
 				throw new Error("Native audio track is unavailable");
 			}
 
@@ -390,10 +392,15 @@ function RecordingControl() {
 
 			const audioSender = getPeerConnectionAudioSender(peerConnection);
 			if (audioSender) {
-				await audioSender.replaceTrack(nativeAudioTrack);
+				await audioSender.replaceTrack(nativeAudioTrackForRecording);
 			} else {
-				const nativeAudioTrackStream = new MediaStream([nativeAudioTrack]);
-				peerConnection.addTrack(nativeAudioTrack, nativeAudioTrackStream);
+				const nativeAudioTrackStream = new MediaStream([
+					nativeAudioTrackForRecording,
+				]);
+				peerConnection.addTrack(
+					nativeAudioTrackForRecording,
+					nativeAudioTrackStream,
+				);
 			}
 
 			if (!isCurrentRecordingStartAttempt()) {
@@ -432,21 +439,21 @@ function RecordingControl() {
 
 			// Emit after state transition tick so VoiceVisualizer has subscribed.
 			setTimeout(() => {
-				if (
-					recordingStartAttemptIdRef.current !== recordingStartAttemptId ||
-					!nativeAudioTrack
-				) {
+				if (recordingStartAttemptIdRef.current !== recordingStartAttemptId) {
 					return;
 				}
 
 				client.emit(
 					RTVIEvent.TrackStarted,
-					nativeAudioTrack,
+					nativeAudioTrackForRecording,
 					PIPECAT_LOCAL_PARTICIPANT,
 				);
 			}, 0);
 		} catch (error) {
 			console.warn("[Recording] Failed to start recording:", error);
+			stopNativeCapture();
+			lastMicIdRef.current = undefined;
+			micPreparedRef.current = false;
 			setShowError(true);
 		} finally {
 			if (isCurrentRecordingStartAttempt()) {
@@ -457,7 +464,7 @@ function RecordingControl() {
 		client,
 		settings?.selected_mic_id,
 		settings?.send_active_app_context_enabled,
-		nativeAudioTrack,
+		getCurrentNativeAudioTrack,
 		waitUntilNativeAudioReady,
 		startNativeCapture,
 		stopNativeCapture,

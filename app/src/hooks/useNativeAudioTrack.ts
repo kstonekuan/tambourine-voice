@@ -9,6 +9,8 @@ import {
 interface UseNativeAudioTrackResult {
 	/** The MediaStreamTrack from native audio capture, or null if not ready */
 	track: MediaStreamTrack | null;
+	/** Resolve the latest track value from the native bridge */
+	getCurrentTrack: () => MediaStreamTrack | null;
 	/** Whether the native audio bridge has been initialized */
 	isReady: boolean;
 	/** Error if initialization failed */
@@ -95,6 +97,10 @@ export function useNativeAudioTrack(): UseNativeAudioTrackResult {
 		return nativeAudioBridge.start(options);
 	}, []);
 
+	const getCurrentTrack = useCallback(() => {
+		return bridgeRef.current?.track ?? null;
+	}, []);
+
 	const stop = useCallback(() => {
 		bridgeRef.current?.stop();
 	}, []);
@@ -109,6 +115,7 @@ export function useNativeAudioTrack(): UseNativeAudioTrackResult {
 
 	return {
 		track: bridgeRef.current?.track ?? null,
+		getCurrentTrack,
 		isReady,
 		error,
 		waitUntilReady,
