@@ -30,6 +30,23 @@ fn normalize_browser_document_origin_keeps_origin_when_path_is_missing() {
 }
 
 #[test]
+fn normalize_browser_document_origin_supports_scheme_less_browser_values() {
+    let raw_document_url = "github.com/kstonekuan/tambourine-voice";
+    let normalized_document_origin = normalize_browser_document_origin(raw_document_url);
+    assert_eq!(
+        normalized_document_origin.as_deref(),
+        Some("https://github.com")
+    );
+}
+
+#[test]
+fn normalize_browser_document_origin_rejects_non_url_like_search_queries() {
+    let raw_document_url = "how to fix rust clippy warning";
+    let normalized_document_origin = normalize_browser_document_origin(raw_document_url);
+    assert_eq!(normalized_document_origin, None);
+}
+
+#[test]
 fn infer_browser_tab_title_from_window_title_strips_browser_suffix() {
     let focused_window_title = Some("Active App Context Plan - Google Chrome");
     let inferred_tab_title =

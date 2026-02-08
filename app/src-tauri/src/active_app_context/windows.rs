@@ -279,12 +279,17 @@ fn get_value_pattern_current_value(value_pattern: &IUIAutomationValuePattern) ->
         .and_then(bstr_to_non_empty_focus_text)
 }
 
-fn extract_normalized_origin_from_edit_control(
+fn extract_raw_and_normalized_origin_from_edit_control(
     edit_control_element: &IUIAutomationElement,
-) -> Option<String> {
-    let value_pattern = get_value_pattern_for_edit_control(edit_control_element)?;
-    let address_bar_value = get_value_pattern_current_value(&value_pattern)?;
-    normalize_browser_document_origin(&address_bar_value)
+) -> (Option<String>, Option<String>) {
+    let Some(value_pattern) = get_value_pattern_for_edit_control(edit_control_element) else {
+        return (None, None);
+    };
+    let raw_address_bar_value = get_value_pattern_current_value(&value_pattern);
+    let normalized_document_origin = raw_address_bar_value
+        .as_deref()
+        .and_then(normalize_browser_document_origin);
+    (raw_address_bar_value, normalized_document_origin)
 }
 
 fn extract_browser_document_origin_from_uia(
@@ -379,12 +384,12 @@ fn extract_browser_document_origin_from_uia(
         }
         likely_address_bar_candidate_count += 1;
 
-        if let Some(normalized_document_origin) =
-            extract_normalized_origin_from_edit_control(&edit_control_element)
-        {
+        let (raw_address_bar_value, normalized_document_origin) =
+            extract_raw_and_normalized_origin_from_edit_control(&edit_control_element);
+        if let Some(normalized_document_origin) = normalized_document_origin {
             if should_emit_uia_debug_logs() {
                 log::debug!(
-                    "[UIA Debug] Extracted browser origin for {browser_display_name} from candidate id={automation_id:?} name={control_name:?}: {normalized_document_origin}"
+                    "[UIA Debug] Extracted browser origin for {browser_display_name} from candidate id={automation_id:?} name={control_name:?} value={raw_address_bar_value:?}: {normalized_document_origin}"
                 );
             }
             return Some(normalized_document_origin);
@@ -393,7 +398,7 @@ fn extract_browser_document_origin_from_uia(
         candidate_without_origin_count += 1;
         if should_emit_uia_debug_logs() {
             log::debug!(
-                "[UIA Debug] Candidate looked like address bar but had no normalized origin for {browser_display_name} (id={automation_id:?}, name={control_name:?})"
+                "[UIA Debug] Candidate looked like address bar but had no normalized origin for {browser_display_name} (id={automation_id:?}, name={control_name:?}, value={raw_address_bar_value:?})"
             );
         }
     }

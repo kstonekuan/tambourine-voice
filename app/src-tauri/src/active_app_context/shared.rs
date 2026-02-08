@@ -1,4 +1,5 @@
 use crate::active_app_context::FocusConfidenceLevel;
+use std::net::IpAddr;
 
 pub(crate) fn normalize_non_empty_focus_text(raw_focus_text: &str) -> Option<String> {
     let trimmed_focus_text = raw_focus_text.trim();
@@ -9,8 +10,7 @@ pub(crate) fn normalize_non_empty_focus_text(raw_focus_text: &str) -> Option<Str
     }
 }
 
-pub(crate) fn normalize_browser_document_origin(raw_document_url: &str) -> Option<String> {
-    let trimmed_document_url = normalize_non_empty_focus_text(raw_document_url)?;
+fn normalize_origin_from_absolute_url(trimmed_document_url: &str) -> Option<String> {
     let scheme_separator_index = trimmed_document_url.find("://")?;
     let (url_scheme, url_remainder_with_separator) =
         trimmed_document_url.split_at(scheme_separator_index);
@@ -28,6 +28,40 @@ pub(crate) fn normalize_browser_document_origin(raw_document_url: &str) -> Optio
     }
 
     Some(format!("{url_scheme}://{authority_component}"))
+}
+
+fn normalize_origin_from_scheme_less_url(trimmed_document_url: &str) -> Option<String> {
+    if trimmed_document_url.contains(char::is_whitespace) {
+        return None;
+    }
+
+    let authority_end_index = trimmed_document_url
+        .find(['/', '?', '#'])
+        .unwrap_or(trimmed_document_url.len());
+    let authority_component = &trimmed_document_url[..authority_end_index];
+    if authority_component.is_empty() {
+        return None;
+    }
+
+    let authority_without_port = authority_component
+        .split(':')
+        .next()
+        .unwrap_or(authority_component);
+    let looks_like_domain_name = authority_without_port.contains('.');
+    let looks_like_localhost = authority_without_port.eq_ignore_ascii_case("localhost");
+    let looks_like_ip_address = authority_without_port.parse::<IpAddr>().is_ok();
+
+    if !(looks_like_domain_name || looks_like_localhost || looks_like_ip_address) {
+        return None;
+    }
+
+    Some(format!("https://{authority_component}"))
+}
+
+pub(crate) fn normalize_browser_document_origin(raw_document_url: &str) -> Option<String> {
+    let trimmed_document_url = normalize_non_empty_focus_text(raw_document_url)?;
+    normalize_origin_from_absolute_url(&trimmed_document_url)
+        .or_else(|| normalize_origin_from_scheme_less_url(&trimmed_document_url))
 }
 
 pub(crate) fn infer_browser_tab_title_from_window_title(
