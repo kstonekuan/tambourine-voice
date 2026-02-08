@@ -32,13 +32,11 @@ services:
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # GPU attachment is runtime-specific and may not be supported by all
-    # compose implementations (e.g., podman-compose). For Docker Engine, use
-    # `device_requests` or the NVIDIA container toolkit. For Podman, use the
-    # host's GPU configuration. We keep the Swarm-style reservation below for
-    # environments that support it.
+    # GPU attachment may need to comment one of these out
+    # Podman GPU Support
     devices:
       - nvidia.com/gpu=all
+    # Docker GPU support
     deploy:
       resources:
         reservations:
