@@ -1,12 +1,54 @@
 services:
   server:
+    privileged: false
     build:
       context: ..
       dockerfile: server/Dockerfile
-    ports:
-      - "8765:8765"
+      args:
+        # Override at build-time to use a CUDA-enabled base when you want GPU support
+        # Has to be 12.9.1 for Whisper
+        BASE_IMAGE: ${BASE_IMAGE:-nvidia/cuda:12.9.1-cudnn-runtime-ubuntu24.04}
+    network_mode: "host" # Use host networking for WebRTC reliability
+    # Note: when using host mode the 'ports' mapping is ignored. Keep host
+    # networking when you need direct socket access for WebRTC (recommended).
     env_file:
       - .env
+    environment:
+      # Persist model / hub cache and torch cache to speed up rebuilds and avoid
+      # re-downloading models on container recreation.
+      - HF_HOME=/cache/huggingface
+      - HUGGINGFACE_HUB_CACHE=/cache/huggingface
+      - TORCH_HOME=/cache/torch
+      - XDG_CACHE_HOME=/cache
+      # Override the default Whisper device (cpu|cuda). Defaults to 'cuda' to enable GPU.
+      - WHISPER_DEVICE=${WHISPER_DEVICE:-cuda}
+      # Optional: model name for local Whisper (tiny, base, small, medium, large). Defaults to 'tiny'.
+      - WHISPER_MODEL=${WHISPER_MODEL:-medium}
+    volumes:
+      - server_hf_cache:/cache/huggingface
+      - server_torch_cache:/cache/torch
+      - server_propcache:/cache/propcache
+      - server_pipecat_cache:/cache/pipecat
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # GPU attachment is runtime-specific and may not be supported by all
+    # compose implementations (e.g., podman-compose). For Docker Engine, use
+    # `device_requests` or the NVIDIA container toolkit. For Podman, use the
+    # host's GPU configuration. We keep the Swarm-style reservation below for
+    # environments that support it.
+    devices:
+      - nvidia.com/gpu=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+
+volumes:
+  server_hf_cache:
+  server_torch_cache:
+  server_propcache:
+  server_pipecat_cache:

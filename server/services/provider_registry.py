@@ -10,6 +10,7 @@ Provider ID enums are defined in protocol.providers (single source of truth).
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
+import os
 
 # Direct imports from pipecat - type checked at import time
 from pipecat.services.anthropic.llm import AnthropicLLMService
@@ -285,6 +286,12 @@ STT_PROVIDERS: Final[dict[STTProviderId, STTProviderConfig]] = {
         display_name="Whisper",
         service_class=WhisperSTTService,
         credential_mapper=NoAuthMapper(availability_fields=("whisper_enabled",)),
+        # Allow configuring model and device via env vars: WHISPER_MODEL (e.g., tiny, base, small)
+        # and WHISPER_DEVICE (cpu|cuda). Defaults: model='tiny', device='cuda'.
+        default_kwargs={
+            "model": os.environ.get("WHISPER_MODEL", "medium"),
+            "device": os.environ.get("WHISPER_DEVICE", "cuda"),
+        },
     ),
 }
 

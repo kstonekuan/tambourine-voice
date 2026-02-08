@@ -5,7 +5,7 @@ description = "Your personal voice interface for any app"
 authors = [{ name = "kstonekuan" }]
 license = "AGPL-3.0-only"
 readme = "../README.md"
-requires-python = ">=3.13"
+requires-python = "~=3.13.0"
 dependencies = [
     "pipecat-ai[anthropic,speechmatics,assemblyai,aws,azure,cartesia,cerebras,deepgram,google,groq,openai,openrouter,silero,webrtc,whisper]>=0.0.101",
     "pydantic-settings>=2.12.0",

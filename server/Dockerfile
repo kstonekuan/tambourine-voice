@@ -1,4 +1,5 @@
-FROM python:3.13-slim
+ARG BASE_IMAGE=nvidia/cuda:12.9.1-cudnn-runtime-ubuntu24.04
+FROM ${BASE_IMAGE}
 
 # Install system dependencies for OpenCV and audio processing
 RUN apt-get update && apt-get install -y --no-install-recommends \
