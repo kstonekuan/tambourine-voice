@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { ConnectionState } from "../lib/tauri";
 
 /**
  * Simple UI state store for connection status display.
@@ -9,14 +10,6 @@ import { create } from "zustand";
  * The actual connection logic is managed by the XState machine in the overlay window.
  * This store just mirrors that state for UI display purposes.
  */
-type ConnectionState =
-	| "disconnected"
-	| "connecting"
-	| "reconnecting"
-	| "idle"
-	| "recording"
-	| "processing";
-
 interface RecordingState {
 	state: ConnectionState;
 	setState: (state: ConnectionState) => void;
