@@ -531,11 +531,11 @@ pub fn run() {
                     let send_focus_context_enabled = get_setting_from_store(
                         app.handle(),
                         LocalOnlySetting::SendFocusContextEnabled,
-                        true,
+                        false,
                     );
 
                     #[cfg(not(desktop))]
-                    let send_focus_context_enabled = true;
+                    let send_focus_context_enabled = false;
 
                     sync_focus_watcher_enabled(
                         app.handle(),

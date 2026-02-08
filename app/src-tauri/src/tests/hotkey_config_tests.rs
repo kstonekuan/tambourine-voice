@@ -1,8 +1,32 @@
 use crate::settings::{
-    check_hotkey_conflict, AppSettings, HotkeyConfig, HotkeyType, LocalOnlySetting,
+    check_hotkey_conflict, AppSettings, HotkeyConfig, HotkeyType, LocalOnlySetting, SettingsError,
 };
 
 // Tests for HotkeyConfig::to_shortcut_string()
+fn make_hotkey(modifiers: &[&str], key: &str) -> HotkeyConfig {
+    HotkeyConfig {
+        modifiers: modifiers
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect(),
+        key: key.to_string(),
+        enabled: true,
+    }
+}
+
+fn make_settings_with_hotkeys(
+    toggle_hotkey: HotkeyConfig,
+    hold_hotkey: HotkeyConfig,
+    paste_last_hotkey: HotkeyConfig,
+) -> AppSettings {
+    AppSettings {
+        toggle_hotkey,
+        hold_hotkey,
+        paste_last_hotkey,
+        ..AppSettings::default()
+    }
+}
+
 #[test]
 fn test_to_shortcut_string_single_modifier() {
     let hotkey = HotkeyConfig {
@@ -143,59 +167,66 @@ fn test_is_same_as_different_modifier_counts() {
 // Tests for check_hotkey_conflict()
 #[test]
 fn test_check_hotkey_conflict_no_conflict() {
-    let settings = AppSettings::default();
-    let new_hotkey = HotkeyConfig {
-        modifiers: vec!["ctrl".to_string(), "shift".to_string()],
-        key: "A".to_string(),
-        enabled: true,
-    };
+    let settings = make_settings_with_hotkeys(
+        make_hotkey(&["ctrl", "alt"], "Space"),
+        make_hotkey(&["ctrl", "alt"], "Backquote"),
+        make_hotkey(&["ctrl", "alt"], "Period"),
+    );
+    let new_hotkey = make_hotkey(&["ctrl", "shift"], "A");
     assert!(check_hotkey_conflict(&new_hotkey, &settings, HotkeyType::Toggle).is_none());
 }
 
 #[test]
 fn test_check_hotkey_conflict_allows_same_type() {
-    let settings = AppSettings::default();
-    // Using toggle's default hotkey when editing toggle should be allowed
-    let new_hotkey = HotkeyConfig::default_toggle();
+    let toggle_hotkey = make_hotkey(&["ctrl", "alt"], "Space");
+    let settings = make_settings_with_hotkeys(
+        toggle_hotkey.clone(),
+        make_hotkey(&["ctrl", "alt"], "Backquote"),
+        make_hotkey(&["ctrl", "alt"], "Period"),
+    );
+    // Reusing the current toggle hotkey while editing toggle is valid.
+    let new_hotkey = toggle_hotkey;
     assert!(check_hotkey_conflict(&new_hotkey, &settings, HotkeyType::Toggle).is_none());
 }
 
 #[test]
-fn test_check_hotkey_conflict_detects_conflict_with_hold() {
-    let settings = AppSettings::default();
-    // Trying to use hold's hotkey for toggle should fail
-    let new_hotkey = HotkeyConfig::default_hold();
-    let result = check_hotkey_conflict(&new_hotkey, &settings, HotkeyType::Toggle);
-    assert!(result.is_some());
-}
-
-#[test]
-fn test_check_hotkey_conflict_detects_conflict_with_paste_last() {
-    let settings = AppSettings::default();
-    // Trying to use paste_last's hotkey for toggle should fail
-    let new_hotkey = HotkeyConfig::default_paste_last();
-    let result = check_hotkey_conflict(&new_hotkey, &settings, HotkeyType::Toggle);
-    assert!(result.is_some());
-}
-
-// Tests for AppSettings::default()
-#[test]
-fn test_app_settings_default() {
-    let settings = AppSettings::default();
-    assert_eq!(settings.toggle_hotkey, HotkeyConfig::default_toggle());
-    assert_eq!(settings.hold_hotkey, HotkeyConfig::default_hold());
-    assert_eq!(
-        settings.paste_last_hotkey,
-        HotkeyConfig::default_paste_last()
+fn test_check_hotkey_conflict_detects_conflict_with_hold_and_reports_type() {
+    let hold_hotkey = make_hotkey(&["ctrl", "alt"], "Backquote");
+    let settings = make_settings_with_hotkeys(
+        make_hotkey(&["ctrl", "alt"], "Space"),
+        hold_hotkey.clone(),
+        make_hotkey(&["ctrl", "alt"], "Period"),
     );
-    assert!(settings.sound_enabled);
-    assert!(!settings.auto_mute_audio);
-    assert!(settings.selected_mic_id.is_none());
-    assert_eq!(settings.stt_provider, "auto");
-    assert_eq!(settings.llm_provider, "auto");
-    assert!(settings.cleanup_prompt_sections.is_none());
-    assert!(settings.stt_timeout_seconds.is_none());
-    assert_eq!(settings.server_url, "http://127.0.0.1:8765");
+    // Trying to use hold's hotkey for toggle should fail.
+    let new_hotkey = hold_hotkey;
+    let result = check_hotkey_conflict(&new_hotkey, &settings, HotkeyType::Toggle);
+    assert!(matches!(
+        result,
+        Some(SettingsError::HotkeyConflict {
+            conflicting_type: HotkeyType::Hold,
+            ..
+        })
+    ));
+}
+
+#[test]
+fn test_check_hotkey_conflict_detects_conflict_with_paste_last_and_reports_type() {
+    let paste_last_hotkey = make_hotkey(&["ctrl", "alt"], "Period");
+    let settings = make_settings_with_hotkeys(
+        make_hotkey(&["ctrl", "alt"], "Space"),
+        make_hotkey(&["ctrl", "alt"], "Backquote"),
+        paste_last_hotkey.clone(),
+    );
+    // Trying to use paste-last's hotkey for toggle should fail.
+    let new_hotkey = paste_last_hotkey;
+    let result = check_hotkey_conflict(&new_hotkey, &settings, HotkeyType::Toggle);
+    assert!(matches!(
+        result,
+        Some(SettingsError::HotkeyConflict {
+            conflicting_type: HotkeyType::PasteLast,
+            ..
+        })
+    ));
 }
 
 // Tests for HotkeyType

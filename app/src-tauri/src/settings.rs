@@ -131,6 +131,11 @@ impl From<RtviSyncedSetting> for SettingClass {
 fn default_enabled() -> bool {
     true
 }
+
+/// Disable boolean field by default (needed for serde)
+fn default_disabled() -> bool {
+    false
+}
 /// Configuration for a hotkey combination
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct HotkeyConfig {
@@ -346,7 +351,7 @@ pub struct AppSettings {
     pub server_url: String,
     #[serde(default = "default_enabled")]
     pub llm_formatting_enabled: bool,
-    #[serde(default = "default_enabled")]
+    #[serde(default = "default_disabled")]
     pub send_focus_context_enabled: bool,
 }
 
@@ -365,7 +370,7 @@ impl Default for AppSettings {
             stt_timeout_seconds: None,
             server_url: DEFAULT_SERVER_URL.to_string(),
             llm_formatting_enabled: true,
-            send_focus_context_enabled: true,
+            send_focus_context_enabled: false,
         }
     }
 }

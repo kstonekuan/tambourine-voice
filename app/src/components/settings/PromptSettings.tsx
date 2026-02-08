@@ -206,15 +206,15 @@ export function PromptSettings() {
 	};
 
 	const handleFocusContextToggle = (checked: boolean) => {
-		if (!checked) {
+		if (checked) {
 			focusWarningHandlers.open();
 		} else {
-			focusContextMutation.mutate(true);
+			focusContextMutation.mutate(false);
 		}
 	};
 
-	const confirmDisableFocusContext = () => {
-		focusContextMutation.mutate(false);
+	const confirmEnableFocusContext = () => {
+		focusContextMutation.mutate(true);
 		focusWarningHandlers.close();
 	};
 
@@ -254,7 +254,7 @@ export function PromptSettings() {
 						</p>
 					</div>
 					<Switch
-						checked={settings?.send_focus_context_enabled ?? true}
+						checked={settings?.send_focus_context_enabled ?? false}
 						onChange={(event) =>
 							handleFocusContextToggle(event.currentTarget.checked)
 						}
@@ -387,24 +387,26 @@ export function PromptSettings() {
 				</div>
 			</Modal>
 
-			{/* Warning modal when disabling focus context */}
+			{/* Warning modal when enabling focus context */}
 			<Modal
 				opened={focusWarningOpened}
 				onClose={focusWarningHandlers.close}
-				title="Disable focus context?"
+				title="Enable focus context?"
 				centered
 				size="md"
 			>
 				<Text size="sm" mb="md">
-					Disabling focus context may reduce dictation quality because the
-					server won't know which app or document you're working in.
+					This experimental feature can improve dictation quality by adapting
+					formatting to your active app or window. It might send personal data
+					about what active app you are in to the server, and if you connect to
+					a cloud service, that data will be sent to the cloud service as well.
 				</Text>
 				<div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
 					<Button variant="default" onClick={focusWarningHandlers.close}>
 						Cancel
 					</Button>
-					<Button color="red" onClick={confirmDisableFocusContext}>
-						Disable Focus Context
+					<Button color="orange" onClick={confirmEnableFocusContext}>
+						Enable Focus Context
 					</Button>
 				</div>
 			</Modal>

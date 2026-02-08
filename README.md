@@ -65,6 +65,7 @@ Open-source alternative to [Wispr Flow](https://wisprflow.ai), [Superwhisper](ht
   - Toggle mode: `Ctrl+Alt+Space` - Press to start, press again to stop
 - **Real-time Speech-to-Text** - Fast transcription with configurable STT providers
 - **LLM Text Formatting** - Removes filler words, adds punctuation using configurable LLM
+- **Context-Aware Formatting** - Automatically detect which application is focused and tailor formatting accordingly. Email clients get proper salutations and sign-offs, messaging apps get casual formatting, code editors get syntax-aware output with proper casing and punctuation.
 - **Customizable Prompts** - Edit formatting rules, enable advanced features, add personal dictionary
 - **In-App Provider Selection** - Switch STT and LLM providers without restarting
 - **Automatic Typing** - Input text directly at focused position
@@ -76,7 +77,6 @@ Open-source alternative to [Wispr Flow](https://wisprflow.ai), [Superwhisper](ht
 
 ## Planned Features
 
-- **Context-Aware Formatting** - Automatically detect which application is focused and tailor formatting accordingly. Email clients get proper salutations and sign-offs, messaging apps get casual formatting, code editors get syntax-aware output with proper casing and punctuation.
 - **Voice-Driven Text Modification** - Highlight existing text and describe how to modify it. Select a paragraph and say "make this more formal" or "fix the grammar" to transform text in place.
 - **Voice Shortcuts** - Create custom triggers that expand to full formatted text. Say "insert meeting link" to paste your scheduling URL, or "sign off" for your email signature.
 - **Auto-Learning Dictionary** - Automatically learn new words, names, and terminology from your usage patterns rather than requiring manual dictionary entries.

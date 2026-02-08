@@ -213,7 +213,7 @@ pub fn get_settings(app: AppHandle) -> Result<AppSettings, String> {
         send_focus_context_enabled: get_setting_from_store(
             &app,
             LocalOnlySetting::SendFocusContextEnabled,
-            true,
+            false,
         ),
     })
 }
