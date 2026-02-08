@@ -275,9 +275,7 @@ fn get_value_pattern_current_value(value_pattern: &IUIAutomationValuePattern) ->
 fn extract_normalized_origin_from_edit_control(
     edit_control_element: &IUIAutomationElement,
 ) -> Option<String> {
-    let Some(value_pattern) = get_value_pattern_for_edit_control(edit_control_element) else {
-        return None;
-    };
+    let value_pattern = get_value_pattern_for_edit_control(edit_control_element)?;
     let raw_address_bar_value = get_value_pattern_current_value(&value_pattern);
     raw_address_bar_value
         .as_deref()
