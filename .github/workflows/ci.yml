@@ -133,7 +133,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=sha,prefix={{branch}}-
+            type=sha
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
