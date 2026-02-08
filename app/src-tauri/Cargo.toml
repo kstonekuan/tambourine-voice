@@ -27,6 +27,7 @@ tauri-plugin-store = "2.4.2"
 tauri-plugin-http = { version = "2.5.7", features = ["json"] }
 tauri-plugin-dialog = "2.6.0"
 tauri-plugin-fs = "2.4.5"
+tauri-plugin-os = "2.3.2"
 
 # Serialization
 serde = { version = "1.0.228", features = ["derive"] }
