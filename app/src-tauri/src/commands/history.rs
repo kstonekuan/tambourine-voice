@@ -1,3 +1,4 @@
+use crate::active_app_context::ActiveAppContextSnapshot;
 use crate::history::{HistoryEntry, HistoryStorage};
 use tauri::State;
 
@@ -6,10 +7,11 @@ use tauri::State;
 pub async fn add_history_entry(
     text: String,
     raw_text: String,
+    active_app_context: Option<ActiveAppContextSnapshot>,
     history: State<'_, HistoryStorage>,
 ) -> Result<HistoryEntry, String> {
     history
-        .add_entry(text, raw_text)
+        .add_entry(text, raw_text, active_app_context)
         .map_err(|error| error.to_string())
 }
 

@@ -41,6 +41,7 @@ function showSettingsError(message: string): void {
 }
 
 import {
+	type ActiveAppContextSnapshot,
 	type AppSettings,
 	type AvailableProvidersData,
 	type CleanupPromptSections,
@@ -339,8 +340,15 @@ export function useHistory(limit?: number) {
 export function useAddHistoryEntry() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: ({ text, rawText }: { text: string; rawText: string }) =>
-			tauriAPI.addHistoryEntry(text, rawText),
+		mutationFn: ({
+			text,
+			rawText,
+			activeAppContext,
+		}: {
+			text: string;
+			rawText: string;
+			activeAppContext?: ActiveAppContextSnapshot | null;
+		}) => tauriAPI.addHistoryEntry(text, rawText, activeAppContext),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["history"] });
 			// Notify other windows about history change

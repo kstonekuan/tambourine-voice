@@ -30,6 +30,14 @@ function formatDate(timestamp: string): string {
 	return format(date, "MMM d");
 }
 
+function formatContextCapturedAt(capturedAt: string): string {
+	const parsedCapturedAt = new Date(capturedAt);
+	if (Number.isNaN(parsedCapturedAt.getTime())) {
+		return capturedAt;
+	}
+	return format(parsedCapturedAt, "MMM d, h:mm:ss a");
+}
+
 interface GroupedHistory {
 	date: string;
 	items: HistoryEntry[];
@@ -64,6 +72,25 @@ const HistoryItem = memo(function HistoryItem({
 	isDeleting,
 }: HistoryItemProps) {
 	const [isExpanded, setIsExpanded] = useState(false);
+	const activeAppContextSnapshot = entry.active_app_context;
+	const focusedApplicationDisplayName =
+		activeAppContextSnapshot?.focused_application?.display_name ?? "Unknown";
+	const focusedWindowTitle =
+		activeAppContextSnapshot?.focused_window?.title ?? "Unknown";
+	const focusedBrowserName =
+		activeAppContextSnapshot?.focused_browser_tab?.browser ?? "Unknown";
+	const focusedBrowserTabTitle =
+		activeAppContextSnapshot?.focused_browser_tab?.title ?? "Unknown";
+	const focusedBrowserOrigin =
+		activeAppContextSnapshot?.focused_browser_tab?.origin ?? "Unknown";
+	const focusEventSource = activeAppContextSnapshot?.event_source ?? "unknown";
+	const focusConfidenceLevel =
+		activeAppContextSnapshot?.confidence_level ?? "low";
+	const privacyFilteredLabel =
+		activeAppContextSnapshot?.privacy_filtered === true ? "Yes" : "No";
+	const capturedAtLabel = activeAppContextSnapshot?.captured_at
+		? formatContextCapturedAt(activeAppContextSnapshot.captured_at)
+		: null;
 
 	return (
 		<div className="history-item">
@@ -78,6 +105,76 @@ const HistoryItem = memo(function HistoryItem({
 						<Text size="sm" c="dimmed">
 							{entry.raw_text}
 						</Text>
+
+						<Text size="xs" c="dimmed" fw={500} mt={12} mb={4}>
+							Active app context sent to LLM:
+						</Text>
+						{activeAppContextSnapshot ? (
+							<div className="history-context-grid">
+								<Text size="xs" c="dimmed">
+									App
+								</Text>
+								<Text size="sm" c="dimmed">
+									{focusedApplicationDisplayName}
+								</Text>
+								<Text size="xs" c="dimmed">
+									Window
+								</Text>
+								<Text size="sm" c="dimmed">
+									{focusedWindowTitle}
+								</Text>
+								<Text size="xs" c="dimmed">
+									Browser
+								</Text>
+								<Text size="sm" c="dimmed">
+									{focusedBrowserName}
+								</Text>
+								<Text size="xs" c="dimmed">
+									Tab
+								</Text>
+								<Text size="sm" c="dimmed">
+									{focusedBrowserTabTitle}
+								</Text>
+								<Text size="xs" c="dimmed">
+									Origin
+								</Text>
+								<Text size="sm" c="dimmed">
+									{focusedBrowserOrigin}
+								</Text>
+								<Text size="xs" c="dimmed">
+									Source
+								</Text>
+								<Text size="sm" c="dimmed">
+									{focusEventSource}
+								</Text>
+								<Text size="xs" c="dimmed">
+									Confidence
+								</Text>
+								<Text size="sm" c="dimmed">
+									{focusConfidenceLevel}
+								</Text>
+								<Text size="xs" c="dimmed">
+									Privacy filtered
+								</Text>
+								<Text size="sm" c="dimmed">
+									{privacyFilteredLabel}
+								</Text>
+								{capturedAtLabel && (
+									<>
+										<Text size="xs" c="dimmed">
+											Captured at
+										</Text>
+										<Text size="sm" c="dimmed">
+											{capturedAtLabel}
+										</Text>
+									</>
+								)}
+							</div>
+						) : (
+							<Text size="sm" c="dimmed">
+								No active app context was sent for this dictation.
+							</Text>
+						)}
 					</div>
 				)}
 			</div>
@@ -105,9 +202,9 @@ const HistoryItem = memo(function HistoryItem({
 							leftSection={
 								isExpanded ? <EyeOff size={14} /> : <Eye size={14} />
 							}
-							onClick={() => setIsExpanded(!isExpanded)}
+							onClick={() => setIsExpanded((currentState) => !currentState)}
 						>
-							{isExpanded ? "Hide" : "View"} raw transcript
+							{isExpanded ? "Hide" : "View"} details
 						</Menu.Item>
 						<Menu.Divider />
 						<Menu.Item

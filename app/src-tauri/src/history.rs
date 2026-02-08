@@ -1,3 +1,4 @@
+use crate::active_app_context::ActiveAppContextSnapshot;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -38,15 +39,22 @@ pub struct HistoryEntry {
     pub text: String,
     #[serde(default)]
     pub raw_text: String,
+    #[serde(default)]
+    pub active_app_context: Option<ActiveAppContextSnapshot>,
 }
 
 impl HistoryEntry {
-    pub fn new(text: String, raw_text: String) -> Self {
+    pub fn new(
+        text: String,
+        raw_text: String,
+        active_app_context: Option<ActiveAppContextSnapshot>,
+    ) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             timestamp: Utc::now(),
             text,
             raw_text,
+            active_app_context,
         }
     }
 }
@@ -117,8 +125,13 @@ impl HistoryStorage {
     }
 
     /// Add a new entry to the history
-    pub fn add_entry(&self, text: String, raw_text: String) -> Result<HistoryEntry> {
-        let new_history_entry = HistoryEntry::new(text, raw_text);
+    pub fn add_entry(
+        &self,
+        text: String,
+        raw_text: String,
+        active_app_context: Option<ActiveAppContextSnapshot>,
+    ) -> Result<HistoryEntry> {
+        let new_history_entry = HistoryEntry::new(text, raw_text, active_app_context);
         {
             let mut history_data = self.data.write().map_err(|error| {
                 anyhow::anyhow!("Failed to acquire history write lock when adding entry: {error}")
@@ -269,5 +282,113 @@ impl HistoryStorage {
             entries_imported: Some(imported_count),
             entries_skipped: Some(skipped_count),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::active_app_context::{
+        FocusConfidenceLevel, FocusEventSource, FocusedApplication, FocusedBrowserTab,
+        FocusedWindow,
+    };
+
+    struct TemporaryHistoryDirectory {
+        path: PathBuf,
+    }
+
+    impl TemporaryHistoryDirectory {
+        fn new() -> Self {
+            let path =
+                std::env::temp_dir().join(format!("tambourine-history-test-{}", Uuid::new_v4()));
+            fs::create_dir_all(&path).expect("failed to create temporary history test directory");
+            Self { path }
+        }
+    }
+
+    impl Drop for TemporaryHistoryDirectory {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    #[test]
+    fn loading_legacy_history_entries_defaults_optional_fields() {
+        let temporary_history_directory = TemporaryHistoryDirectory::new();
+        let history_file_path = temporary_history_directory.path.join("history.json");
+
+        let legacy_history_content = r#"{
+  "entries": [
+    {
+      "id": "legacy-entry-id",
+      "timestamp": "2026-02-08T12:00:00Z",
+      "text": "Legacy formatted text"
+    }
+  ]
+}"#;
+
+        fs::write(&history_file_path, legacy_history_content)
+            .expect("failed to seed legacy history file");
+
+        let history_storage = HistoryStorage::new(temporary_history_directory.path.clone());
+        let loaded_entries = history_storage
+            .get_all(None)
+            .expect("failed to load legacy history entries");
+
+        assert_eq!(loaded_entries.len(), 1);
+        assert_eq!(loaded_entries[0].id, "legacy-entry-id");
+        assert_eq!(loaded_entries[0].raw_text, "");
+        assert!(loaded_entries[0].active_app_context.is_none());
+    }
+
+    #[test]
+    fn add_entry_persists_active_app_context() {
+        let temporary_history_directory = TemporaryHistoryDirectory::new();
+        let history_storage = HistoryStorage::new(temporary_history_directory.path.clone());
+
+        let active_app_context_snapshot = ActiveAppContextSnapshot {
+            focused_application: Some(FocusedApplication {
+                display_name: "Code".to_string(),
+                bundle_id: Some("com.microsoft.VSCode".to_string()),
+                process_path: None,
+            }),
+            focused_window: Some(FocusedWindow {
+                title: "notes.md".to_string(),
+            }),
+            focused_browser_tab: Some(FocusedBrowserTab {
+                title: Some("Issue tracker".to_string()),
+                origin: Some("https://github.com".to_string()),
+                browser: Some("Google Chrome".to_string()),
+            }),
+            event_source: FocusEventSource::Accessibility,
+            confidence_level: FocusConfidenceLevel::High,
+            privacy_filtered: false,
+            captured_at: "2026-02-08T12:00:00Z".to_string(),
+        };
+
+        let new_history_entry = history_storage
+            .add_entry(
+                "Formatted text".to_string(),
+                "Raw text".to_string(),
+                Some(active_app_context_snapshot.clone()),
+            )
+            .expect("failed to add history entry with active app context");
+
+        assert_eq!(
+            new_history_entry.active_app_context,
+            Some(active_app_context_snapshot.clone())
+        );
+
+        let persisted_entries = history_storage
+            .get_all(Some(1))
+            .expect("failed to read persisted history entry");
+
+        assert_eq!(persisted_entries.len(), 1);
+        assert_eq!(persisted_entries[0].text, "Formatted text");
+        assert_eq!(persisted_entries[0].raw_text, "Raw text");
+        assert_eq!(
+            persisted_entries[0].active_app_context,
+            Some(active_app_context_snapshot)
+        );
     }
 }

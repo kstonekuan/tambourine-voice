@@ -226,6 +226,8 @@ function RecordingControl() {
 	const latestActiveAppContextRef = useRef<ActiveAppContextSnapshot | null>(
 		null,
 	);
+	const activeAppContextSentForCurrentRecordingRef =
+		useRef<ActiveAppContextSnapshot | null>(null);
 	// Track the last mic device ID used for capture
 	// undefined = never started, null = system default, string = specific device
 	const lastMicIdRef = useRef<string | null | undefined>(undefined);
@@ -291,6 +293,7 @@ function RecordingControl() {
 		// because UserTranscript events arrive DURING recording, before LLM processes
 		streamedLlmResponseChunksRef.current = "";
 		rawTranscriptionRef.current = "";
+		activeAppContextSentForCurrentRecordingRef.current = null;
 
 		// Always show loading indicator during mic acquisition and recording start
 		// This ensures accurate UX feedback even when mic is pre-warmed
@@ -355,11 +358,15 @@ function RecordingControl() {
 				// Signal server to start turn management
 				// LLM formatting is now controlled globally via the config API
 				// Use safe send to detect communication failures and trigger reconnection
-				const startRecordingData =
-					settings?.send_active_app_context_enabled === true &&
-					latestActiveAppContextRef.current
-						? { active_app_context: latestActiveAppContextRef.current }
-						: {};
+				const activeAppContextSentForCurrentRecording =
+					settings?.send_active_app_context_enabled === true
+						? latestActiveAppContextRef.current
+						: null;
+				activeAppContextSentForCurrentRecordingRef.current =
+					activeAppContextSentForCurrentRecording;
+				const startRecordingData = activeAppContextSentForCurrentRecording
+					? { active_app_context: activeAppContextSentForCurrentRecording }
+					: {};
 				console.debug(
 					"[Active App Context] Sending start-recording payload:",
 					startRecordingData,
@@ -441,8 +448,16 @@ function RecordingControl() {
 			safeSendClientMessage(client, "stop-recording", {}, (error) =>
 				send({ type: "COMMUNICATION_ERROR", error }),
 			);
+		} else {
+			activeAppContextSentForCurrentRecordingRef.current = null;
 		}
 	}, [client, displayState, stopNativeCapture, send, startResponseTimeout]);
+
+	useEffect(() => {
+		if (displayState !== "recording" && displayState !== "processing") {
+			activeAppContextSentForCurrentRecordingRef.current = null;
+		}
+	}, [displayState]);
 
 	useEffect(() => {
 		let isCancelled = false;
@@ -681,6 +696,8 @@ function RecordingControl() {
 			clearResponseTimeout();
 			const text = streamedLlmResponseChunksRef.current.trim();
 			const rawText = rawTranscriptionRef.current.trim();
+			const activeAppContextSentForCurrentRecording =
+				activeAppContextSentForCurrentRecordingRef.current;
 			streamedLlmResponseChunksRef.current = "";
 			rawTranscriptionRef.current = "";
 
@@ -692,8 +709,13 @@ function RecordingControl() {
 				} catch (error) {
 					console.error("[Pipecat] Failed to type text:", error);
 				}
-				addHistoryEntry.mutate({ text, rawText });
+				addHistoryEntry.mutate({
+					text,
+					rawText,
+					activeAppContext: activeAppContextSentForCurrentRecording,
+				});
 			}
+			activeAppContextSentForCurrentRecordingRef.current = null;
 			send({ type: "RESPONSE_RECEIVED" });
 		}, [clearResponseTimeout, typeTextMutation, addHistoryEntry, send]),
 	);
@@ -709,11 +731,14 @@ function RecordingControl() {
 				match(parsed)
 					.with({ type: "recording-complete" }, () => {
 						clearResponseTimeout();
+						activeAppContextSentForCurrentRecordingRef.current = null;
 						send({ type: "RESPONSE_RECEIVED" });
 					})
 					.with({ type: "raw-transcription" }, async ({ text }) => {
 						// Raw transcription received (LLM bypassed)
 						clearResponseTimeout();
+						const activeAppContextSentForCurrentRecording =
+							activeAppContextSentForCurrentRecordingRef.current;
 						const trimmedText = text.trim();
 
 						if (trimmedText) {
@@ -730,8 +755,10 @@ function RecordingControl() {
 							addHistoryEntry.mutate({
 								text: trimmedText,
 								rawText: trimmedText,
+								activeAppContext: activeAppContextSentForCurrentRecording,
 							});
 						}
+						activeAppContextSentForCurrentRecordingRef.current = null;
 						send({ type: "RESPONSE_RECEIVED" });
 					})
 					.with({ type: "config-updated" }, ({ setting, value }) => {
@@ -781,6 +808,7 @@ function RecordingControl() {
 					// Return to idle if in processing state (error means no content coming)
 					if (displayState === "processing") {
 						clearResponseTimeout();
+						activeAppContextSentForCurrentRecordingRef.current = null;
 						send({ type: "RESPONSE_RECEIVED" });
 					}
 

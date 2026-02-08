@@ -307,6 +307,13 @@ body {
 	white-space: pre-wrap;
 }
 
+.history-context-grid {
+	display: grid;
+	grid-template-columns: minmax(90px, auto) 1fr;
+	gap: 4px 12px;
+	margin-top: 4px;
+}
+
 .history-actions {
 	display: flex;
 	gap: 4px;

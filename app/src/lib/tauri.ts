@@ -326,6 +326,7 @@ export interface HistoryEntry {
 	timestamp: string;
 	text: string;
 	raw_text: string;
+	active_app_context?: ActiveAppContextSnapshot | null;
 }
 
 // =============================================================================
@@ -580,8 +581,12 @@ export const tauriAPI = {
 		return invoke("set_hotkey_enabled", { hotkeyType, enabled });
 	},
 
-	async addHistoryEntry(text: string, rawText: string): Promise<HistoryEntry> {
-		return invoke("add_history_entry", { text, rawText });
+	async addHistoryEntry(
+		text: string,
+		rawText: string,
+		activeAppContext?: ActiveAppContextSnapshot | null,
+	): Promise<HistoryEntry> {
+		return invoke("add_history_entry", { text, rawText, activeAppContext });
 	},
 
 	async getHistory(limit?: number): Promise<HistoryEntry[]> {
