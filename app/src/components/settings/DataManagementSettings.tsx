@@ -321,4 +321,79 @@ export function DataManagementSettings() {
 				onClose={closeResetModal}
 				title={
 					<Group gap="xs">
-						<AlertTriangle siz
+						<AlertTriangle size={20} color="var(--mantine-color-red-6)" />
+						<span>Factory Reset</span>
+					</Group>
+				}
+				centered
+			>
+				{match(resetModalState)
+					.with({ type: "first_confirm" }, () => (
+						<Stack gap="md">
+							<Text size="sm">
+								Are you sure you want to reset all settings and clear your
+								transcription history?
+							</Text>
+							<Text size="sm" c="red" fw={500}>
+								This action cannot be undone.
+							</Text>
+							<Group justify="flex-end" mt="md">
+								<Button variant="subtle" onClick={closeResetModal}>
+									Cancel
+								</Button>
+								<Button color="red" onClick={handleFirstConfirm}>
+									Continue
+								</Button>
+							</Group>
+						</Stack>
+					))
+					.with({ type: "second_confirm" }, () => (
+						<Stack gap="md">
+							<Text size="sm" fw={500}>
+								This will permanently delete:
+							</Text>
+							<ul style={{ margin: 0, paddingLeft: 20 }}>
+								<li>
+									<Text size="sm">All your custom settings</Text>
+								</li>
+								<li>
+									<Text size="sm">All hotkey configurations</Text>
+								</li>
+								<li>
+									<Text size="sm">All transcription history</Text>
+								</li>
+							</ul>
+							<Text size="sm" c="dimmed" mt="xs">
+								Type <strong>RESET</strong> below to confirm:
+							</Text>
+							<TextInput
+								value={resetConfirmText}
+								onChange={(e) => setResetConfirmText(e.currentTarget.value)}
+								placeholder="Type RESET to confirm"
+								styles={{
+									input: {
+										fontFamily: "monospace",
+									},
+								}}
+							/>
+							<Group justify="flex-end" mt="md">
+								<Button variant="subtle" onClick={closeResetModal}>
+									Cancel
+								</Button>
+								<Button
+									color="red"
+									onClick={handleFinalReset}
+									disabled={!isResetConfirmValid}
+									loading={factoryReset.isPending}
+								>
+									Reset Everything
+								</Button>
+							</Group>
+						</Stack>
+					))
+					.with({ type: "closed" }, () => null)
+					.exhaustive()}
+			</Modal>
+		</>
+	);
+}
