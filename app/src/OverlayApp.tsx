@@ -35,6 +35,12 @@ import type { ConnectionMachineStateValue } from "./machines/connectionMachine";
 import "./overlay-global.css";
 
 const SERVER_RESPONSE_TIMEOUT_MS = 10_000;
+const NATIVE_AUDIO_FIRST_FRAME_READY_TIMEOUT_MS = 500;
+const PIPECAT_LOCAL_PARTICIPANT = {
+	id: "local",
+	name: "local",
+	local: true,
+} as const;
 
 // Server message schemas as a discriminated union for single-parse handling
 const KnownServerMessageSchema = z.discriminatedUnion("type", [
@@ -208,6 +214,24 @@ function getDisplayState(
 		.exhaustive();
 }
 
+function getPeerConnectionAudioSender(
+	peerConnection: RTCPeerConnection,
+): RTCRtpSender | undefined {
+	return peerConnection
+		.getSenders()
+		.find(
+			(sender) =>
+				sender.track?.kind === "audio" ||
+				peerConnection
+					.getTransceivers()
+					.some(
+						(transceiver) =>
+							transceiver.sender === sender &&
+							transceiver.receiver.track?.kind === "audio",
+					),
+		);
+}
+
 function RecordingControl() {
 	const client = usePipecatClient();
 	const queryClient = useQueryClient();
@@ -236,7 +260,7 @@ function RecordingControl() {
 	// Bypasses browser's getUserMedia() which has ~300-400ms latency on macOS
 	const {
 		track: nativeAudioTrack,
-		isReady: isNativeAudioReady,
+		waitUntilReady: waitUntilNativeAudioReady,
 		start: startNativeCapture,
 		stop: stopNativeCapture,
 	} = useNativeAudioTrack();
@@ -251,6 +275,7 @@ function RecordingControl() {
 
 	// Error display state (persists until user records again)
 	const [showError, setShowError] = useState(false);
+	const recordingStartAttemptIdRef = useRef(0);
 
 	const { start: startResponseTimeout, clear: clearResponseTimeout } =
 		useTimeout(() => {
@@ -285,6 +310,12 @@ function RecordingControl() {
 
 	// Handle start/stop recording from hotkeys
 	const onStartRecording = useCallback(async () => {
+		const recordingStartAttemptId = recordingStartAttemptIdRef.current + 1;
+		recordingStartAttemptIdRef.current = recordingStartAttemptId;
+
+		const isCurrentRecordingStartAttempt = () =>
+			recordingStartAttemptIdRef.current === recordingStartAttemptId;
+
 		// Clear error state when starting recording
 		setShowError(false);
 
@@ -304,135 +335,166 @@ function RecordingControl() {
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
 		try {
-			// Use native audio capture for low-latency mic acquisition
-			if (isNativeAudioReady) {
-				const deviceId = settings?.selected_mic_id ?? undefined;
+			if (!client) {
+				return;
+			}
 
-				// Start native capture (skip if pre-warmed)
-				if (!micPreparedRef.current) {
-					await startNativeCapture(deviceId);
-					lastMicIdRef.current = deviceId ?? null;
+			await waitUntilNativeAudioReady(
+				NATIVE_AUDIO_FIRST_FRAME_READY_TIMEOUT_MS,
+			);
+			if (!isCurrentRecordingStartAttempt()) {
+				return;
+			}
+
+			const selectedMicDeviceId = settings?.selected_mic_id ?? undefined;
+			if (!micPreparedRef.current) {
+				const startNativeCaptureResult = await startNativeCapture({
+					deviceId: selectedMicDeviceId,
+					waitForFirstAudioFrameMs: NATIVE_AUDIO_FIRST_FRAME_READY_TIMEOUT_MS,
+				});
+				if (!isCurrentRecordingStartAttempt()) {
+					stopNativeCapture();
+					lastMicIdRef.current = undefined;
+					return;
+				}
+				lastMicIdRef.current = selectedMicDeviceId ?? null;
+
+				if (!isCurrentRecordingStartAttempt()) {
+					stopNativeCapture();
+					lastMicIdRef.current = undefined;
+					return;
 				}
 
-				// Inject the native audio track into WebRTC
-				if (client && nativeAudioTrack) {
-					const transport = client.transport as SmallWebRTCTransport;
-					const pc = (transport as unknown as { pc?: RTCPeerConnection }).pc;
-					if (pc) {
-						const audioSender = pc
-							.getSenders()
-							.find(
-								(s) =>
-									s.track?.kind === "audio" ||
-									pc
-										.getTransceivers()
-										.some(
-											(t) =>
-												t.sender === s && t.receiver.track?.kind === "audio",
-										),
-							);
-
-						if (audioSender) {
-							await audioSender.replaceTrack(nativeAudioTrack);
-						} else {
-							const stream = new MediaStream([nativeAudioTrack]);
-							pc.addTrack(nativeAudioTrack, stream);
-						}
-					}
+				if (!startNativeCaptureResult.firstFrameReceived) {
+					console.warn(
+						"[Recording] Native mic did not produce audio frames before timeout",
+					);
+					setShowError(true);
+					stopNativeCapture();
+					lastMicIdRef.current = undefined;
+					return;
 				}
+			}
+
+			if (!nativeAudioTrack) {
+				throw new Error("Native audio track is unavailable");
+			}
+
+			const transport = client.transport as SmallWebRTCTransport;
+			const peerConnection = (
+				transport as unknown as { pc?: RTCPeerConnection }
+			).pc;
+			if (!peerConnection) {
+				throw new Error("WebRTC peer connection is unavailable");
+			}
+
+			const audioSender = getPeerConnectionAudioSender(peerConnection);
+			if (audioSender) {
+				await audioSender.replaceTrack(nativeAudioTrack);
+			} else {
+				const nativeAudioTrackStream = new MediaStream([nativeAudioTrack]);
+				peerConnection.addTrack(nativeAudioTrack, nativeAudioTrackStream);
+			}
+
+			if (!isCurrentRecordingStartAttempt()) {
+				stopNativeCapture();
+				lastMicIdRef.current = undefined;
+				return;
 			}
 
 			// Reset prepared state for next recording
 			micPreparedRef.current = false;
 
-			// Enable mic and transition to recording state
-			if (client) {
-				try {
-					client.enableMic(true);
-				} catch (error) {
-					console.warn("[Recording] Failed to enable mic:", error);
+			send({ type: "START_RECORDING" });
+
+			// Signal server to start turn management
+			// LLM formatting is now controlled globally via the config API
+			// Use safe send to detect communication failures and trigger reconnection
+			const activeAppContextSentForCurrentRecording =
+				settings?.send_active_app_context_enabled === true
+					? latestActiveAppContextRef.current
+					: null;
+			activeAppContextSentForCurrentRecordingRef.current =
+				activeAppContextSentForCurrentRecording;
+			const startRecordingData = activeAppContextSentForCurrentRecording
+				? { active_app_context: activeAppContextSentForCurrentRecording }
+				: {};
+			console.debug(
+				"[Active App Context] Sending start-recording payload:",
+				startRecordingData,
+			);
+			safeSendClientMessage(
+				client,
+				"start-recording",
+				startRecordingData,
+				(error) => send({ type: "COMMUNICATION_ERROR", error }),
+			);
+
+			// Emit after state transition tick so VoiceVisualizer has subscribed.
+			setTimeout(() => {
+				if (
+					recordingStartAttemptIdRef.current !== recordingStartAttemptId ||
+					!nativeAudioTrack
+				) {
 					return;
 				}
-				send({ type: "START_RECORDING" });
 
-				// Signal server to start turn management
-				// LLM formatting is now controlled globally via the config API
-				// Use safe send to detect communication failures and trigger reconnection
-				const activeAppContextSentForCurrentRecording =
-					settings?.send_active_app_context_enabled === true
-						? latestActiveAppContextRef.current
-						: null;
-				activeAppContextSentForCurrentRecordingRef.current =
-					activeAppContextSentForCurrentRecording;
-				const startRecordingData = activeAppContextSentForCurrentRecording
-					? { active_app_context: activeAppContextSentForCurrentRecording }
-					: {};
-				console.debug(
-					"[Active App Context] Sending start-recording payload:",
-					startRecordingData,
+				client.emit(
+					RTVIEvent.TrackStarted,
+					nativeAudioTrack,
+					PIPECAT_LOCAL_PARTICIPANT,
 				);
-				safeSendClientMessage(
-					client,
-					"start-recording",
-					startRecordingData,
-					(error) => send({ type: "COMMUNICATION_ERROR", error }),
-				);
-			}
+			}, 0);
 		} catch (error) {
 			console.warn("[Recording] Failed to start recording:", error);
+			setShowError(true);
 		} finally {
-			setIsMicAcquiring(false);
+			if (isCurrentRecordingStartAttempt()) {
+				setIsMicAcquiring(false);
+			}
 		}
 	}, [
 		client,
 		settings?.selected_mic_id,
 		settings?.send_active_app_context_enabled,
-		isNativeAudioReady,
 		nativeAudioTrack,
+		waitUntilNativeAudioReady,
 		startNativeCapture,
+		stopNativeCapture,
 		send,
 	]);
 
 	const onStopRecording = useCallback(() => {
+		recordingStartAttemptIdRef.current += 1;
+		setIsMicAcquiring(false);
+		micPreparedRef.current = false;
+
 		// Stop native audio capture and reset state so next recording starts fresh
 		stopNativeCapture();
 		lastMicIdRef.current = undefined;
 
-		// Always disable mic and detach track, regardless of displayState
+		// Always detach track, regardless of displayState
 		// This ensures the mic indicator goes away even if state changed
 		if (client) {
-			// Disable mic to release any browser getUserMedia stream
-			try {
-				client.enableMic(false);
-			} catch (error) {
-				console.warn("[Recording] Failed to disable mic:", error);
-			}
-
 			// Detach the native audio track from WebRTC sender to stop transmitting
-			// (enableMic only affects the client's internal track, not our injected native track)
 			try {
 				const transport = client.transport as SmallWebRTCTransport;
 				const pc = (transport as unknown as { pc?: RTCPeerConnection }).pc;
 				if (pc) {
-					const audioSender = pc
-						.getSenders()
-						.find((s) => s.track?.kind === "audio");
+					const audioSender = getPeerConnectionAudioSender(pc);
 					if (audioSender) {
 						audioSender.replaceTrack(null);
 					}
 				}
-			} catch (error) {
-				console.warn("[Recording] Failed to detach audio track:", error);
-			}
-
-			// Stop the audio track immediately to release the microphone
-			try {
-				const tracks = client.tracks();
-				if (tracks?.local?.audio) {
-					tracks.local.audio.stop();
+				if (nativeAudioTrack) {
+					client.emit(
+						RTVIEvent.TrackStopped,
+						nativeAudioTrack,
+						PIPECAT_LOCAL_PARTICIPANT,
+					);
 				}
 			} catch (error) {
-				console.warn("[Recording] Failed to stop audio track:", error);
+				console.warn("[Recording] Failed to detach audio track:", error);
 			}
 		}
 
@@ -451,7 +513,14 @@ function RecordingControl() {
 		} else {
 			activeAppContextSentForCurrentRecordingRef.current = null;
 		}
-	}, [client, displayState, stopNativeCapture, send, startResponseTimeout]);
+	}, [
+		client,
+		displayState,
+		nativeAudioTrack,
+		stopNativeCapture,
+		send,
+		startResponseTimeout,
+	]);
 
 	useEffect(() => {
 		if (displayState !== "recording" && displayState !== "processing") {
@@ -498,21 +567,40 @@ function RecordingControl() {
 		const setup = async () => {
 			unlisten = await tauriAPI.onPrepareRecording(async () => {
 				// Only prepare if we're idle and not already prepared
-				if (
-					!micPreparedRef.current &&
-					displayState === "idle" &&
-					isNativeAudioReady
-				) {
-					const deviceId = settings?.selected_mic_id ?? undefined;
+				if (!micPreparedRef.current && displayState === "idle") {
+					const selectedMicDeviceId = settings?.selected_mic_id ?? undefined;
 					setIsMicAcquiring(true);
 					try {
-						await startNativeCapture(deviceId);
-						lastMicIdRef.current = deviceId ?? null;
+						await waitUntilNativeAudioReady(
+							NATIVE_AUDIO_FIRST_FRAME_READY_TIMEOUT_MS,
+						);
+
+						const startNativeCaptureResult = await startNativeCapture({
+							deviceId: selectedMicDeviceId,
+							waitForFirstAudioFrameMs:
+								NATIVE_AUDIO_FIRST_FRAME_READY_TIMEOUT_MS,
+						});
+
+						if (!startNativeCaptureResult.firstFrameReceived) {
+							console.warn(
+								"[Recording] Native mic pre-warm timed out before first frame",
+							);
+							stopNativeCapture();
+							lastMicIdRef.current = undefined;
+							micPreparedRef.current = false;
+							return;
+						}
+
+						lastMicIdRef.current = selectedMicDeviceId ?? null;
+						micPreparedRef.current = true;
 					} catch (error) {
 						console.warn("[Recording] Failed to pre-warm mic:", error);
+						stopNativeCapture();
+						lastMicIdRef.current = undefined;
+						micPreparedRef.current = false;
+					} finally {
+						setIsMicAcquiring(false);
 					}
-					setIsMicAcquiring(false);
-					micPreparedRef.current = true;
 				}
 			});
 		};
@@ -525,8 +613,9 @@ function RecordingControl() {
 	}, [
 		settings?.selected_mic_id,
 		displayState,
-		isNativeAudioReady,
+		waitUntilNativeAudioReady,
 		startNativeCapture,
+		stopNativeCapture,
 	]);
 
 	// Listen for settings changes from main window and invalidate cache to trigger sync

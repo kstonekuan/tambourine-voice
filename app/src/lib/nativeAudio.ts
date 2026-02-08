@@ -2,6 +2,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 const SAMPLE_RATE = 48000;
+export const DEFAULT_FIRST_AUDIO_FRAME_TIMEOUT_MS = 500;
+
+function getMonotonicTimestampMs(): number {
+	return globalThis.performance?.now() ?? Date.now();
+}
 
 /**
  * Information about a native audio input device.
@@ -23,10 +28,24 @@ export async function listNativeAudioDevices(): Promise<AudioDeviceInfo[]> {
 
 export interface NativeAudioBridge {
 	track: MediaStreamTrack;
-	start: (deviceId?: string) => Promise<void>;
+	start: (options?: NativeMicStartOptions) => Promise<NativeMicStartResult>;
 	stop: () => void;
 	pause: () => void;
 	resume: () => void;
+}
+
+export interface NativeMicStartOptions {
+	/** Device ID to capture from; omitted means system default */
+	deviceId?: string;
+	/** Timeout for receiving the first native audio frame after start */
+	waitForFirstAudioFrameMs?: number;
+}
+
+export interface NativeMicStartResult {
+	/** True when at least one native audio frame arrived before timeout */
+	firstFrameReceived: boolean;
+	/** Time between wait-start and first frame arrival; null when timed out */
+	timeToFirstFrameMs: number | null;
 }
 
 /**
@@ -63,29 +82,87 @@ export async function createNativeAudioBridge(): Promise<NativeAudioBridge> {
 
 	// Listen for native audio data events
 	let unlisten: UnlistenFn | undefined;
+	type PendingFirstFrameWaiter = {
+		startedAtMs: number;
+		timeoutHandle: ReturnType<typeof setTimeout>;
+		resolve: (result: NativeMicStartResult) => void;
+	};
+	const pendingFirstFrameWaiters = new Set<PendingFirstFrameWaiter>();
 
-	const start = async (deviceId?: string): Promise<void> => {
+	const resolvePendingFirstFrameWaiters = (
+		firstFrameReceived: boolean,
+	): void => {
+		const resolvedAtMs = getMonotonicTimestampMs();
+		for (const pendingFirstFrameWaiter of pendingFirstFrameWaiters) {
+			clearTimeout(pendingFirstFrameWaiter.timeoutHandle);
+			pendingFirstFrameWaiters.delete(pendingFirstFrameWaiter);
+			pendingFirstFrameWaiter.resolve({
+				firstFrameReceived,
+				timeToFirstFrameMs: firstFrameReceived
+					? resolvedAtMs - pendingFirstFrameWaiter.startedAtMs
+					: null,
+			});
+		}
+	};
+
+	const ensureNativeAudioListener = async (): Promise<void> => {
+		if (unlisten) {
+			return;
+		}
+
+		unlisten = await listen<number[]>("native-audio-data", (event) => {
+			workletNode.port.postMessage({
+				type: "audio-data",
+				samples: event.payload,
+			});
+			resolvePendingFirstFrameWaiters(true);
+		});
+	};
+
+	const waitForFirstAudioFrame = async (
+		timeoutMs: number,
+	): Promise<NativeMicStartResult> => {
+		await ensureNativeAudioListener();
+
+		return new Promise<NativeMicStartResult>((resolve) => {
+			const pendingFirstFrameWaiter: PendingFirstFrameWaiter = {
+				startedAtMs: getMonotonicTimestampMs(),
+				timeoutHandle: setTimeout(() => {
+					pendingFirstFrameWaiters.delete(pendingFirstFrameWaiter);
+					resolve({
+						firstFrameReceived: false,
+						timeToFirstFrameMs: null,
+					});
+				}, timeoutMs),
+				resolve,
+			};
+			pendingFirstFrameWaiters.add(pendingFirstFrameWaiter);
+		});
+	};
+
+	const start = async (
+		options?: NativeMicStartOptions,
+	): Promise<NativeMicStartResult> => {
 		// Resume audio context (required for autoplay policy)
 		if (audioContext.state === "suspended") {
 			await audioContext.resume();
 		}
 
-		// Start listening for audio data from Rust (if not already listening)
-		if (!unlisten) {
-			unlisten = await listen<number[]>("native-audio-data", (event) => {
-				workletNode.port.postMessage({
-					type: "audio-data",
-					samples: event.payload,
-				});
-			});
-		}
+		await ensureNativeAudioListener();
+
+		const deviceId = options?.deviceId;
+		const firstAudioFrameTimeoutMs =
+			options?.waitForFirstAudioFrameMs ?? DEFAULT_FIRST_AUDIO_FRAME_TIMEOUT_MS;
 
 		// Start native capture
 		await invoke("start_native_mic", { deviceId });
+
+		return waitForFirstAudioFrame(firstAudioFrameTimeoutMs);
 	};
 
 	const stop = (): void => {
 		invoke("stop_native_mic");
+		resolvePendingFirstFrameWaiters(false);
 		unlisten?.();
 		unlisten = undefined;
 	};

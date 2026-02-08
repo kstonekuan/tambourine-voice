@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	createNativeAudioBridge,
 	type NativeAudioBridge,
+	type NativeMicStartOptions,
+	type NativeMicStartResult,
 } from "../lib/nativeAudio";
 
 interface UseNativeAudioTrackResult {
@@ -11,8 +13,10 @@ interface UseNativeAudioTrackResult {
 	isReady: boolean;
 	/** Error if initialization failed */
 	error: Error | null;
+	/** Wait until the native bridge is initialized */
+	waitUntilReady: (timeoutMs: number) => Promise<void>;
 	/** Start capturing audio from the specified device (by ID) */
-	start: (deviceId?: string) => Promise<void>;
+	start: (options?: NativeMicStartOptions) => Promise<NativeMicStartResult>;
 	/** Stop capturing and release resources */
 	stop: () => void;
 	/** Pause capture (stream stays alive for fast resume) */
@@ -34,6 +38,7 @@ export function useNativeAudioTrack(): UseNativeAudioTrackResult {
 	const bridgeRef = useRef<NativeAudioBridge | null>(null);
 	const [isReady, setIsReady] = useState(false);
 	const [error, setError] = useState<Error | null>(null);
+	const initializationErrorRef = useRef<Error | null>(null);
 
 	useEffect(() => {
 		let mounted = true;
@@ -48,7 +53,10 @@ export function useNativeAudioTrack(): UseNativeAudioTrackResult {
 			} catch (err) {
 				console.error("[NativeAudio] Failed to initialize:", err);
 				if (mounted) {
-					setError(err instanceof Error ? err : new Error(String(err)));
+					const nativeAudioInitializationError =
+						err instanceof Error ? err : new Error(String(err));
+					initializationErrorRef.current = nativeAudioInitializationError;
+					setError(nativeAudioInitializationError);
 				}
 			}
 		};
@@ -61,8 +69,30 @@ export function useNativeAudioTrack(): UseNativeAudioTrackResult {
 		};
 	}, []);
 
-	const start = useCallback(async (deviceId?: string) => {
-		await bridgeRef.current?.start(deviceId);
+	const waitUntilReady = useCallback(async (timeoutMs: number) => {
+		const waitStartAtMs = Date.now();
+		const waitIntervalMs = 10;
+
+		while (!bridgeRef.current) {
+			if (initializationErrorRef.current) {
+				throw initializationErrorRef.current;
+			}
+
+			if (Date.now() - waitStartAtMs >= timeoutMs) {
+				throw new Error(`Native audio bridge not ready within ${timeoutMs}ms`);
+			}
+
+			await new Promise((resolve) => setTimeout(resolve, waitIntervalMs));
+		}
+	}, []);
+
+	const start = useCallback(async (options?: NativeMicStartOptions) => {
+		const nativeAudioBridge = bridgeRef.current;
+		if (!nativeAudioBridge) {
+			throw new Error("Native audio bridge is not ready");
+		}
+
+		return nativeAudioBridge.start(options);
 	}, []);
 
 	const stop = useCallback(() => {
@@ -81,6 +111,7 @@ export function useNativeAudioTrack(): UseNativeAudioTrackResult {
 		track: bridgeRef.current?.track ?? null,
 		isReady,
 		error,
+		waitUntilReady,
 		start,
 		stop,
 		pause,
