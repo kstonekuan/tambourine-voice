@@ -268,6 +268,8 @@ See `server/main.py` and `server/api/config_api.py` for all endpoints. All endpo
 
 Copy `.env.example` to `.env` and add API keys for at least one STT and one LLM provider. See the example file for all supported providers including Deepgram, Cartesia, OpenAI, Anthropic, Cerebras, Groq, AWS, and more. Additional [Pipecat-supported providers](https://docs.pipecat.ai/server/services/supported-services) can be added easily.
 
+New: You can optionally configure Silero VAD parameters via environment variables (see `server/.env.example` for `VAD_SAMPLE_RATE`, `VAD_CONFIDENCE`, `VAD_START_SECS`, `VAD_STOP_SECS`, and `VAD_MIN_VOLUME`).
+
 ### App Configuration
 
 The app connects to `localhost:8765` by default via WebRTC. Settings are persisted locally and include:

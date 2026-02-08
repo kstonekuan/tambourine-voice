@@ -79,6 +79,20 @@ class Settings(BaseSettings):
     host: str = Field("127.0.0.1", description="Host to bind the server to")
     port: int = Field(8765, description="Port to listen on")
 
+    # Silero VAD configuration (optional - leave unset to use library defaults)
+    vad_confidence: float | None = Field(
+        None, description="Silero VAD confidence threshold (0.0 - 1.0)"
+    )
+    vad_start_secs: float | None = Field(
+        None, description="Silero VAD start_secs (seconds of speech required to start)"
+    )
+    vad_stop_secs: float | None = Field(
+        None, description="Silero VAD stop_secs (seconds of silence required to stop)"
+    )
+    vad_min_volume: float | None = Field(
+        None, description="Silero VAD min_volume threshold (0.0 - 1.0)"
+    )
+
     @model_validator(mode="after")
     def validate_at_least_one_provider(self) -> Self:
         """Validate that at least one STT and one LLM provider is configured.

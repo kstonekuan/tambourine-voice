@@ -1,6 +1,7 @@
 services:
   server:
     privileged: false
+    #image: ghcr.io/kstonekuan/tambourine-voice/server:latest
     build:
       context: ..
       dockerfile: server/Dockerfile

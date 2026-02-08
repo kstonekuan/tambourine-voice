@@ -22,7 +22,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
-from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.audio.vad.silero import SileroVADAnalyzer, VADParams
 from pipecat.frames.frames import HeartbeatFrame
 from pipecat.observers.loggers.user_bot_latency_log_observer import UserBotLatencyLogObserver
 from pipecat.pipeline.llm_switcher import LLMSwitcher
@@ -190,12 +190,32 @@ async def run_pipeline(
 
     # Create transport using the WebRTC connection
     # (client connects with enableMic: false, only enables when recording starts)
+    # Build Silero VAD analyzer from environment-configurable settings (optional)
+    # Uses defaults from the library when settings are not provided.
+    settings = services.settings
+
+    # Construct VAD params from settings and always pass a VADParams object
+    vad_params_kwargs: dict = {}
+    if settings.vad_confidence is not None:
+        vad_params_kwargs["confidence"] = settings.vad_confidence
+    if settings.vad_start_secs is not None:
+        vad_params_kwargs["start_secs"] = settings.vad_start_secs
+    if settings.vad_stop_secs is not None:
+        vad_params_kwargs["stop_secs"] = settings.vad_stop_secs
+    if settings.vad_min_volume is not None:
+        vad_params_kwargs["min_volume"] = settings.vad_min_volume
+
+    vad_params = VADParams(**vad_params_kwargs)
+    vad_analyzer = SileroVADAnalyzer(params=vad_params)
+
+    logger.info(f"SileroVADAnalyzer configuration: params={vad_params_kwargs}")
+
     transport = SmallWebRTCTransport(
         webrtc_connection=webrtc_connection,
         params=TransportParams(
             audio_in_enabled=True,
             audio_out_enabled=False,  # No audio output for dictation
-            vad_analyzer=SileroVADAnalyzer(),
+            vad_analyzer=vad_analyzer,
         ),
     )
 
