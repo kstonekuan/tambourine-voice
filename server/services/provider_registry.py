@@ -7,10 +7,10 @@ at startup instead of runtime failures.
 Provider ID enums are defined in protocol.providers (single source of truth).
 """
 
+import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
-import os
 
 # Direct imports from pipecat - type checked at import time
 from pipecat.services.anthropic.llm import AnthropicLLMService
