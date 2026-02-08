@@ -4,9 +4,11 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::RwLock;
+use tempfile::NamedTempFile;
 use uuid::Uuid;
 
 const MAX_HISTORY_ENTRIES: usize = 500;
@@ -117,8 +119,53 @@ impl HistoryStorage {
         let serialized_history_content = serde_json::to_string_pretty(&*history_data)
             .context("Failed to serialize history data to JSON")?;
 
-        fs::write(&self.file_path, serialized_history_content).with_context(|| {
-            format!("Failed to write history file {}", self.file_path.display())
+        let history_directory_path = self
+            .file_path
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("History file path has no parent directory"))?;
+
+        let mut temporary_history_file = NamedTempFile::new_in(history_directory_path)
+            .with_context(|| {
+                format!(
+                    "Failed to create temporary history file in {}",
+                    history_directory_path.display()
+                )
+            })?;
+
+        temporary_history_file
+            .write_all(serialized_history_content.as_bytes())
+            .with_context(|| {
+                format!(
+                    "Failed to write temporary history file for {}",
+                    self.file_path.display()
+                )
+            })?;
+
+        temporary_history_file
+            .as_file()
+            .sync_all()
+            .with_context(|| {
+                format!(
+                    "Failed to sync temporary history file for {}",
+                    self.file_path.display()
+                )
+            })?;
+
+        let persisted_history_file = temporary_history_file
+            .persist(&self.file_path)
+            .map_err(|persist_error| persist_error.error)
+            .with_context(|| {
+                format!(
+                    "Failed to atomically replace history file {}",
+                    self.file_path.display()
+                )
+            })?;
+
+        persisted_history_file.sync_all().with_context(|| {
+            format!(
+                "Failed to sync persisted history file {}",
+                self.file_path.display()
+            )
         })?;
 
         Ok(())
