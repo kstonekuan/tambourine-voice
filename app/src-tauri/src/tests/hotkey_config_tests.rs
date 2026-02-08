@@ -1,4 +1,6 @@
-use crate::settings::{check_hotkey_conflict, AppSettings, HotkeyConfig, HotkeyType, StoreKey};
+use crate::settings::{
+    check_hotkey_conflict, AppSettings, HotkeyConfig, HotkeyType, LocalOnlySetting,
+};
 
 // Tests for HotkeyConfig::to_shortcut_string()
 #[test]
@@ -198,10 +200,19 @@ fn test_app_settings_default() {
 
 // Tests for HotkeyType
 #[test]
-fn test_hotkey_type_store_key() {
-    assert_eq!(HotkeyType::Toggle.store_key(), StoreKey::ToggleHotkey);
-    assert_eq!(HotkeyType::Hold.store_key(), StoreKey::HoldHotkey);
-    assert_eq!(HotkeyType::PasteLast.store_key(), StoreKey::PasteLastHotkey);
+fn test_hotkey_type_local_only_setting() {
+    assert_eq!(
+        HotkeyType::Toggle.local_only_setting(),
+        LocalOnlySetting::ToggleHotkey
+    );
+    assert_eq!(
+        HotkeyType::Hold.local_only_setting(),
+        LocalOnlySetting::HoldHotkey
+    );
+    assert_eq!(
+        HotkeyType::PasteLast.local_only_setting(),
+        LocalOnlySetting::PasteLastHotkey
+    );
 }
 
 #[test]

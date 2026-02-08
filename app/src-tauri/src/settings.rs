@@ -28,58 +28,100 @@ pub const DEFAULT_HOLD_KEY: &str = "Backquote";
 pub const DEFAULT_PASTE_LAST_KEY: &str = "Period";
 
 // ============================================================================
-// STORE KEY ENUM - Type-safe access to settings.json keys
+// SETTING CLASSIFICATION - Two-layer setting taxonomy by sync channel
 // ============================================================================
 
-/// Store keys for settings.json - provides type-safe access to settings
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StoreKey {
-    /// Toggle hotkey configuration
+pub enum LocalOnlySetting {
     ToggleHotkey,
-    /// Hold hotkey configuration
     HoldHotkey,
-    /// Paste-last hotkey configuration
     PasteLastHotkey,
-    /// Selected microphone ID
     SelectedMicId,
-    /// Sound enabled setting
     SoundEnabled,
-    /// Cleanup prompt sections
-    CleanupPromptSections,
-    /// STT provider selection
-    SttProvider,
-    /// LLM provider selection
-    LlmProvider,
-    /// Auto-mute audio setting
     AutoMuteAudio,
-    /// STT timeout in seconds
-    SttTimeoutSeconds,
-    /// Server URL
     ServerUrl,
-    /// LLM formatting enabled (true = format with LLM, false = raw transcription)
-    LlmFormattingEnabled,
-    /// Send focus context to server
     SendFocusContextEnabled,
 }
 
-impl StoreKey {
-    /// Returns the string key used in settings.json
-    pub const fn as_str(self) -> &'static str {
+impl LocalOnlySetting {
+    pub const fn storage_key_name(self) -> &'static str {
         match self {
             Self::ToggleHotkey => "toggle_hotkey",
             Self::HoldHotkey => "hold_hotkey",
             Self::PasteLastHotkey => "paste_last_hotkey",
             Self::SelectedMicId => "selected_mic_id",
             Self::SoundEnabled => "sound_enabled",
-            Self::CleanupPromptSections => "cleanup_prompt_sections",
-            Self::SttProvider => "stt_provider",
-            Self::LlmProvider => "llm_provider",
             Self::AutoMuteAudio => "auto_mute_audio",
-            Self::SttTimeoutSeconds => "stt_timeout_seconds",
             Self::ServerUrl => "server_url",
-            Self::LlmFormattingEnabled => "llm_formatting_enabled",
             Self::SendFocusContextEnabled => "send_focus_context_enabled",
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HttpSyncedSetting {
+    CleanupPromptSections,
+    SttTimeoutSeconds,
+    LlmFormattingEnabled,
+}
+
+impl HttpSyncedSetting {
+    pub const fn storage_key_name(self) -> &'static str {
+        match self {
+            Self::CleanupPromptSections => "cleanup_prompt_sections",
+            Self::SttTimeoutSeconds => "stt_timeout_seconds",
+            Self::LlmFormattingEnabled => "llm_formatting_enabled",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RtviSyncedSetting {
+    SttProvider,
+    LlmProvider,
+}
+
+impl RtviSyncedSetting {
+    pub const fn storage_key_name(self) -> &'static str {
+        match self {
+            Self::SttProvider => "stt_provider",
+            Self::LlmProvider => "llm_provider",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SettingClass {
+    LocalOnly(LocalOnlySetting),
+    ServerSyncedHttp(HttpSyncedSetting),
+    ServerSyncedRtvi(RtviSyncedSetting),
+}
+
+impl SettingClass {
+    pub const fn storage_key_name(self) -> &'static str {
+        match self {
+            Self::LocalOnly(local_only_setting) => local_only_setting.storage_key_name(),
+            Self::ServerSyncedHttp(http_synced_setting) => http_synced_setting.storage_key_name(),
+            Self::ServerSyncedRtvi(rtvi_synced_setting) => rtvi_synced_setting.storage_key_name(),
+        }
+    }
+}
+
+impl From<LocalOnlySetting> for SettingClass {
+    fn from(value: LocalOnlySetting) -> Self {
+        Self::LocalOnly(value)
+    }
+}
+
+impl From<HttpSyncedSetting> for SettingClass {
+    fn from(value: HttpSyncedSetting) -> Self {
+        Self::ServerSyncedHttp(value)
+    }
+}
+
+impl From<RtviSyncedSetting> for SettingClass {
+    fn from(value: RtviSyncedSetting) -> Self {
+        Self::ServerSyncedRtvi(value)
     }
 }
 
@@ -302,10 +344,8 @@ pub struct AppSettings {
     pub auto_mute_audio: bool,
     pub stt_timeout_seconds: Option<f64>,
     pub server_url: String,
-    /// LLM formatting enabled (true = format with LLM, false = raw transcription)
     #[serde(default = "default_enabled")]
     pub llm_formatting_enabled: bool,
-    /// Send focus context to server for prompt injection
     #[serde(default = "default_enabled")]
     pub send_focus_context_enabled: bool,
 }
@@ -344,11 +384,11 @@ pub enum HotkeyType {
 }
 
 impl HotkeyType {
-    pub fn store_key(self) -> StoreKey {
+    pub fn local_only_setting(self) -> LocalOnlySetting {
         match self {
-            Self::Toggle => StoreKey::ToggleHotkey,
-            Self::Hold => StoreKey::HoldHotkey,
-            Self::PasteLast => StoreKey::PasteLastHotkey,
+            Self::Toggle => LocalOnlySetting::ToggleHotkey,
+            Self::Hold => LocalOnlySetting::HoldHotkey,
+            Self::PasteLast => LocalOnlySetting::PasteLastHotkey,
         }
     }
 

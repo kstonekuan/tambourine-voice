@@ -6,7 +6,7 @@ use std::time::Duration;
 use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 
-use crate::settings::{StoreKey, DEFAULT_SERVER_URL};
+use crate::settings::{LocalOnlySetting, DEFAULT_SERVER_URL};
 
 /// Delay after clipboard operations to ensure system stability
 const CLIPBOARD_STABILIZATION_DELAY_MS: u64 = 50;
@@ -21,7 +21,7 @@ const CLIPBOARD_RESTORE_DELAY_MS: u64 = 100;
 pub async fn get_server_url(app: AppHandle) -> Result<String, String> {
     let store = app.store("settings.json").map_err(|e| e.to_string())?;
     let url = store
-        .get(StoreKey::ServerUrl.as_str())
+        .get(LocalOnlySetting::ServerUrl.storage_key_name())
         .and_then(|v| v.as_str().map(String::from))
         .unwrap_or_else(|| DEFAULT_SERVER_URL.to_string());
     Ok(url)

@@ -1,0 +1,8 @@
+{
+  "rust-analyzer.linkedProjects": [
+    "app/src-tauri/Cargo.toml"
+  ],
+  "rust-analyzer.cargo.buildScripts.enable": true,
+  "rust-analyzer.procMacro.enable": true,
+  "rust-analyzer.checkOnSave.command": "check"
+}

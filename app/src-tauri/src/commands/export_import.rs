@@ -1,3 +1,4 @@
+use anyhow::Context;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -6,7 +7,8 @@ use tauri::{AppHandle, Manager};
 use crate::config_sync::{ConfigSync, DEFAULT_STT_TIMEOUT_SECONDS};
 use crate::history::{HistoryEntry, HistoryImportResult, HistoryImportStrategy, HistoryStorage};
 use crate::settings::{
-    AppSettings, CleanupPromptSections, PromptMode, PromptSection, PromptSectionType, StoreKey,
+    AppSettings, CleanupPromptSections, HttpSyncedSetting, LocalOnlySetting, PromptMode,
+    PromptSection, PromptSectionType, RtviSyncedSetting, SettingClass,
 };
 
 #[cfg(desktop)]
@@ -30,6 +32,7 @@ const PROMPT_COMMENT_PREFIX: &str = "<!-- tambourine-prompt: ";
 const PROMPT_COMMENT_SUFFIX: &str = " -->";
 
 /// Settings data for export (excludes prompts - they're exported as .md files)
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SettingsExportData {
@@ -43,6 +46,7 @@ pub struct SettingsExportData {
     pub llm_provider: String,
     pub auto_mute_audio: bool,
     pub stt_timeout_seconds: Option<f64>,
+    pub llm_formatting_enabled: bool,
     pub server_url: String,
     pub send_focus_context_enabled: bool,
 }
@@ -65,8 +69,30 @@ impl From<AppSettings> for SettingsExportData {
             llm_provider: settings.llm_provider,
             auto_mute_audio: settings.auto_mute_audio,
             stt_timeout_seconds: settings.stt_timeout_seconds,
+            llm_formatting_enabled: settings.llm_formatting_enabled,
             server_url: settings.server_url,
             send_focus_context_enabled: settings.send_focus_context_enabled,
+        }
+    }
+}
+
+impl From<SettingsExportData> for AppSettings {
+    fn from(exported_settings: SettingsExportData) -> Self {
+        Self {
+            toggle_hotkey: exported_settings.toggle_hotkey,
+            hold_hotkey: exported_settings.hold_hotkey,
+            paste_last_hotkey: exported_settings.paste_last_hotkey,
+            selected_mic_id: exported_settings.selected_mic_id,
+            sound_enabled: exported_settings.sound_enabled,
+            // Prompts are imported from prompt markdown files, not the JSON settings file.
+            cleanup_prompt_sections: None,
+            stt_provider: exported_settings.stt_provider,
+            llm_provider: exported_settings.llm_provider,
+            auto_mute_audio: exported_settings.auto_mute_audio,
+            stt_timeout_seconds: exported_settings.stt_timeout_seconds,
+            llm_formatting_enabled: exported_settings.llm_formatting_enabled,
+            server_url: exported_settings.server_url,
+            send_focus_context_enabled: exported_settings.send_focus_context_enabled,
         }
     }
 }
@@ -262,7 +288,7 @@ pub async fn import_prompt(
     // Get current prompt sections or use default
     let mut sections: CleanupPromptSections = get_setting_from_store(
         &app,
-        StoreKey::CleanupPromptSections,
+        HttpSyncedSetting::CleanupPromptSections,
         CleanupPromptSections::default(),
     );
 
@@ -303,7 +329,12 @@ pub async fn import_prompt(
     sections.set(section, new_section);
 
     // Save updated sections
-    crate::save_setting_to_store(&app, StoreKey::CleanupPromptSections, &sections)?;
+    crate::save_setting_to_store(
+        &app,
+        HttpSyncedSetting::CleanupPromptSections.into(),
+        &sections,
+    )
+    .map_err(|error| format!("Failed to save imported prompt section: {error:#}"))?;
 
     // Sync to server if connected
     let sync = config_sync.read().await;
@@ -369,6 +400,93 @@ pub fn detect_export_file_type(content: String) -> DetectedFileType {
     }
 }
 
+// ============================================================================
+// SETTINGS IMPORT/RESET STORE MAPPING
+// ============================================================================
+
+const IMPORT_EXPORT_SETTING_CLASSES: [SettingClass; 12] = [
+    SettingClass::LocalOnly(LocalOnlySetting::ToggleHotkey),
+    SettingClass::LocalOnly(LocalOnlySetting::HoldHotkey),
+    SettingClass::LocalOnly(LocalOnlySetting::PasteLastHotkey),
+    SettingClass::LocalOnly(LocalOnlySetting::SelectedMicId),
+    SettingClass::LocalOnly(LocalOnlySetting::SoundEnabled),
+    SettingClass::ServerSyncedRtvi(RtviSyncedSetting::SttProvider),
+    SettingClass::ServerSyncedRtvi(RtviSyncedSetting::LlmProvider),
+    SettingClass::LocalOnly(LocalOnlySetting::AutoMuteAudio),
+    SettingClass::ServerSyncedHttp(HttpSyncedSetting::SttTimeoutSeconds),
+    SettingClass::ServerSyncedHttp(HttpSyncedSetting::LlmFormattingEnabled),
+    SettingClass::LocalOnly(LocalOnlySetting::ServerUrl),
+    SettingClass::LocalOnly(LocalOnlySetting::SendFocusContextEnabled),
+];
+
+const FACTORY_RESET_SETTING_CLASSES: [SettingClass; 9] = [
+    SettingClass::LocalOnly(LocalOnlySetting::ToggleHotkey),
+    SettingClass::LocalOnly(LocalOnlySetting::HoldHotkey),
+    SettingClass::LocalOnly(LocalOnlySetting::PasteLastHotkey),
+    SettingClass::LocalOnly(LocalOnlySetting::SoundEnabled),
+    SettingClass::ServerSyncedRtvi(RtviSyncedSetting::SttProvider),
+    SettingClass::ServerSyncedRtvi(RtviSyncedSetting::LlmProvider),
+    SettingClass::LocalOnly(LocalOnlySetting::AutoMuteAudio),
+    SettingClass::LocalOnly(LocalOnlySetting::ServerUrl),
+    SettingClass::LocalOnly(LocalOnlySetting::SendFocusContextEnabled),
+];
+
+fn serialized_value_for_setting_class(
+    app_settings: &AppSettings,
+    setting_class: SettingClass,
+) -> anyhow::Result<serde_json::Value> {
+    let setting_value = match setting_class {
+        SettingClass::LocalOnly(local_only_setting) => match local_only_setting {
+            LocalOnlySetting::ToggleHotkey => serde_json::to_value(&app_settings.toggle_hotkey),
+            LocalOnlySetting::HoldHotkey => serde_json::to_value(&app_settings.hold_hotkey),
+            LocalOnlySetting::PasteLastHotkey => {
+                serde_json::to_value(&app_settings.paste_last_hotkey)
+            }
+            LocalOnlySetting::SelectedMicId => serde_json::to_value(&app_settings.selected_mic_id),
+            LocalOnlySetting::SoundEnabled => serde_json::to_value(app_settings.sound_enabled),
+            LocalOnlySetting::AutoMuteAudio => serde_json::to_value(app_settings.auto_mute_audio),
+            LocalOnlySetting::ServerUrl => serde_json::to_value(&app_settings.server_url),
+            LocalOnlySetting::SendFocusContextEnabled => {
+                serde_json::to_value(app_settings.send_focus_context_enabled)
+            }
+        },
+        SettingClass::ServerSyncedHttp(http_synced_setting) => match http_synced_setting {
+            HttpSyncedSetting::CleanupPromptSections => {
+                serde_json::to_value(&app_settings.cleanup_prompt_sections)
+            }
+            HttpSyncedSetting::SttTimeoutSeconds => {
+                serde_json::to_value(app_settings.stt_timeout_seconds)
+            }
+            HttpSyncedSetting::LlmFormattingEnabled => {
+                serde_json::to_value(app_settings.llm_formatting_enabled)
+            }
+        },
+        SettingClass::ServerSyncedRtvi(rtvi_synced_setting) => match rtvi_synced_setting {
+            RtviSyncedSetting::SttProvider => serde_json::to_value(&app_settings.stt_provider),
+            RtviSyncedSetting::LlmProvider => serde_json::to_value(&app_settings.llm_provider),
+        },
+    };
+
+    setting_value.with_context(|| {
+        format!(
+            "Failed to serialize setting value for key '{}'",
+            setting_class.storage_key_name()
+        )
+    })
+}
+
+fn write_setting_classes_to_store(
+    app_settings: &AppSettings,
+    setting_classes: &[SettingClass],
+    mut write_setting_entry: impl FnMut(SettingClass, serde_json::Value),
+) -> anyhow::Result<()> {
+    for setting_class in setting_classes {
+        let setting_value = serialized_value_for_setting_class(app_settings, *setting_class)?;
+        write_setting_entry(*setting_class, setting_value);
+    }
+    Ok(())
+}
+
 /// Import settings from a JSON string
 #[cfg(desktop)]
 #[tauri::command]
@@ -403,54 +521,18 @@ pub async fn import_settings(
         .map_err(|e| format!("Failed to get store: {e}"))?;
 
     // Import each setting
-    let settings = export.data;
+    let imported_settings: AppSettings = export.data.into();
 
-    // Save each setting individually so we can handle defaults properly
-    store.set(
-        StoreKey::ToggleHotkey.as_str(),
-        serde_json::to_value(&settings.toggle_hotkey).map_err(|e| e.to_string())?,
-    );
-    store.set(
-        StoreKey::HoldHotkey.as_str(),
-        serde_json::to_value(&settings.hold_hotkey).map_err(|e| e.to_string())?,
-    );
-    store.set(
-        StoreKey::PasteLastHotkey.as_str(),
-        serde_json::to_value(&settings.paste_last_hotkey).map_err(|e| e.to_string())?,
-    );
-    store.set(
-        StoreKey::SelectedMicId.as_str(),
-        serde_json::to_value(&settings.selected_mic_id).map_err(|e| e.to_string())?,
-    );
-    store.set(
-        StoreKey::SoundEnabled.as_str(),
-        serde_json::to_value(settings.sound_enabled).map_err(|e| e.to_string())?,
-    );
-    // Note: cleanup_prompt_sections is not imported here - prompts come from .md files
-    store.set(
-        StoreKey::SttProvider.as_str(),
-        serde_json::to_value(&settings.stt_provider).map_err(|e| e.to_string())?,
-    );
-    store.set(
-        StoreKey::LlmProvider.as_str(),
-        serde_json::to_value(&settings.llm_provider).map_err(|e| e.to_string())?,
-    );
-    store.set(
-        StoreKey::AutoMuteAudio.as_str(),
-        serde_json::to_value(settings.auto_mute_audio).map_err(|e| e.to_string())?,
-    );
-    store.set(
-        StoreKey::SttTimeoutSeconds.as_str(),
-        serde_json::to_value(settings.stt_timeout_seconds).map_err(|e| e.to_string())?,
-    );
-    store.set(
-        StoreKey::ServerUrl.as_str(),
-        serde_json::to_value(&settings.server_url).map_err(|e| e.to_string())?,
-    );
-    store.set(
-        StoreKey::SendFocusContextEnabled.as_str(),
-        serde_json::to_value(settings.send_focus_context_enabled).map_err(|e| e.to_string())?,
-    );
+    // Save each setting individually so we can handle defaults properly.
+    // Note: cleanup_prompt_sections is not imported here - prompts come from .md files.
+    write_setting_classes_to_store(
+        &imported_settings,
+        &IMPORT_EXPORT_SETTING_CLASSES,
+        |setting_class, setting_value| {
+            store.set(setting_class.storage_key_name(), setting_value);
+        },
+    )
+    .map_err(|error| format!("Failed to serialize setting for import: {error:#}"))?;
 
     store
         .save()
@@ -460,7 +542,7 @@ pub async fn import_settings(
 
     let sync = config_sync.read().await;
     if sync.is_connected() {
-        if let Some(timeout) = settings.stt_timeout_seconds {
+        if let Some(timeout) = imported_settings.stt_timeout_seconds {
             if let Err(e) = sync.sync_stt_timeout(timeout).await {
                 log::warn!("Failed to sync STT timeout after import: {e}");
             }
@@ -546,43 +628,14 @@ pub async fn factory_reset(
     // Re-initialize with default settings
     let default_settings = AppSettings::default();
 
-    store.set(
-        StoreKey::ToggleHotkey.as_str(),
-        serde_json::to_value(&default_settings.toggle_hotkey).map_err(|e| e.to_string())?,
-    );
-    store.set(
-        StoreKey::HoldHotkey.as_str(),
-        serde_json::to_value(&default_settings.hold_hotkey).map_err(|e| e.to_string())?,
-    );
-    store.set(
-        StoreKey::PasteLastHotkey.as_str(),
-        serde_json::to_value(&default_settings.paste_last_hotkey).map_err(|e| e.to_string())?,
-    );
-    store.set(
-        StoreKey::SoundEnabled.as_str(),
-        serde_json::to_value(default_settings.sound_enabled).map_err(|e| e.to_string())?,
-    );
-    store.set(
-        StoreKey::SttProvider.as_str(),
-        serde_json::to_value(&default_settings.stt_provider).map_err(|e| e.to_string())?,
-    );
-    store.set(
-        StoreKey::LlmProvider.as_str(),
-        serde_json::to_value(&default_settings.llm_provider).map_err(|e| e.to_string())?,
-    );
-    store.set(
-        StoreKey::AutoMuteAudio.as_str(),
-        serde_json::to_value(default_settings.auto_mute_audio).map_err(|e| e.to_string())?,
-    );
-    store.set(
-        StoreKey::ServerUrl.as_str(),
-        serde_json::to_value(&default_settings.server_url).map_err(|e| e.to_string())?,
-    );
-    store.set(
-        StoreKey::SendFocusContextEnabled.as_str(),
-        serde_json::to_value(default_settings.send_focus_context_enabled)
-            .map_err(|e| e.to_string())?,
-    );
+    write_setting_classes_to_store(
+        &default_settings,
+        &FACTORY_RESET_SETTING_CLASSES,
+        |setting_class, setting_value| {
+            store.set(setting_class.storage_key_name(), setting_value);
+        },
+    )
+    .map_err(|error| format!("Failed to serialize setting for factory reset: {error:#}"))?;
 
     store
         .save()
