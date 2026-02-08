@@ -106,39 +106,31 @@ const HistoryItem = memo(function HistoryItem({
 				<p className="history-text">{entry.text}</p>
 				{isExpanded && (
 					<div className="history-raw-text">
-						<Text size="xs" c="dimmed" fw={500} mb={4}>
+						<Text className="history-details-heading" mb={4}>
 							Raw transcription:
 						</Text>
-						<Text size="sm" c="dimmed">
-							{entry.raw_text}
-						</Text>
+						<Text className="history-details-content">{entry.raw_text}</Text>
 
-						<Text size="xs" c="dimmed" fw={500} mt={12} mb={4}>
-							Active app context sent to LLM:
-						</Text>
-						{activeAppContextSnapshot ? (
-							activeAppContextFields.length > 0 ? (
-								<div className="history-context-grid">
-									{activeAppContextFields.map(({ label, value }) => (
-										<div key={label} className="history-context-row">
-											<Text size="xs" c="dimmed">
-												{label}
-											</Text>
-											<Text size="sm" c="dimmed">
-												{value}
-											</Text>
-										</div>
-									))}
-								</div>
-							) : (
-								<Text size="sm" c="dimmed">
-									No active app details were available for this dictation.
+						{activeAppContextSnapshot && (
+							<>
+								<Text className="history-details-heading" mt={12} mb={4}>
+									Active app context:
 								</Text>
-							)
-						) : (
-							<Text size="sm" c="dimmed">
-								No active app context was sent for this dictation.
-							</Text>
+								{activeAppContextFields.length > 0 ? (
+									<div className="history-context-grid">
+										{activeAppContextFields.map(({ label, value }) => (
+											<div key={label} className="history-context-row">
+												<Text className="history-context-label">{label}</Text>
+												<Text className="history-context-value">{value}</Text>
+											</div>
+										))}
+									</div>
+								) : (
+									<Text className="history-details-content">
+										No active app details were available for this dictation.
+									</Text>
+								)}
+							</>
 						)}
 					</div>
 				)}
