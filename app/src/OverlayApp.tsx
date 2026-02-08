@@ -27,7 +27,7 @@ import {
 	useConnectionState,
 } from "./contexts/ConnectionContext";
 import { useNativeAudioTrack } from "./hooks/useNativeAudioTrack";
-import type { FocusContextSnapshot } from "./lib/focus";
+import type { ActiveAppContextSnapshot } from "./lib/activeAppContext";
 import { useAddHistoryEntry, useSettings, useTypeText } from "./lib/queries";
 import { safeSendClientMessage } from "./lib/safeSendClientMessage";
 import { tauriAPI } from "./lib/tauri";
@@ -223,7 +223,9 @@ function RecordingControl() {
 	// State and refs for mic acquisition optimization
 	const [isMicAcquiring, setIsMicAcquiring] = useState(false);
 	const micPreparedRef = useRef(false);
-	const latestFocusContextRef = useRef<FocusContextSnapshot | null>(null);
+	const latestActiveAppContextRef = useRef<ActiveAppContextSnapshot | null>(
+		null,
+	);
 	// Track the last mic device ID used for capture
 	// undefined = never started, null = system default, string = specific device
 	const lastMicIdRef = useRef<string | null | undefined>(undefined);
@@ -354,12 +356,12 @@ function RecordingControl() {
 				// LLM formatting is now controlled globally via the config API
 				// Use safe send to detect communication failures and trigger reconnection
 				const startRecordingData =
-					settings?.send_focus_context_enabled === true &&
-					latestFocusContextRef.current
-						? { focus_context: latestFocusContextRef.current }
+					settings?.send_active_app_context_enabled === true &&
+					latestActiveAppContextRef.current
+						? { active_app_context: latestActiveAppContextRef.current }
 						: {};
 				console.debug(
-					"[Focus Context] Sending start-recording payload:",
+					"[Active App Context] Sending start-recording payload:",
 					startRecordingData,
 				);
 				safeSendClientMessage(
@@ -377,7 +379,7 @@ function RecordingControl() {
 	}, [
 		client,
 		settings?.selected_mic_id,
-		settings?.send_focus_context_enabled,
+		settings?.send_active_app_context_enabled,
 		isNativeAudioReady,
 		nativeAudioTrack,
 		startNativeCapture,
@@ -531,31 +533,31 @@ function RecordingControl() {
 		};
 	}, [queryClient]);
 
-	// Listen for focus context updates from Rust
+	// Listen for active app context updates from Rust
 	useEffect(() => {
 		let unlisten: (() => void) | undefined;
 		let shouldIgnoreSetupResults = false;
 
 		const setup = async () => {
-			unlisten = await tauriAPI.onFocusContextChanged((payload) => {
-				latestFocusContextRef.current = payload;
+			unlisten = await tauriAPI.onActiveAppContextChanged((payload) => {
+				latestActiveAppContextRef.current = payload;
 			});
 
 			try {
-				const seededFocusContextSnapshot =
-					await tauriAPI.focusGetCurrentContext();
+				const seededActiveAppContextSnapshot =
+					await tauriAPI.activeAppGetCurrentContext();
 				if (shouldIgnoreSetupResults) {
 					return;
 				}
 
-				// Seed startup focus context only when no live event has populated it yet.
+				// Seed startup active app context only when no live event has populated it yet.
 				// Keep startup behavior simple and best-effort without recency comparisons.
-				if (!latestFocusContextRef.current) {
-					latestFocusContextRef.current = seededFocusContextSnapshot;
+				if (!latestActiveAppContextRef.current) {
+					latestActiveAppContextRef.current = seededActiveAppContextSnapshot;
 				}
 			} catch (error) {
 				console.warn(
-					"[Focus Context] Failed to fetch startup focus snapshot:",
+					"[Active App Context] Failed to fetch startup focus snapshot:",
 					error,
 				);
 			}

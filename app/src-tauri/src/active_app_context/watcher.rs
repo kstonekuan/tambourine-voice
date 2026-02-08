@@ -9,8 +9,10 @@ use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter};
 
+use crate::active_app_context::{
+    get_current_active_app_context, ActiveAppContextSnapshot, FocusConfidenceLevel,
+};
 use crate::events::EventName;
-use crate::focus::{get_current_focus_context, FocusConfidenceLevel, FocusContextSnapshot};
 
 #[derive(Debug, Clone)]
 pub struct FocusWatcherHandle {
@@ -30,7 +32,7 @@ impl Drop for FocusWatcherHandle {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct ComparableFocusContext {
+struct ComparableActiveAppContext {
     focused_application_display_name: Option<String>,
     focused_window_title: Option<String>,
     focused_browser_tab_title: Option<String>,
@@ -38,8 +40,8 @@ struct ComparableFocusContext {
     confidence_level: FocusConfidenceLevel,
 }
 
-impl From<&FocusContextSnapshot> for ComparableFocusContext {
-    fn from(snapshot: &FocusContextSnapshot) -> Self {
+impl From<&ActiveAppContextSnapshot> for ComparableActiveAppContext {
+    fn from(snapshot: &ActiveAppContextSnapshot) -> Self {
         Self {
             focused_application_display_name: snapshot
                 .focused_application
@@ -64,15 +66,15 @@ impl From<&FocusContextSnapshot> for ComparableFocusContext {
 
 #[derive(Debug, Clone)]
 struct DebouncingCandidateState {
-    candidate_context: ComparableFocusContext,
-    candidate_snapshot: FocusContextSnapshot,
+    candidate_context: ComparableActiveAppContext,
+    candidate_snapshot: ActiveAppContextSnapshot,
     first_seen_at: Instant,
 }
 
 #[derive(Debug, Clone)]
 struct EmissionCandidate {
-    candidate_context: ComparableFocusContext,
-    candidate_snapshot: FocusContextSnapshot,
+    candidate_context: ComparableActiveAppContext,
+    candidate_snapshot: ActiveAppContextSnapshot,
 }
 
 #[derive(Debug, Clone)]
@@ -85,18 +87,18 @@ struct WatcherPollResult {
 enum FocusWatcherState {
     AwaitingInitialEmission,
     StableEmitted {
-        emitted_context: ComparableFocusContext,
+        emitted_context: ComparableActiveAppContext,
     },
     DebouncingCandidate(Box<DebouncingCandidateState>),
 }
 
 fn process_focus_snapshot_poll(
     current_state: FocusWatcherState,
-    polled_snapshot: FocusContextSnapshot,
+    polled_snapshot: ActiveAppContextSnapshot,
     observed_at: Instant,
     debounce_window: Duration,
 ) -> WatcherPollResult {
-    let polled_context = ComparableFocusContext::from(&polled_snapshot);
+    let polled_context = ComparableActiveAppContext::from(&polled_snapshot);
 
     match current_state {
         FocusWatcherState::AwaitingInitialEmission => WatcherPollResult {
@@ -159,11 +161,13 @@ fn process_focus_snapshot_poll(
 }
 
 #[cfg(target_os = "macos")]
-fn get_focus_context_snapshot_thread_safe(app: &AppHandle) -> Option<FocusContextSnapshot> {
-    let (snapshot_sender, snapshot_receiver) = mpsc::sync_channel::<FocusContextSnapshot>(1);
+fn get_active_app_context_snapshot_thread_safe(
+    app: &AppHandle,
+) -> Option<ActiveAppContextSnapshot> {
+    let (snapshot_sender, snapshot_receiver) = mpsc::sync_channel::<ActiveAppContextSnapshot>(1);
 
     app.run_on_main_thread(move || {
-        let snapshot = get_current_focus_context();
+        let snapshot = get_current_active_app_context();
         let _ = snapshot_sender.send(snapshot);
     })
     .ok()?;
@@ -174,8 +178,10 @@ fn get_focus_context_snapshot_thread_safe(app: &AppHandle) -> Option<FocusContex
 }
 
 #[cfg(not(target_os = "macos"))]
-fn get_focus_context_snapshot_thread_safe(_app: &AppHandle) -> Option<FocusContextSnapshot> {
-    Some(get_current_focus_context())
+fn get_active_app_context_snapshot_thread_safe(
+    _app: &AppHandle,
+) -> Option<ActiveAppContextSnapshot> {
+    Some(get_current_active_app_context())
 }
 
 pub fn start_focus_watcher(app: AppHandle) -> FocusWatcherHandle {
@@ -188,7 +194,7 @@ pub fn start_focus_watcher(app: AppHandle) -> FocusWatcherHandle {
         let mut focus_watcher_state = FocusWatcherState::AwaitingInitialEmission;
 
         while !should_stop_clone.load(Ordering::SeqCst) {
-            let Some(snapshot) = get_focus_context_snapshot_thread_safe(&app) else {
+            let Some(snapshot) = get_active_app_context_snapshot_thread_safe(&app) else {
                 thread::sleep(poll_interval);
                 continue;
             };
@@ -204,7 +210,7 @@ pub fn start_focus_watcher(app: AppHandle) -> FocusWatcherHandle {
                 Some(emission_candidate)
                     if app
                         .emit(
-                            EventName::FocusContextChanged.as_str(),
+                            EventName::ActiveAppContextChanged.as_str(),
                             &emission_candidate.candidate_snapshot,
                         )
                         .is_ok() =>

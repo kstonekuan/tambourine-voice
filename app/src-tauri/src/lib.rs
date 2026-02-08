@@ -6,16 +6,16 @@ use tauri::{
 };
 use tauri_utils::config::BackgroundThrottlingPolicy;
 
+mod active_app_context;
 mod audio;
 mod audio_mute;
 mod commands;
 mod config_sync;
 pub mod events;
-mod focus;
 mod history;
 
+use active_app_context::{get_current_active_app_context, sync_focus_watcher_enabled};
 use events::EventName;
-use focus::{get_current_focus_context, sync_focus_watcher_enabled};
 mod mic_capture;
 mod settings;
 mod state;
@@ -381,52 +381,52 @@ fn list_native_mic_devices(state: tauri::State<'_, MicCaptureManager>) -> Vec<Au
     state.capture().list_devices()
 }
 
-/// Get current focus context snapshot
+/// Get current active app context snapshot
 #[tauri::command]
-fn focus_get_current_context(app: AppHandle) -> focus::FocusContextSnapshot {
+fn active_app_get_current_context(app: AppHandle) -> active_app_context::ActiveAppContextSnapshot {
     #[cfg(target_os = "macos")]
     {
         use std::sync::mpsc;
         use std::time::Duration;
 
         let (snapshot_sender, snapshot_receiver) =
-            mpsc::sync_channel::<focus::FocusContextSnapshot>(1);
+            mpsc::sync_channel::<active_app_context::ActiveAppContextSnapshot>(1);
 
         if let Err(error) = app.run_on_main_thread(move || {
-            let snapshot = get_current_focus_context();
+            let snapshot = get_current_active_app_context();
             let _ = snapshot_sender.send(snapshot);
         }) {
             log::warn!(
-                "Failed to dispatch focus snapshot to macOS main thread: {error}. Returning fallback focus context."
+                "Failed to dispatch focus snapshot to macOS main thread: {error}. Returning fallback active app context."
             );
-            return fallback_focus_context_snapshot();
+            return fallback_active_app_context_snapshot();
         }
 
         snapshot_receiver
             .recv_timeout(Duration::from_millis(150))
             .unwrap_or_else(|error| {
                 log::warn!(
-                    "Timed out waiting for macOS focus snapshot on main thread: {error}. Returning fallback focus context."
+                    "Timed out waiting for macOS focus snapshot on main thread: {error}. Returning fallback active app context."
                 );
-                fallback_focus_context_snapshot()
+                fallback_active_app_context_snapshot()
             })
     }
 
     #[cfg(not(target_os = "macos"))]
     {
         let _ = app;
-        get_current_focus_context()
+        get_current_active_app_context()
     }
 }
 
 #[cfg(target_os = "macos")]
-fn fallback_focus_context_snapshot() -> focus::FocusContextSnapshot {
-    focus::FocusContextSnapshot {
+fn fallback_active_app_context_snapshot() -> active_app_context::ActiveAppContextSnapshot {
+    active_app_context::ActiveAppContextSnapshot {
         focused_application: None,
         focused_window: None,
         focused_browser_tab: None,
-        event_source: focus::FocusEventSource::Unknown,
-        confidence_level: focus::FocusConfidenceLevel::Low,
+        event_source: active_app_context::FocusEventSource::Unknown,
+        confidence_level: active_app_context::FocusConfidenceLevel::Low,
         privacy_filtered: true,
         captured_at: chrono::Utc::now().to_rfc3339(),
     }
@@ -476,7 +476,7 @@ pub fn run() {
             commands::settings::update_stt_timeout,
             commands::settings::update_server_url,
             commands::settings::update_llm_formatting_enabled,
-            commands::settings::update_send_focus_context_enabled,
+            commands::settings::update_send_active_app_context_enabled,
             commands::settings::reset_hotkeys_to_defaults,
             is_audio_mute_supported,
             commands::history::add_history_entry,
@@ -500,7 +500,7 @@ pub fn run() {
             pause_native_mic,
             resume_native_mic,
             list_native_mic_devices,
-            focus_get_current_context,
+            active_app_get_current_context,
         ])
         .setup(|app| {
             // Initialize history storage
@@ -528,19 +528,19 @@ pub fn run() {
             if let Some(app_state) = app.try_state::<AppState>() {
                 if let Ok(mut watcher_guard) = app_state.focus_watcher.lock() {
                     #[cfg(desktop)]
-                    let send_focus_context_enabled = get_setting_from_store(
+                    let send_active_app_context_enabled = get_setting_from_store(
                         app.handle(),
-                        LocalOnlySetting::SendFocusContextEnabled,
+                        LocalOnlySetting::SendActiveAppContextEnabled,
                         false,
                     );
 
                     #[cfg(not(desktop))]
-                    let send_focus_context_enabled = false;
+                    let send_active_app_context_enabled = false;
 
                     sync_focus_watcher_enabled(
                         app.handle(),
                         &mut watcher_guard,
-                        send_focus_context_enabled,
+                        send_active_app_context_enabled,
                     );
                 }
             }

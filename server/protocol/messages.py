@@ -34,12 +34,12 @@ class SettingName(StrEnum):
 
 
 # =============================================================================
-# Focus Context Types (Client -> Server)
+# Active App Context Types (Client -> Server)
 # =============================================================================
 
 
 class FocusEventSource(StrEnum):
-    """Source of focus context data."""
+    """Source of active app context data."""
 
     POLLING = "polling"
     ACCESSIBILITY = "accessibility"
@@ -48,7 +48,7 @@ class FocusEventSource(StrEnum):
 
 
 class FocusConfidenceLevel(StrEnum):
-    """Confidence level of focus context data."""
+    """Confidence level of active app context data."""
 
     HIGH = "high"
     MEDIUM = "medium"
@@ -77,8 +77,8 @@ class FocusedBrowserTab(BaseModel):
     browser: str | None = None
 
 
-class FocusContextSnapshot(BaseModel):
-    """Snapshot of current focus context."""
+class ActiveAppContextSnapshot(BaseModel):
+    """Snapshot of current active app context."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -101,26 +101,26 @@ class StartRecordingData(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    focus_context: FocusContextSnapshot | None = None
+    active_app_context: ActiveAppContextSnapshot | None = None
 
-    @field_validator("focus_context", mode="before")
+    @field_validator("active_app_context", mode="before")
     @classmethod
-    def parse_focus_context_or_clear(
+    def parse_active_app_context_or_clear(
         cls,
-        raw_focus_context: object,
-    ) -> FocusContextSnapshot | None:
-        """Treat malformed optional focus context as absent metadata."""
-        if raw_focus_context is None:
+        raw_active_app_context: object,
+    ) -> ActiveAppContextSnapshot | None:
+        """Treat malformed optional active app context as absent metadata."""
+        if raw_active_app_context is None:
             return None
-        if isinstance(raw_focus_context, FocusContextSnapshot):
-            return raw_focus_context
-        if not isinstance(raw_focus_context, Mapping):
-            logger.debug("Ignoring non-mapping focus_context payload")
+        if isinstance(raw_active_app_context, ActiveAppContextSnapshot):
+            return raw_active_app_context
+        if not isinstance(raw_active_app_context, Mapping):
+            logger.debug("Ignoring non-mapping active_app_context payload")
             return None
         try:
-            return FocusContextSnapshot.model_validate(raw_focus_context)
+            return ActiveAppContextSnapshot.model_validate(raw_active_app_context)
         except ValidationError:
-            logger.debug("Ignoring malformed focus_context payload")
+            logger.debug("Ignoring malformed active_app_context payload")
             return None
 
 
@@ -133,11 +133,11 @@ class StartRecordingMessage(BaseModel):
     type: Literal["start-recording"]
     data: StartRecordingData | None = None
 
-    def focus_context_for_recording(self) -> FocusContextSnapshot | None:
-        """Return focus context for this recording, or None to explicitly clear it."""
+    def active_app_context_for_recording(self) -> ActiveAppContextSnapshot | None:
+        """Return active app context for this recording, or None to explicitly clear it."""
         if self.data is None:
             return None
-        return self.data.focus_context
+        return self.data.active_app_context
 
 
 class StopRecordingMessage(BaseModel):

@@ -1,4 +1,4 @@
-use crate::focus::FocusConfidenceLevel;
+use crate::active_app_context::FocusConfidenceLevel;
 
 pub(crate) fn normalize_non_empty_focus_text(raw_focus_text: &str) -> Option<String> {
     let trimmed_focus_text = raw_focus_text.trim();

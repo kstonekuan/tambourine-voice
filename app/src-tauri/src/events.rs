@@ -40,8 +40,8 @@ pub enum EventName {
     HistoryChanged,
     /// Rust → Overlay: Native audio data from mic capture
     NativeAudioData,
-    /// Rust → All: Focus context updates
-    FocusContextChanged,
+    /// Rust → All: Active app context updates
+    ActiveAppContextChanged,
 }
 
 impl EventName {
@@ -61,7 +61,7 @@ impl EventName {
             Self::ReconnectResult => "reconnect-result",
             Self::HistoryChanged => "history-changed",
             Self::NativeAudioData => "native-audio-data",
-            Self::FocusContextChanged => "focus-context-changed",
+            Self::ActiveAppContextChanged => "active-app-context-changed",
         }
     }
 }

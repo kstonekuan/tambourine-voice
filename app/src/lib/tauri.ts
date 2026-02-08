@@ -5,9 +5,9 @@ import { Store } from "@tauri-apps/plugin-store";
 import ky from "ky";
 import { withoutTrailingSlash } from "ufo";
 import { z } from "zod";
-import type { FocusContextSnapshot } from "./focus";
+import type { ActiveAppContextSnapshot } from "./activeAppContext";
 
-export * from "./focus";
+export * from "./activeAppContext";
 
 // =============================================================================
 // Provider ID Constants - Single source of truth
@@ -388,8 +388,8 @@ export interface AppSettings {
 	server_url: string;
 	/** LLM formatting enabled (true = format with LLM, false = raw transcription) */
 	llm_formatting_enabled: boolean;
-	/** Send focus context to server for prompt injection */
-	send_focus_context_enabled: boolean;
+	/** Send active app context to server for prompt injection */
+	send_active_app_context_enabled: boolean;
 }
 
 export const DEFAULT_SERVER_URL = "http://127.0.0.1:8765";
@@ -549,8 +549,8 @@ export const tauriAPI = {
 	async updateLLMFormattingEnabled(enabled: boolean): Promise<void> {
 		return invoke("update_llm_formatting_enabled", { enabled });
 	},
-	async updateSendFocusContextEnabled(enabled: boolean): Promise<void> {
-		return invoke("update_send_focus_context_enabled", { enabled });
+	async updateSendActiveAppContextEnabled(enabled: boolean): Promise<void> {
+		return invoke("update_send_active_app_context_enabled", { enabled });
 	},
 
 	async isAudioMuteSupported(): Promise<boolean> {
@@ -700,14 +700,14 @@ export const tauriAPI = {
 		return listenEvent(AppEvents.providerChangeRequest, callback);
 	},
 
-	async onFocusContextChanged(
-		callback: (payload: FocusContextSnapshot) => void,
+	async onActiveAppContextChanged(
+		callback: (payload: ActiveAppContextSnapshot) => void,
 	): Promise<UnlistenFn> {
-		return listenEvent(AppEvents.focusContextChanged, callback);
+		return listenEvent(AppEvents.activeAppContextChanged, callback);
 	},
 
-	async focusGetCurrentContext(): Promise<FocusContextSnapshot> {
-		return invoke("focus_get_current_context");
+	async activeAppGetCurrentContext(): Promise<ActiveAppContextSnapshot> {
+		return invoke("active_app_get_current_context");
 	},
 
 	// Server connection state management (for Rust-side config syncing)

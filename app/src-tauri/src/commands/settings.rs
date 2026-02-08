@@ -8,7 +8,7 @@ use anyhow::Context;
 use tauri::{AppHandle, Manager};
 
 #[cfg(desktop)]
-use crate::focus::sync_focus_watcher_enabled;
+use crate::active_app_context::sync_focus_watcher_enabled;
 
 #[cfg(desktop)]
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
@@ -210,9 +210,9 @@ pub fn get_settings(app: AppHandle) -> Result<AppSettings, String> {
             HttpSyncedSetting::LlmFormattingEnabled,
             true,
         ),
-        send_focus_context_enabled: get_setting_from_store(
+        send_active_app_context_enabled: get_setting_from_store(
             &app,
-            LocalOnlySetting::SendFocusContextEnabled,
+            LocalOnlySetting::SendActiveAppContextEnabled,
             false,
         ),
     })
@@ -468,15 +468,19 @@ pub async fn update_llm_formatting_enabled(_app: AppHandle, _enabled: bool) -> R
     Ok(())
 }
 
-/// Update send focus context setting
+/// Update send active app context setting
 #[cfg(desktop)]
 #[tauri::command]
-pub async fn update_send_focus_context_enabled(
+pub async fn update_send_active_app_context_enabled(
     app: AppHandle,
     enabled: bool,
 ) -> Result<(), String> {
-    persist_local_only_setting(&app, LocalOnlySetting::SendFocusContextEnabled, &enabled)
-        .map_err(|error| format!("{error:#}"))?;
+    persist_local_only_setting(
+        &app,
+        LocalOnlySetting::SendActiveAppContextEnabled,
+        &enabled,
+    )
+    .map_err(|error| format!("{error:#}"))?;
 
     match app.try_state::<AppState>() {
         Some(app_state) => match app_state.focus_watcher.lock() {
@@ -485,24 +489,24 @@ pub async fn update_send_focus_context_enabled(
             }
             Err(lock_error) => {
                 log::warn!(
-                    "Failed to lock focus watcher state while updating send_focus_context_enabled: {lock_error}"
+                    "Failed to lock focus watcher state while updating send_active_app_context_enabled: {lock_error}"
                 );
             }
         },
         None => {
             log::warn!(
-                "AppState unavailable while updating send_focus_context_enabled; watcher lifecycle unchanged"
+                "AppState unavailable while updating send_active_app_context_enabled; watcher lifecycle unchanged"
             );
         }
     }
 
-    log::info!("Send focus context enabled: {enabled}");
+    log::info!("Send active app context enabled: {enabled}");
     Ok(())
 }
 
 #[cfg(not(desktop))]
 #[tauri::command]
-pub async fn update_send_focus_context_enabled(
+pub async fn update_send_active_app_context_enabled(
     _app: AppHandle,
     _enabled: bool,
 ) -> Result<(), String> {

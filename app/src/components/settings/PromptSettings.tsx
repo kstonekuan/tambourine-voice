@@ -7,7 +7,7 @@ import {
 	useSettings,
 	useUpdateCleanupPromptSections,
 	useUpdateLLMFormattingEnabled,
-	useUpdateSendFocusContextEnabled,
+	useUpdateSendActiveAppContextEnabled,
 } from "../../lib/queries";
 import type { CleanupPromptSections, PromptSection } from "../../lib/tauri";
 import { PromptSectionEditor } from "./PromptSectionEditor";
@@ -27,7 +27,7 @@ export function PromptSettings() {
 		useDefaultSections();
 	const updateCleanupPromptSections = useUpdateCleanupPromptSections();
 	const llmFormattingMutation = useUpdateLLMFormattingEnabled();
-	const focusContextMutation = useUpdateSendFocusContextEnabled();
+	const activeAppContextMutation = useUpdateSendActiveAppContextEnabled();
 
 	// Modal for warning when disabling LLM formatting
 	const [disableWarningOpened, disableWarningHandlers] = useDisclosure(false);
@@ -205,16 +205,16 @@ export function PromptSettings() {
 		disableWarningHandlers.close();
 	};
 
-	const handleFocusContextToggle = (checked: boolean) => {
+	const handleActiveAppContextToggle = (checked: boolean) => {
 		if (checked) {
 			focusWarningHandlers.open();
 		} else {
-			focusContextMutation.mutate(false);
+			activeAppContextMutation.mutate(false);
 		}
 	};
 
-	const confirmEnableFocusContext = () => {
-		focusContextMutation.mutate(true);
+	const confirmEnableActiveAppContext = () => {
+		activeAppContextMutation.mutate(true);
 		focusWarningHandlers.close();
 	};
 
@@ -245,20 +245,22 @@ export function PromptSettings() {
 				<div className="settings-row">
 					<div>
 						<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-							<p className="settings-label">Send Focus Context</p>
-							<StatusIndicator status={focusContextMutation.status} />
+							<p className="settings-label">
+								Use Active App Context for Formatting
+							</p>
+							<StatusIndicator status={activeAppContextMutation.status} />
 						</div>
 						<p className="settings-description">
-							Share current app/window context with the server to improve
-							formatting
+							Share active app/window context with the server to improve
+							formatting quality
 						</p>
 					</div>
 					<Switch
-						checked={settings?.send_focus_context_enabled ?? false}
+						checked={settings?.send_active_app_context_enabled ?? false}
 						onChange={(event) =>
-							handleFocusContextToggle(event.currentTarget.checked)
+							handleActiveAppContextToggle(event.currentTarget.checked)
 						}
-						disabled={focusContextMutation.isPending}
+						disabled={activeAppContextMutation.isPending}
 						size="md"
 						color="gray"
 					/>
@@ -387,26 +389,26 @@ export function PromptSettings() {
 				</div>
 			</Modal>
 
-			{/* Warning modal when enabling focus context */}
+			{/* Warning modal when enabling active app context */}
 			<Modal
 				opened={focusWarningOpened}
 				onClose={focusWarningHandlers.close}
-				title="Enable focus context?"
+				title="Enable active app context?"
 				centered
 				size="md"
 			>
 				<Text size="sm" mb="md">
 					This experimental feature can improve dictation quality by adapting
 					formatting to your active app or window. It might send personal data
-					about what active app you are in to the server, and if you connect to
-					a cloud service, that data will be sent to the cloud service as well.
+					about your active app/window to the server, and if you connect to a
+					cloud service, that data will be sent to the cloud service as well.
 				</Text>
 				<div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
 					<Button variant="default" onClick={focusWarningHandlers.close}>
 						Cancel
 					</Button>
-					<Button color="orange" onClick={confirmEnableFocusContext}>
-						Enable Focus Context
+					<Button color="orange" onClick={confirmEnableActiveAppContext}>
+						Enable Active App Context
 					</Button>
 				</div>
 			</Modal>

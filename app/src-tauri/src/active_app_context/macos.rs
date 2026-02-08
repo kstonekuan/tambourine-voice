@@ -17,8 +17,8 @@ use super::shared::{
     determine_focus_confidence_level, infer_browser_tab_title_from_window_title,
     normalize_browser_document_origin, normalize_non_empty_focus_text,
 };
-use crate::focus::{
-    FocusConfidenceLevel, FocusContextSnapshot, FocusEventSource, FocusedApplication,
+use crate::active_app_context::{
+    ActiveAppContextSnapshot, FocusConfidenceLevel, FocusEventSource, FocusedApplication,
     FocusedBrowserTab, FocusedWindow, SupportedBrowser,
 };
 
@@ -326,7 +326,7 @@ fn build_focused_browser_tab(
     })
 }
 
-pub fn get_current_focus_context() -> FocusContextSnapshot {
+pub fn get_current_active_app_context() -> ActiveAppContextSnapshot {
     let captured_at = chrono::Utc::now().to_rfc3339();
     let frontmost_application_metadata = collect_frontmost_application_metadata();
     let accessibility_focused_window_details =
@@ -363,7 +363,7 @@ pub fn get_current_focus_context() -> FocusContextSnapshot {
         focused_browser_origin_is_present,
     );
 
-    FocusContextSnapshot {
+    ActiveAppContextSnapshot {
         focused_application,
         focused_window,
         focused_browser_tab,
@@ -375,5 +375,5 @@ pub fn get_current_focus_context() -> FocusContextSnapshot {
 }
 
 #[cfg(test)]
-#[path = "../tests/focus_macos_tests.rs"]
+#[path = "../tests/active_app_context_macos_tests.rs"]
 mod focus_macos_tests;

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::sync::{Mutex, RwLock};
 
-use crate::focus::FocusWatcherHandle;
+use crate::active_app_context::FocusWatcherHandle;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ShortcutState {

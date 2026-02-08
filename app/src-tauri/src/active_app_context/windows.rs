@@ -23,8 +23,8 @@ use super::shared::{
     determine_focus_confidence_level, infer_browser_tab_title_from_window_title,
     normalize_browser_document_origin, normalize_non_empty_focus_text,
 };
-use crate::focus::{
-    FocusConfidenceLevel, FocusContextSnapshot, FocusEventSource, FocusedApplication,
+use crate::active_app_context::{
+    ActiveAppContextSnapshot, FocusConfidenceLevel, FocusEventSource, FocusedApplication,
     FocusedBrowserTab, FocusedWindow, SupportedBrowser,
 };
 
@@ -313,11 +313,11 @@ fn extract_browser_document_origin_from_uia(hwnd: HWND) -> Option<String> {
     None
 }
 
-pub fn get_current_focus_context() -> FocusContextSnapshot {
+pub fn get_current_active_app_context() -> ActiveAppContextSnapshot {
     let captured_at = chrono::Utc::now().to_rfc3339();
 
     let Some(hwnd) = get_foreground_window() else {
-        return FocusContextSnapshot {
+        return ActiveAppContextSnapshot {
             focused_application: None,
             focused_window: None,
             focused_browser_tab: None,
@@ -383,7 +383,7 @@ pub fn get_current_focus_context() -> FocusContextSnapshot {
             .is_some(),
     );
 
-    FocusContextSnapshot {
+    ActiveAppContextSnapshot {
         focused_application,
         focused_window,
         focused_browser_tab,
@@ -395,5 +395,5 @@ pub fn get_current_focus_context() -> FocusContextSnapshot {
 }
 
 #[cfg(test)]
-#[path = "../tests/focus_windows_tests.rs"]
+#[path = "../tests/active_app_context_windows_tests.rs"]
 mod focus_windows_tests;

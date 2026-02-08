@@ -17,7 +17,7 @@ export type FocusedBrowserTab = {
 	browser?: string | null;
 };
 
-export type FocusContextSnapshot = {
+export type ActiveAppContextSnapshot = {
 	focused_application?: FocusedApplication | null;
 	focused_window?: FocusedWindow | null;
 	focused_browser_tab?: FocusedBrowserTab | null;

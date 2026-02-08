@@ -1,19 +1,19 @@
-use super::{process_focus_snapshot_poll, ComparableFocusContext, FocusWatcherState};
-use crate::focus::{
-    FocusConfidenceLevel, FocusContextSnapshot, FocusEventSource, FocusedApplication,
+use super::{process_focus_snapshot_poll, ComparableActiveAppContext, FocusWatcherState};
+use crate::active_app_context::{
+    ActiveAppContextSnapshot, FocusConfidenceLevel, FocusEventSource, FocusedApplication,
     FocusedBrowserTab, FocusedWindow,
 };
 use std::time::{Duration, Instant};
 
-fn build_focus_context_snapshot_for_test(
+fn build_active_app_context_snapshot_for_test(
     application_name: &str,
     window_title: &str,
     browser_tab_title: Option<&str>,
     browser_tab_origin: Option<&str>,
     confidence_level: FocusConfidenceLevel,
     captured_at: &str,
-) -> FocusContextSnapshot {
-    FocusContextSnapshot {
+) -> ActiveAppContextSnapshot {
+    ActiveAppContextSnapshot {
         focused_application: Some(FocusedApplication {
             display_name: application_name.to_string(),
             bundle_id: None,
@@ -35,8 +35,8 @@ fn build_focus_context_snapshot_for_test(
 }
 
 #[test]
-fn comparable_focus_context_is_stable_for_identical_snapshots() {
-    let identical_focus_snapshot = build_focus_context_snapshot_for_test(
+fn comparable_active_app_context_is_stable_for_identical_snapshots() {
+    let identical_focus_snapshot = build_active_app_context_snapshot_for_test(
         "Code",
         "notes.md",
         Some("Pull Request"),
@@ -45,15 +45,15 @@ fn comparable_focus_context_is_stable_for_identical_snapshots() {
         "2026-01-01T00:00:00Z",
     );
 
-    let comparable_context_first = ComparableFocusContext::from(&identical_focus_snapshot);
-    let comparable_context_second = ComparableFocusContext::from(&identical_focus_snapshot);
+    let comparable_context_first = ComparableActiveAppContext::from(&identical_focus_snapshot);
+    let comparable_context_second = ComparableActiveAppContext::from(&identical_focus_snapshot);
 
     assert_eq!(comparable_context_first, comparable_context_second);
 }
 
 #[test]
-fn comparable_focus_context_ignores_captured_at_changes() {
-    let earlier_snapshot = build_focus_context_snapshot_for_test(
+fn comparable_active_app_context_ignores_captured_at_changes() {
+    let earlier_snapshot = build_active_app_context_snapshot_for_test(
         "Code",
         "notes.md",
         Some("Pull Request"),
@@ -61,7 +61,7 @@ fn comparable_focus_context_ignores_captured_at_changes() {
         FocusConfidenceLevel::High,
         "2026-01-01T00:00:00Z",
     );
-    let later_snapshot = build_focus_context_snapshot_for_test(
+    let later_snapshot = build_active_app_context_snapshot_for_test(
         "Code",
         "notes.md",
         Some("Pull Request"),
@@ -71,14 +71,14 @@ fn comparable_focus_context_ignores_captured_at_changes() {
     );
 
     assert_eq!(
-        ComparableFocusContext::from(&earlier_snapshot),
-        ComparableFocusContext::from(&later_snapshot)
+        ComparableActiveAppContext::from(&earlier_snapshot),
+        ComparableActiveAppContext::from(&later_snapshot)
     );
 }
 
 #[test]
-fn comparable_focus_context_changes_when_semantic_fields_change() {
-    let original_snapshot = build_focus_context_snapshot_for_test(
+fn comparable_active_app_context_changes_when_semantic_fields_change() {
+    let original_snapshot = build_active_app_context_snapshot_for_test(
         "Code",
         "notes.md",
         Some("Pull Request"),
@@ -86,7 +86,7 @@ fn comparable_focus_context_changes_when_semantic_fields_change() {
         FocusConfidenceLevel::High,
         "2026-01-01T00:00:00Z",
     );
-    let changed_semantic_snapshot = build_focus_context_snapshot_for_test(
+    let changed_semantic_snapshot = build_active_app_context_snapshot_for_test(
         "Code",
         "notes.md",
         Some("Issue"),
@@ -96,8 +96,8 @@ fn comparable_focus_context_changes_when_semantic_fields_change() {
     );
 
     assert_ne!(
-        ComparableFocusContext::from(&original_snapshot),
-        ComparableFocusContext::from(&changed_semantic_snapshot),
+        ComparableActiveAppContext::from(&original_snapshot),
+        ComparableActiveAppContext::from(&changed_semantic_snapshot),
     );
 }
 
@@ -106,7 +106,7 @@ fn initial_observed_focus_snapshot_emits_after_debounce_window() {
     let debounce_window = Duration::from_millis(75);
     let initial_instant = Instant::now();
     let initial_state = FocusWatcherState::AwaitingInitialEmission;
-    let focus_snapshot = build_focus_context_snapshot_for_test(
+    let focus_snapshot = build_active_app_context_snapshot_for_test(
         "Code",
         "notes.md",
         Some("Pull Request"),
@@ -137,7 +137,7 @@ fn debounce_timer_resets_only_when_comparable_context_changes() {
     let debounce_window = Duration::from_millis(75);
     let initial_instant = Instant::now();
     let initial_state = FocusWatcherState::AwaitingInitialEmission;
-    let first_focus_snapshot = build_focus_context_snapshot_for_test(
+    let first_focus_snapshot = build_active_app_context_snapshot_for_test(
         "Code",
         "notes.md",
         Some("Pull Request"),
@@ -145,7 +145,7 @@ fn debounce_timer_resets_only_when_comparable_context_changes() {
         FocusConfidenceLevel::High,
         "2026-01-01T00:00:00Z",
     );
-    let second_focus_snapshot = build_focus_context_snapshot_for_test(
+    let second_focus_snapshot = build_active_app_context_snapshot_for_test(
         "Terminal",
         "shell",
         None,
@@ -191,7 +191,7 @@ fn debounce_timer_resets_only_when_comparable_context_changes() {
 fn stable_emitted_state_does_not_reemit_identical_context() {
     let debounce_window = Duration::from_millis(75);
     let base_instant = Instant::now();
-    let stable_focus_snapshot = build_focus_context_snapshot_for_test(
+    let stable_focus_snapshot = build_active_app_context_snapshot_for_test(
         "Code",
         "notes.md",
         Some("Pull Request"),
@@ -200,9 +200,9 @@ fn stable_emitted_state_does_not_reemit_identical_context() {
         "2026-01-01T00:00:00Z",
     );
     let stable_emitted_state = FocusWatcherState::StableEmitted {
-        emitted_context: ComparableFocusContext::from(&stable_focus_snapshot),
+        emitted_context: ComparableActiveAppContext::from(&stable_focus_snapshot),
     };
-    let same_context_with_new_timestamp = build_focus_context_snapshot_for_test(
+    let same_context_with_new_timestamp = build_active_app_context_snapshot_for_test(
         "Code",
         "notes.md",
         Some("Pull Request"),
@@ -230,7 +230,7 @@ fn debouncing_candidate_retries_after_emission_failure() {
     let debounce_window = Duration::from_millis(75);
     let base_instant = Instant::now();
     let initial_state = FocusWatcherState::AwaitingInitialEmission;
-    let focus_snapshot = build_focus_context_snapshot_for_test(
+    let focus_snapshot = build_active_app_context_snapshot_for_test(
         "Code",
         "notes.md",
         Some("Pull Request"),

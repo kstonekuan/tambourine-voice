@@ -468,22 +468,22 @@ export function useUpdateLLMFormattingEnabled() {
 	});
 }
 
-// Focus context sending enabled mutation
-export function useUpdateSendFocusContextEnabled() {
+// Active app context sending enabled mutation
+export function useUpdateSendActiveAppContextEnabled() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: (enabled: boolean) =>
-			tauriAPI.updateSendFocusContextEnabled(enabled),
+			tauriAPI.updateSendActiveAppContextEnabled(enabled),
 		onSuccess: (_data, enabled) => {
 			queryClient.invalidateQueries({ queryKey: ["settings"] });
 			tauriAPI.emitSettingsChanged();
 			showSettingsSuccess(
-				`Focus context ${enabled ? "enabled" : "disabled"} for server`,
+				`Active app context ${enabled ? "enabled" : "disabled"} for formatting`,
 			);
 		},
 		onError: (error) => {
 			showSettingsError(
-				`Failed to update focus context setting: ${error.message}`,
+				`Failed to update active app context setting: ${error.message}`,
 			);
 		},
 	});

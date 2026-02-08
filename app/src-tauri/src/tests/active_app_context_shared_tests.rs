@@ -31,10 +31,13 @@ fn normalize_browser_document_origin_keeps_origin_when_path_is_missing() {
 
 #[test]
 fn infer_browser_tab_title_from_window_title_strips_browser_suffix() {
-    let focused_window_title = Some("Focus Context Plan - Google Chrome");
+    let focused_window_title = Some("Active App Context Plan - Google Chrome");
     let inferred_tab_title =
         infer_browser_tab_title_from_window_title(focused_window_title, "Google Chrome");
-    assert_eq!(inferred_tab_title.as_deref(), Some("Focus Context Plan"));
+    assert_eq!(
+        inferred_tab_title.as_deref(),
+        Some("Active App Context Plan")
+    );
 }
 
 #[test]

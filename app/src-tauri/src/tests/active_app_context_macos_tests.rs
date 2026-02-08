@@ -1,5 +1,5 @@
 use super::supported_browser_from_bundle_identifier;
-use crate::focus::SupportedBrowser;
+use crate::active_app_context::SupportedBrowser;
 
 #[test]
 fn supported_browser_from_bundle_identifier_supports_v1_browser_set() {

@@ -85,7 +85,7 @@ pub struct FocusedBrowserTab {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct FocusContextSnapshot {
+pub struct ActiveAppContextSnapshot {
     pub focused_application: Option<FocusedApplication>,
     pub focused_window: Option<FocusedWindow>,
     pub focused_browser_tab: Option<FocusedBrowserTab>,
@@ -95,18 +95,18 @@ pub struct FocusContextSnapshot {
     pub captured_at: String,
 }
 
-pub fn get_current_focus_context() -> FocusContextSnapshot {
+pub fn get_current_active_app_context() -> ActiveAppContextSnapshot {
     #[cfg(target_os = "windows")]
     {
-        windows::get_current_focus_context()
+        windows::get_current_active_app_context()
     }
     #[cfg(target_os = "macos")]
     {
-        macos::get_current_focus_context()
+        macos::get_current_active_app_context()
     }
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
-        FocusContextSnapshot {
+        ActiveAppContextSnapshot {
             focused_application: None,
             focused_window: None,
             focused_browser_tab: None,
@@ -125,9 +125,9 @@ pub fn start_focus_watcher_in_app(app: &AppHandle) -> FocusWatcherHandle {
 pub fn sync_focus_watcher_enabled(
     app: &AppHandle,
     focus_watcher_handle: &mut Option<FocusWatcherHandle>,
-    send_focus_context_enabled: bool,
+    send_active_app_context_enabled: bool,
 ) {
-    if send_focus_context_enabled {
+    if send_active_app_context_enabled {
         if focus_watcher_handle.is_none() {
             *focus_watcher_handle = Some(start_focus_watcher_in_app(app));
         }
@@ -137,5 +137,5 @@ pub fn sync_focus_watcher_enabled(
 }
 
 #[cfg(test)]
-#[path = "../tests/focus_shared_tests.rs"]
+#[path = "../tests/active_app_context_shared_tests.rs"]
 mod focus_shared_tests;
