@@ -23,6 +23,5 @@ export type ActiveAppContextSnapshot = {
 	focused_browser_tab?: FocusedBrowserTab | null;
 	event_source: FocusEventSource;
 	confidence_level: FocusConfidenceLevel;
-	privacy_filtered: boolean;
 	captured_at: string;
 };

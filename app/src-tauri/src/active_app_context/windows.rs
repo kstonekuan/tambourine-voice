@@ -1,6 +1,7 @@
 use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
 use std::path::Path;
+use std::sync::OnceLock;
 
 use windows::core::{BSTR, PWSTR};
 use windows::Win32::Foundation::{CloseHandle, HWND, RPC_E_CHANGED_MODE};
@@ -27,6 +28,12 @@ use crate::active_app_context::{
     ActiveAppContextSnapshot, FocusConfidenceLevel, FocusEventSource, FocusedApplication,
     FocusedBrowserTab, FocusedWindow, SupportedBrowser,
 };
+
+fn should_emit_uia_debug_logs() -> bool {
+    static SHOULD_EMIT_UIA_DEBUG_LOGS: OnceLock<bool> = OnceLock::new();
+    *SHOULD_EMIT_UIA_DEBUG_LOGS
+        .get_or_init(|| std::env::var("TAMBOURINE_UIA_DEBUG").is_ok_and(|value| value != "0"))
+}
 
 fn get_foreground_window() -> Option<HWND> {
     let hwnd = unsafe { GetForegroundWindow() };
@@ -280,20 +287,88 @@ fn extract_normalized_origin_from_edit_control(
     normalize_browser_document_origin(&address_bar_value)
 }
 
-fn extract_browser_document_origin_from_uia(hwnd: HWND) -> Option<String> {
-    let (_com_apartment_initialization_guard, ui_automation_client) =
-        create_ui_automation_client()?;
-    let focused_window_automation_element =
-        get_automation_element_for_window(&ui_automation_client, hwnd)?;
-    let edit_control_type_condition = create_edit_control_type_condition(&ui_automation_client)?;
-    let edit_control_elements = find_subtree_elements_matching_condition(
+fn extract_browser_document_origin_from_uia(
+    hwnd: HWND,
+    browser_display_name: &str,
+) -> Option<String> {
+    let Some((_com_apartment_initialization_guard, ui_automation_client)) =
+        create_ui_automation_client()
+    else {
+        if should_emit_uia_debug_logs() {
+            log::debug!(
+                "[UIA Debug] Failed to create UI Automation client while extracting browser origin for {browser_display_name}"
+            );
+        }
+        return None;
+    };
+
+    let Some(focused_window_automation_element) =
+        get_automation_element_for_window(&ui_automation_client, hwnd)
+    else {
+        if should_emit_uia_debug_logs() {
+            log::debug!(
+                "[UIA Debug] Failed to map foreground HWND to UIA element for {browser_display_name}"
+            );
+        }
+        return None;
+    };
+
+    let Some(edit_control_type_condition) =
+        create_edit_control_type_condition(&ui_automation_client)
+    else {
+        if should_emit_uia_debug_logs() {
+            log::debug!(
+                "[UIA Debug] Failed to create UIA EditControl condition for {browser_display_name}"
+            );
+        }
+        return None;
+    };
+
+    let Some(edit_control_elements) = find_subtree_elements_matching_condition(
         &focused_window_automation_element,
         &edit_control_type_condition,
-    )?;
-    let edit_control_count = get_automation_element_array_length(&edit_control_elements)?;
+    ) else {
+        if should_emit_uia_debug_logs() {
+            log::debug!(
+                "[UIA Debug] Failed to enumerate edit controls in UIA subtree for {browser_display_name}"
+            );
+        }
+        return None;
+    };
+
+    let Some(edit_control_count) = get_automation_element_array_length(&edit_control_elements)
+    else {
+        if should_emit_uia_debug_logs() {
+            log::debug!(
+                "[UIA Debug] Failed to query UIA edit control count for {browser_display_name}"
+            );
+        }
+        return None;
+    };
+
+    if edit_control_count <= 0 {
+        if should_emit_uia_debug_logs() {
+            log::debug!(
+                "[UIA Debug] UIA subtree returned no edit controls for {browser_display_name}"
+            );
+        }
+        return None;
+    }
+
+    let mut likely_address_bar_candidate_count = 0;
+    let mut candidate_without_origin_count = 0;
+
     for edit_control_index in 0..edit_control_count {
-        let edit_control_element =
-            get_automation_element_at_index(&edit_control_elements, edit_control_index)?;
+        let Some(edit_control_element) =
+            get_automation_element_at_index(&edit_control_elements, edit_control_index)
+        else {
+            if should_emit_uia_debug_logs() {
+                log::debug!(
+                    "[UIA Debug] Failed to read edit control at index {edit_control_index} for {browser_display_name}"
+                );
+            }
+            continue;
+        };
         let automation_id = get_element_current_automation_id(&edit_control_element);
         let control_name = get_element_current_name(&edit_control_element);
         if !is_likely_browser_address_bar_candidate(
@@ -302,11 +377,36 @@ fn extract_browser_document_origin_from_uia(hwnd: HWND) -> Option<String> {
         ) {
             continue;
         }
+        likely_address_bar_candidate_count += 1;
 
         if let Some(normalized_document_origin) =
             extract_normalized_origin_from_edit_control(&edit_control_element)
         {
+            if should_emit_uia_debug_logs() {
+                log::debug!(
+                    "[UIA Debug] Extracted browser origin for {browser_display_name} from candidate id={automation_id:?} name={control_name:?}: {normalized_document_origin}"
+                );
+            }
             return Some(normalized_document_origin);
+        }
+
+        candidate_without_origin_count += 1;
+        if should_emit_uia_debug_logs() {
+            log::debug!(
+                "[UIA Debug] Candidate looked like address bar but had no normalized origin for {browser_display_name} (id={automation_id:?}, name={control_name:?})"
+            );
+        }
+    }
+
+    if should_emit_uia_debug_logs() {
+        if likely_address_bar_candidate_count == 0 {
+            log::debug!(
+                "[UIA Debug] No likely address-bar candidates found among {edit_control_count} edit controls for {browser_display_name}"
+            );
+        } else {
+            log::debug!(
+                "[UIA Debug] Found {likely_address_bar_candidate_count} likely address-bar candidates for {browser_display_name}, but none produced a normalized origin (failed candidates: {candidate_without_origin_count})"
+            );
         }
     }
 
@@ -323,7 +423,6 @@ pub fn get_current_active_app_context() -> ActiveAppContextSnapshot {
             focused_browser_tab: None,
             event_source: FocusEventSource::Polling,
             confidence_level: FocusConfidenceLevel::Low,
-            privacy_filtered: true,
             captured_at,
         };
     };
@@ -352,8 +451,9 @@ pub fn get_current_active_app_context() -> ActiveAppContextSnapshot {
             supported_browser.display_name(),
         )
     });
-    let browser_document_origin =
-        supported_browser.and_then(|_| extract_browser_document_origin_from_uia(hwnd));
+    let browser_document_origin = supported_browser.and_then(|supported_browser| {
+        extract_browser_document_origin_from_uia(hwnd, supported_browser.display_name())
+    });
     let focused_browser_tab = supported_browser.and_then(|supported_browser| {
         if browser_tab_title.is_none() && browser_document_origin.is_none() {
             return None;
@@ -389,7 +489,6 @@ pub fn get_current_active_app_context() -> ActiveAppContextSnapshot {
         focused_browser_tab,
         event_source,
         confidence_level,
-        privacy_filtered: true,
         captured_at,
     }
 }

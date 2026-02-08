@@ -29,7 +29,6 @@ fn build_active_app_context_snapshot_for_test(
         }),
         event_source: FocusEventSource::Polling,
         confidence_level,
-        privacy_filtered: true,
         captured_at: captured_at.to_string(),
     }
 }

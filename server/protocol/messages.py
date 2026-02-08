@@ -87,7 +87,6 @@ class ActiveAppContextSnapshot(BaseModel):
     focused_browser_tab: FocusedBrowserTab | None = None
     event_source: FocusEventSource = FocusEventSource.UNKNOWN
     confidence_level: FocusConfidenceLevel = FocusConfidenceLevel.LOW
-    privacy_filtered: bool = False
     captured_at: str
 
 

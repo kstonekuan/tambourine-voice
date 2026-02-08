@@ -91,7 +91,6 @@ pub struct ActiveAppContextSnapshot {
     pub focused_browser_tab: Option<FocusedBrowserTab>,
     pub event_source: FocusEventSource,
     pub confidence_level: FocusConfidenceLevel,
-    pub privacy_filtered: bool,
     pub captured_at: String,
 }
 
@@ -112,7 +111,6 @@ pub fn get_current_active_app_context() -> ActiveAppContextSnapshot {
             focused_browser_tab: None,
             event_source: FocusEventSource::Unknown,
             confidence_level: FocusConfidenceLevel::Low,
-            privacy_filtered: true,
             captured_at: chrono::Utc::now().to_rfc3339(),
         }
     }

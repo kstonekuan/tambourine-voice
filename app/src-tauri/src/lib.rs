@@ -427,7 +427,6 @@ fn fallback_active_app_context_snapshot() -> active_app_context::ActiveAppContex
         focused_browser_tab: None,
         event_source: active_app_context::FocusEventSource::Unknown,
         confidence_level: active_app_context::FocusConfidenceLevel::Low,
-        privacy_filtered: true,
         captured_at: chrono::Utc::now().to_rfc3339(),
     }
 }

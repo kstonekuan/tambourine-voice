@@ -30,12 +30,11 @@ function formatDate(timestamp: string): string {
 	return format(date, "MMM d");
 }
 
-function formatContextCapturedAt(capturedAt: string): string {
-	const parsedCapturedAt = new Date(capturedAt);
-	if (Number.isNaN(parsedCapturedAt.getTime())) {
-		return capturedAt;
-	}
-	return format(parsedCapturedAt, "MMM d, h:mm:ss a");
+function normalizeMeaningfulContextValue(
+	rawContextValue: string | null | undefined,
+): string | null {
+	const trimmedContextValue = rawContextValue?.trim();
+	return trimmedContextValue ? trimmedContextValue : null;
 }
 
 interface GroupedHistory {
@@ -73,24 +72,32 @@ const HistoryItem = memo(function HistoryItem({
 }: HistoryItemProps) {
 	const [isExpanded, setIsExpanded] = useState(false);
 	const activeAppContextSnapshot = entry.active_app_context;
-	const focusedApplicationDisplayName =
-		activeAppContextSnapshot?.focused_application?.display_name ?? "Unknown";
-	const focusedWindowTitle =
-		activeAppContextSnapshot?.focused_window?.title ?? "Unknown";
-	const focusedBrowserName =
-		activeAppContextSnapshot?.focused_browser_tab?.browser ?? "Unknown";
-	const focusedBrowserTabTitle =
-		activeAppContextSnapshot?.focused_browser_tab?.title ?? "Unknown";
-	const focusedBrowserOrigin =
-		activeAppContextSnapshot?.focused_browser_tab?.origin ?? "Unknown";
-	const focusEventSource = activeAppContextSnapshot?.event_source ?? "unknown";
-	const focusConfidenceLevel =
-		activeAppContextSnapshot?.confidence_level ?? "low";
-	const privacyFilteredLabel =
-		activeAppContextSnapshot?.privacy_filtered === true ? "Yes" : "No";
-	const capturedAtLabel = activeAppContextSnapshot?.captured_at
-		? formatContextCapturedAt(activeAppContextSnapshot.captured_at)
-		: null;
+	const activeAppContextFields = [
+		{
+			label: "App",
+			value: normalizeMeaningfulContextValue(
+				activeAppContextSnapshot?.focused_application?.display_name,
+			),
+		},
+		{
+			label: "Window",
+			value: normalizeMeaningfulContextValue(
+				activeAppContextSnapshot?.focused_window?.title,
+			),
+		},
+		{
+			label: "Tab",
+			value: normalizeMeaningfulContextValue(
+				activeAppContextSnapshot?.focused_browser_tab?.title,
+			),
+		},
+		{
+			label: "Origin",
+			value: normalizeMeaningfulContextValue(
+				activeAppContextSnapshot?.focused_browser_tab?.origin,
+			),
+		},
+	].filter((activeAppContextField) => activeAppContextField.value !== null);
 
 	return (
 		<div className="history-item">
@@ -110,66 +117,24 @@ const HistoryItem = memo(function HistoryItem({
 							Active app context sent to LLM:
 						</Text>
 						{activeAppContextSnapshot ? (
-							<div className="history-context-grid">
-								<Text size="xs" c="dimmed">
-									App
-								</Text>
+							activeAppContextFields.length > 0 ? (
+								<div className="history-context-grid">
+									{activeAppContextFields.map(({ label, value }) => (
+										<div key={label} className="history-context-row">
+											<Text size="xs" c="dimmed">
+												{label}
+											</Text>
+											<Text size="sm" c="dimmed">
+												{value}
+											</Text>
+										</div>
+									))}
+								</div>
+							) : (
 								<Text size="sm" c="dimmed">
-									{focusedApplicationDisplayName}
+									No active app details were available for this dictation.
 								</Text>
-								<Text size="xs" c="dimmed">
-									Window
-								</Text>
-								<Text size="sm" c="dimmed">
-									{focusedWindowTitle}
-								</Text>
-								<Text size="xs" c="dimmed">
-									Browser
-								</Text>
-								<Text size="sm" c="dimmed">
-									{focusedBrowserName}
-								</Text>
-								<Text size="xs" c="dimmed">
-									Tab
-								</Text>
-								<Text size="sm" c="dimmed">
-									{focusedBrowserTabTitle}
-								</Text>
-								<Text size="xs" c="dimmed">
-									Origin
-								</Text>
-								<Text size="sm" c="dimmed">
-									{focusedBrowserOrigin}
-								</Text>
-								<Text size="xs" c="dimmed">
-									Source
-								</Text>
-								<Text size="sm" c="dimmed">
-									{focusEventSource}
-								</Text>
-								<Text size="xs" c="dimmed">
-									Confidence
-								</Text>
-								<Text size="sm" c="dimmed">
-									{focusConfidenceLevel}
-								</Text>
-								<Text size="xs" c="dimmed">
-									Privacy filtered
-								</Text>
-								<Text size="sm" c="dimmed">
-									{privacyFilteredLabel}
-								</Text>
-								{capturedAtLabel && (
-									<>
-										<Text size="xs" c="dimmed">
-											Captured at
-										</Text>
-										<Text size="sm" c="dimmed">
-											{capturedAtLabel}
-										</Text>
-									</>
-								)}
-							</div>
+							)
 						) : (
 							<Text size="sm" c="dimmed">
 								No active app context was sent for this dictation.

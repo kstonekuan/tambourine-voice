@@ -9,7 +9,6 @@ def build_active_app_context_payload() -> dict[str, object]:
         "focused_window": {"title": "main.py"},
         "event_source": "polling",
         "confidence_level": "high",
-        "privacy_filtered": True,
         "captured_at": datetime.now(tz=UTC).isoformat(),
     }
 

@@ -21,7 +21,6 @@ def build_active_app_context_snapshot(captured_at: str) -> ActiveAppContextSnaps
         focused_browser_tab=None,
         event_source=FocusEventSource.POLLING,
         confidence_level=FocusConfidenceLevel.HIGH,
-        privacy_filtered=True,
         captured_at=captured_at,
     )
 
@@ -113,7 +112,6 @@ def test_reset_context_for_new_recording_omits_focus_block_when_everything_is_un
             focused_browser_tab=None,
             event_source=FocusEventSource.POLLING,
             confidence_level=FocusConfidenceLevel.LOW,
-            privacy_filtered=True,
             captured_at="2024-01-01T00:00:00+00:00",
         )
     )
@@ -133,7 +131,6 @@ def test_active_app_context_block_omits_window_line_when_window_is_unknown() -> 
             focused_browser_tab=None,
             event_source=FocusEventSource.POLLING,
             confidence_level=FocusConfidenceLevel.HIGH,
-            privacy_filtered=True,
             captured_at="2024-01-01T00:00:00+00:00",
         )
     )
@@ -158,7 +155,6 @@ def test_active_app_context_block_sanitizes_newlines_and_control_characters() ->
             ),
             event_source=FocusEventSource.POLLING,
             confidence_level=FocusConfidenceLevel.HIGH,
-            privacy_filtered=False,
             captured_at="2024-01-01T00:00:00+00:00",
         )
     )
@@ -185,7 +181,6 @@ def test_active_app_context_block_truncates_overlong_untrusted_fields() -> None:
             focused_browser_tab=FocusedBrowserTab(origin=overlong_browser_origin),
             event_source=FocusEventSource.POLLING,
             confidence_level=FocusConfidenceLevel.HIGH,
-            privacy_filtered=False,
             captured_at="2024-01-01T00:00:00+00:00",
         )
     )
@@ -210,7 +205,6 @@ def test_active_app_context_block_handles_prompt_like_title_as_plain_text() -> N
             ),
             event_source=FocusEventSource.POLLING,
             confidence_level=FocusConfidenceLevel.HIGH,
-            privacy_filtered=False,
             captured_at="2024-01-01T00:00:00+00:00",
         )
     )

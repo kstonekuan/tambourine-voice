@@ -409,7 +409,6 @@ mod tests {
             }),
             event_source: FocusEventSource::Accessibility,
             confidence_level: FocusConfidenceLevel::High,
-            privacy_filtered: false,
             captured_at: "2026-02-08T12:00:00Z".to_string(),
         };
 

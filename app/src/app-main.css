@@ -309,9 +309,14 @@ body {
 
 .history-context-grid {
 	display: grid;
+	gap: 6px;
+	margin-top: 4px;
+}
+
+.history-context-row {
+	display: grid;
 	grid-template-columns: minmax(90px, auto) 1fr;
 	gap: 4px 12px;
-	margin-top: 4px;
 }
 
 .history-actions {

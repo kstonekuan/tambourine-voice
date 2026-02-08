@@ -369,7 +369,6 @@ pub fn get_current_active_app_context() -> ActiveAppContextSnapshot {
         focused_browser_tab,
         event_source,
         confidence_level,
-        privacy_filtered: true,
         captured_at,
     }
 }
