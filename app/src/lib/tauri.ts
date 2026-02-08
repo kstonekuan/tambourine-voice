@@ -346,6 +346,53 @@ export interface HistoryImportResult {
 	entries_skipped: number | null;
 }
 
+/** Warning from best-effort runtime setting application after import/reset. */
+export type RuntimeApplyWarningCode =
+	| "focus_watcher_reconcile_failed"
+	| "prompt_sections_sync_failed"
+	| "stt_timeout_sync_failed"
+	| "llm_formatting_sync_failed";
+
+export type RuntimeApplySettingKey = keyof Pick<
+	AppSettings,
+	| "send_active_app_context_enabled"
+	| "cleanup_prompt_sections"
+	| "stt_timeout_seconds"
+	| "llm_formatting_enabled"
+>;
+
+export type RuntimeApplyAction =
+	| "focus_watcher_enabled"
+	| "focus_watcher_disabled"
+	| "prompt_sections_synced"
+	| "stt_timeout_synced"
+	| "llm_formatting_synced";
+
+/** Warning from best-effort runtime setting application after import/reset. */
+export interface RuntimeApplyWarning {
+	code: RuntimeApplyWarningCode;
+	message: string;
+	setting_key: RuntimeApplySettingKey;
+}
+
+/** Runtime action that was successfully applied after import/reset. */
+export interface RuntimeActionApplied {
+	action: RuntimeApplyAction;
+	setting_key: RuntimeApplySettingKey;
+}
+
+/** Runtime setting application summary for settings import. */
+export interface ImportSettingsOutcome {
+	warnings: RuntimeApplyWarning[];
+	runtime_actions_applied: RuntimeActionApplied[];
+}
+
+/** Runtime setting application summary for factory reset. */
+export interface FactoryResetOutcome {
+	warnings: RuntimeApplyWarning[];
+	runtime_actions_applied: RuntimeActionApplied[];
+}
+
 /** Detected file type from import */
 export type DetectedFileType = "settings" | "history" | "unknown";
 
@@ -758,7 +805,7 @@ export const tauriAPI = {
 		return invoke("detect_export_file_type", { content });
 	},
 
-	async importSettings(content: string): Promise<void> {
+	async importSettings(content: string): Promise<ImportSettingsOutcome> {
 		return invoke("import_settings", { content });
 	},
 
@@ -769,7 +816,7 @@ export const tauriAPI = {
 		return invoke("import_history", { content, strategy });
 	},
 
-	async factoryReset(): Promise<void> {
+	async factoryReset(): Promise<FactoryResetOutcome> {
 		return invoke("factory_reset");
 	},
 };

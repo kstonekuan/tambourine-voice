@@ -4,7 +4,7 @@ use crate::settings::{
     DEFAULT_SERVER_URL,
 };
 use crate::state::{AppState, ShortcutErrors, ShortcutRegistrationResult};
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use tauri::{AppHandle, Manager};
 
 #[cfg(desktop)]
@@ -88,6 +88,27 @@ fn persist_rtvi_synced_setting<T: serde::Serialize>(
             rtvi_synced_setting.storage_key_name()
         )
     })
+}
+
+#[cfg(desktop)]
+pub(crate) fn reconcile_focus_watcher_enabled_state(
+    app: &AppHandle,
+    send_active_app_context_enabled: bool,
+) -> anyhow::Result<()> {
+    let app_state = app
+        .try_state::<AppState>()
+        .context("AppState unavailable while reconciling focus watcher lifecycle")?;
+
+    let mut focus_watcher_guard = app_state.focus_watcher.lock().map_err(|lock_error| {
+        anyhow!("Failed to lock focus watcher state for reconciliation: {lock_error}")
+    })?;
+
+    sync_focus_watcher_enabled(
+        app,
+        &mut focus_watcher_guard,
+        send_active_app_context_enabled,
+    );
+    Ok(())
 }
 
 /// Re-register global shortcuts with the current settings from the store.
@@ -482,22 +503,10 @@ pub async fn update_send_active_app_context_enabled(
     )
     .map_err(|error| format!("{error:#}"))?;
 
-    match app.try_state::<AppState>() {
-        Some(app_state) => match app_state.focus_watcher.lock() {
-            Ok(mut focus_watcher_guard) => {
-                sync_focus_watcher_enabled(&app, &mut focus_watcher_guard, enabled);
-            }
-            Err(lock_error) => {
-                log::warn!(
-                    "Failed to lock focus watcher state while updating send_active_app_context_enabled: {lock_error}"
-                );
-            }
-        },
-        None => {
-            log::warn!(
-                "AppState unavailable while updating send_active_app_context_enabled; watcher lifecycle unchanged"
-            );
-        }
+    if let Err(error) = reconcile_focus_watcher_enabled_state(&app, enabled) {
+        log::warn!(
+            "Failed to reconcile focus watcher while updating send_active_app_context_enabled: {error:#}"
+        );
     }
 
     log::info!("Send active app context enabled: {enabled}");

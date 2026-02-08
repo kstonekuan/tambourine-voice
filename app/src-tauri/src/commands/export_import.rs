@@ -131,6 +131,57 @@ pub enum DetectedFileType {
     Unknown,
 }
 
+/// Warning from best-effort runtime setting application.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeApplyWarningCode {
+    #[serde(rename = "focus_watcher_reconcile_failed")]
+    FocusWatcherReconcile,
+    #[serde(rename = "prompt_sections_sync_failed")]
+    PromptSectionsSync,
+    #[serde(rename = "stt_timeout_sync_failed")]
+    SttTimeoutSync,
+    #[serde(rename = "llm_formatting_sync_failed")]
+    LlmFormattingSync,
+}
+
+/// Runtime action that was successfully applied.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeApplyAction {
+    FocusWatcherEnabled,
+    FocusWatcherDisabled,
+    PromptSectionsSynced,
+    SttTimeoutSynced,
+    LlmFormattingSynced,
+}
+
+/// Warning from best-effort runtime setting application.
+#[derive(Debug, Clone, Serialize)]
+pub struct RuntimeApplyWarning {
+    pub code: RuntimeApplyWarningCode,
+    pub message: String,
+    #[serde(serialize_with = "serialize_setting_class_as_storage_key_name")]
+    pub setting_key: SettingClass,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RuntimeActionApplied {
+    pub action: RuntimeApplyAction,
+    #[serde(serialize_with = "serialize_setting_class_as_storage_key_name")]
+    pub setting_key: SettingClass,
+}
+
+/// Runtime application summary returned by import/reset commands.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct RuntimeApplyOutcome {
+    pub warnings: Vec<RuntimeApplyWarning>,
+    pub runtime_actions_applied: Vec<RuntimeActionApplied>,
+}
+
+pub type ImportSettingsOutcome = RuntimeApplyOutcome;
+pub type FactoryResetOutcome = RuntimeApplyOutcome;
+
 // ============================================================================
 // HELPER FOR FILE TYPE DETECTION
 // ============================================================================
@@ -487,6 +538,155 @@ fn write_setting_classes_to_store(
     Ok(())
 }
 
+#[cfg(desktop)]
+fn apply_runtime_warning(
+    code: RuntimeApplyWarningCode,
+    setting_key: SettingClass,
+    message: String,
+) -> RuntimeApplyWarning {
+    RuntimeApplyWarning {
+        code,
+        message,
+        setting_key,
+    }
+}
+
+#[cfg(desktop)]
+fn apply_runtime_action(
+    action: RuntimeApplyAction,
+    setting_key: SettingClass,
+) -> RuntimeActionApplied {
+    RuntimeActionApplied {
+        action,
+        setting_key,
+    }
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn serialize_setting_class_as_storage_key_name<S>(
+    setting_class: &SettingClass,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_str(setting_class.storage_key_name())
+}
+
+#[cfg(desktop)]
+async fn apply_runtime_side_effects(
+    app: &AppHandle,
+    send_active_app_context_enabled: bool,
+    llm_formatting_enabled: bool,
+    stt_timeout_seconds_to_sync: Option<f64>,
+    prompt_sections_to_sync: Option<&CleanupPromptSections>,
+    config_sync: &ConfigSync,
+) -> RuntimeApplyOutcome {
+    let mut runtime_apply_outcome = RuntimeApplyOutcome::default();
+
+    match super::settings::reconcile_focus_watcher_enabled_state(
+        app,
+        send_active_app_context_enabled,
+    ) {
+        Ok(()) => {
+            let focus_watcher_action = if send_active_app_context_enabled {
+                RuntimeApplyAction::FocusWatcherEnabled
+            } else {
+                RuntimeApplyAction::FocusWatcherDisabled
+            };
+            runtime_apply_outcome
+                .runtime_actions_applied
+                .push(apply_runtime_action(
+                    focus_watcher_action,
+                    LocalOnlySetting::SendActiveAppContextEnabled.into(),
+                ));
+        }
+        Err(error) => {
+            runtime_apply_outcome.warnings.push(apply_runtime_warning(
+                RuntimeApplyWarningCode::FocusWatcherReconcile,
+                LocalOnlySetting::SendActiveAppContextEnabled.into(),
+                format!(
+                    "Failed to sync active app context watcher: {error:#}. Toggle 'Send active app context' to retry sync."
+                ),
+            ));
+        }
+    }
+
+    let sync = config_sync.read().await;
+    if !sync.is_connected() {
+        return runtime_apply_outcome;
+    }
+
+    if let Some(prompt_sections) = prompt_sections_to_sync {
+        match sync.sync_prompt_sections(prompt_sections).await {
+            Ok(()) => {
+                runtime_apply_outcome
+                    .runtime_actions_applied
+                    .push(apply_runtime_action(
+                        RuntimeApplyAction::PromptSectionsSynced,
+                        HttpSyncedSetting::CleanupPromptSections.into(),
+                    ));
+            }
+            Err(error) => {
+                runtime_apply_outcome.warnings.push(apply_runtime_warning(
+                    RuntimeApplyWarningCode::PromptSectionsSync,
+                    HttpSyncedSetting::CleanupPromptSections.into(),
+                    format!(
+                        "Failed to sync prompt sections to server: {error:#}. Toggle a prompt section to retry sync."
+                    ),
+                ));
+            }
+        }
+    }
+
+    if let Some(timeout_seconds) = stt_timeout_seconds_to_sync {
+        match sync.sync_stt_timeout(timeout_seconds).await {
+            Ok(()) => {
+                runtime_apply_outcome
+                    .runtime_actions_applied
+                    .push(apply_runtime_action(
+                        RuntimeApplyAction::SttTimeoutSynced,
+                        HttpSyncedSetting::SttTimeoutSeconds.into(),
+                    ));
+            }
+            Err(error) => {
+                runtime_apply_outcome.warnings.push(apply_runtime_warning(
+                    RuntimeApplyWarningCode::SttTimeoutSync,
+                    HttpSyncedSetting::SttTimeoutSeconds.into(),
+                    format!(
+                        "Failed to sync STT timeout to server: {error:#}. Change 'STT timeout' to retry sync."
+                    ),
+                ));
+            }
+        }
+    }
+
+    match sync
+        .sync_llm_formatting_enabled(llm_formatting_enabled)
+        .await
+    {
+        Ok(()) => {
+            runtime_apply_outcome
+                .runtime_actions_applied
+                .push(apply_runtime_action(
+                    RuntimeApplyAction::LlmFormattingSynced,
+                    HttpSyncedSetting::LlmFormattingEnabled.into(),
+                ));
+        }
+        Err(error) => {
+            runtime_apply_outcome.warnings.push(apply_runtime_warning(
+                RuntimeApplyWarningCode::LlmFormattingSync,
+                HttpSyncedSetting::LlmFormattingEnabled.into(),
+                format!(
+                    "Failed to sync LLM formatting mode to server: {error:#}. Toggle 'LLM formatting' to retry sync."
+                ),
+            ));
+        }
+    }
+
+    runtime_apply_outcome
+}
+
 /// Import settings from a JSON string
 #[cfg(desktop)]
 #[tauri::command]
@@ -494,7 +694,7 @@ pub async fn import_settings(
     app: AppHandle,
     content: String,
     config_sync: tauri::State<'_, ConfigSync>,
-) -> Result<(), String> {
+) -> Result<ImportSettingsOutcome, String> {
     // Parse the export file
     let export: SettingsExportFile = serde_json::from_str(&content)
         .map_err(|e| format!("Failed to parse settings file: {e}"))?;
@@ -538,18 +738,26 @@ pub async fn import_settings(
         .save()
         .map_err(|e| format!("Failed to save settings: {e}"))?;
 
-    log::info!("Successfully imported settings from export file");
+    let runtime_apply_outcome = apply_runtime_side_effects(
+        &app,
+        imported_settings.send_active_app_context_enabled,
+        imported_settings.llm_formatting_enabled,
+        imported_settings.stt_timeout_seconds,
+        None,
+        &config_sync,
+    )
+    .await;
 
-    let sync = config_sync.read().await;
-    if sync.is_connected() {
-        if let Some(timeout) = imported_settings.stt_timeout_seconds {
-            if let Err(e) = sync.sync_stt_timeout(timeout).await {
-                log::warn!("Failed to sync STT timeout after import: {e}");
-            }
-        }
+    if runtime_apply_outcome.warnings.is_empty() {
+        log::info!("Successfully imported settings from export file");
+    } else {
+        log::warn!(
+            "Settings imported with {} runtime warnings",
+            runtime_apply_outcome.warnings.len()
+        );
     }
 
-    Ok(())
+    Ok(runtime_apply_outcome)
 }
 
 #[cfg(not(desktop))]
@@ -558,7 +766,7 @@ pub async fn import_settings(
     _app: AppHandle,
     _content: String,
     _config_sync: tauri::State<'_, ConfigSync>,
-) -> Result<(), String> {
+) -> Result<ImportSettingsOutcome, String> {
     Err("Not supported on this platform".to_string())
 }
 
@@ -610,7 +818,7 @@ pub fn import_history(
 pub async fn factory_reset(
     app: AppHandle,
     config_sync: tauri::State<'_, ConfigSync>,
-) -> Result<(), String> {
+) -> Result<FactoryResetOutcome, String> {
     // Clear the settings store completely
     let store = app
         .store("settings.json")
@@ -641,24 +849,27 @@ pub async fn factory_reset(
         .save()
         .map_err(|e| format!("Failed to save default settings: {e}"))?;
 
-    // Sync defaults to server if connected
-    let sync = config_sync.read().await;
-    if sync.is_connected() {
-        // Reset prompts to default mode
-        let default_sections = CleanupPromptSections::default();
-        if let Err(e) = sync.sync_prompt_sections(&default_sections).await {
-            log::warn!("Failed to sync prompts on factory reset: {e}");
-        }
+    let default_sections = CleanupPromptSections::default();
+    let runtime_apply_outcome = apply_runtime_side_effects(
+        &app,
+        default_settings.send_active_app_context_enabled,
+        default_settings.llm_formatting_enabled,
+        Some(DEFAULT_STT_TIMEOUT_SECONDS),
+        Some(&default_sections),
+        &config_sync,
+    )
+    .await;
 
-        // Reset STT timeout to default
-        if let Err(e) = sync.sync_stt_timeout(DEFAULT_STT_TIMEOUT_SECONDS).await {
-            log::warn!("Failed to sync STT timeout on factory reset: {e}");
-        }
+    if runtime_apply_outcome.warnings.is_empty() {
+        log::info!("Factory reset completed: settings and history cleared");
+    } else {
+        log::warn!(
+            "Factory reset completed with {} runtime warnings",
+            runtime_apply_outcome.warnings.len()
+        );
     }
 
-    log::info!("Factory reset completed: settings and history cleared");
-
-    Ok(())
+    Ok(runtime_apply_outcome)
 }
 
 #[cfg(not(desktop))]
@@ -666,6 +877,6 @@ pub async fn factory_reset(
 pub async fn factory_reset(
     _app: AppHandle,
     _config_sync: tauri::State<'_, ConfigSync>,
-) -> Result<(), String> {
+) -> Result<FactoryResetOutcome, String> {
     Err("Not supported on this platform".to_string())
 }

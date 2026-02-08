@@ -14,7 +14,7 @@ mod config_sync;
 pub mod events;
 mod history;
 
-use active_app_context::{get_current_active_app_context, sync_focus_watcher_enabled};
+use active_app_context::get_current_active_app_context;
 use events::EventName;
 mod mic_capture;
 mod settings;
@@ -524,22 +524,19 @@ pub fn run() {
             });
             app.manage(mic_capture_manager);
 
-            if let Some(app_state) = app.try_state::<AppState>() {
-                if let Ok(mut watcher_guard) = app_state.focus_watcher.lock() {
-                    #[cfg(desktop)]
-                    let send_active_app_context_enabled = get_setting_from_store(
-                        app.handle(),
-                        LocalOnlySetting::SendActiveAppContextEnabled,
-                        false,
-                    );
-
-                    #[cfg(not(desktop))]
-                    let send_active_app_context_enabled = false;
-
-                    sync_focus_watcher_enabled(
-                        app.handle(),
-                        &mut watcher_guard,
-                        send_active_app_context_enabled,
+            #[cfg(desktop)]
+            {
+                let send_active_app_context_enabled = get_setting_from_store(
+                    app.handle(),
+                    LocalOnlySetting::SendActiveAppContextEnabled,
+                    false,
+                );
+                if let Err(error) = commands::settings::reconcile_focus_watcher_enabled_state(
+                    app.handle(),
+                    send_active_app_context_enabled,
+                ) {
+                    log::warn!(
+                        "Failed to reconcile focus watcher lifecycle during startup: {error:#}"
                     );
                 }
             }
