@@ -12,6 +12,7 @@ import {
 	setup,
 } from "xstate";
 import type { ProviderChangeRequestPayload } from "../lib/events";
+import { isMacOSRuntime } from "../lib/runtimePlatform";
 import {
 	type ConfigMessage,
 	sendConfigMessages,
@@ -434,6 +435,69 @@ export const connectionMachine = setup({
 		logState: (_, params: { state: string }): void => {
 			console.log(`[XState] → ${params.state}`);
 		},
+		enableClientMicrophoneForRecordingIfSupported: ({ context }): void => {
+			if (isMacOSRuntime()) {
+				return;
+			}
+
+			if (!context.client) {
+				return;
+			}
+
+			const clientWithOptionalEnableMic = context.client as PipecatClient & {
+				enableMic?: (enabled: boolean) => void;
+			};
+			if (typeof clientWithOptionalEnableMic.enableMic !== "function") {
+				return;
+			}
+
+			try {
+				clientWithOptionalEnableMic.enableMic(true);
+			} catch (error) {
+				console.warn(
+					"[Recording] Failed to enable Pipecat client microphone:",
+					error,
+				);
+			}
+		},
+		disableClientMicrophoneAfterRecordingIfSupported: ({ context }): void => {
+			if (isMacOSRuntime()) {
+				return;
+			}
+
+			if (!context.client) {
+				return;
+			}
+
+			const clientWithOptionalMicControls = context.client as PipecatClient & {
+				enableMic?: (enabled: boolean) => void;
+				tracks?: () => {
+					local?: {
+						audio?: {
+							stop: () => void;
+						};
+					};
+				};
+			};
+
+			try {
+				clientWithOptionalMicControls.enableMic?.(false);
+			} catch (error) {
+				console.warn(
+					"[Recording] Failed to disable Pipecat client microphone:",
+					error,
+				);
+			}
+
+			try {
+				clientWithOptionalMicControls.tracks?.().local?.audio?.stop();
+			} catch (error) {
+				console.warn(
+					"[Recording] Failed to stop Pipecat client local audio track:",
+					error,
+				);
+			}
+		},
 	},
 	delays: {
 		connectionTimeout: 30000,
@@ -610,7 +674,10 @@ export const connectionMachine = setup({
 					target: "retrying",
 					actions: "cleanupClient",
 				},
-				START_RECORDING: "recording",
+				START_RECORDING: {
+					target: "recording",
+					actions: "enableClientMicrophoneForRecordingIfSupported",
+				},
 				SERVER_URL_CHANGED: {
 					target: "initializing",
 					actions: [
@@ -649,17 +716,27 @@ export const connectionMachine = setup({
 			on: {
 				DISCONNECTED: {
 					target: "retrying",
-					actions: "cleanupClient",
+					actions: [
+						"disableClientMicrophoneAfterRecordingIfSupported",
+						"cleanupClient",
+					],
 				},
 				COMMUNICATION_ERROR: {
 					target: "retrying",
-					actions: "cleanupClient",
+					actions: [
+						"disableClientMicrophoneAfterRecordingIfSupported",
+						"cleanupClient",
+					],
 				},
-				STOP_RECORDING: "processing",
+				STOP_RECORDING: {
+					target: "processing",
+					actions: "disableClientMicrophoneAfterRecordingIfSupported",
+				},
 				// Handle manual reconnect during recording
 				RECONNECT: {
 					target: "initializing",
 					actions: [
+						"disableClientMicrophoneAfterRecordingIfSupported",
 						"cleanupClient",
 						"emitReconnectStarted",
 						assign({ client: () => null, retryCount: () => 0 }),

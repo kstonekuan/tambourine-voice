@@ -36,6 +36,7 @@
 		"@tauri-apps/plugin-dialog": "^2.6.0",
 		"@tauri-apps/plugin-fs": "^2.4.5",
 		"@tauri-apps/plugin-opener": "^2.5.3",
+		"@tauri-apps/plugin-os": "^2.3.2",
 		"@tauri-apps/plugin-store": "^2.4.2",
 		"@use-gesture/react": "^10.3.1",
 		"@xstate/react": "^6.0.0",
