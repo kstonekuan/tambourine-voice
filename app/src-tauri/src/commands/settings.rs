@@ -6,6 +6,9 @@ use crate::state::{AppState, ShortcutErrors, ShortcutRegistrationResult};
 use tauri::{AppHandle, Manager};
 
 #[cfg(desktop)]
+use crate::focus::sync_focus_watcher_enabled;
+
+#[cfg(desktop)]
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
 #[cfg(desktop)]
@@ -402,6 +405,25 @@ pub async fn update_send_focus_context_enabled(
     enabled: bool,
 ) -> Result<(), String> {
     crate::save_setting_to_store(&app, StoreKey::SendFocusContextEnabled, &enabled)?;
+
+    match app.try_state::<AppState>() {
+        Some(app_state) => match app_state.focus_watcher.lock() {
+            Ok(mut focus_watcher_guard) => {
+                sync_focus_watcher_enabled(&app, &mut focus_watcher_guard, enabled);
+            }
+            Err(lock_error) => {
+                log::warn!(
+                    "Failed to lock focus watcher state while updating send_focus_context_enabled: {lock_error}"
+                );
+            }
+        },
+        None => {
+            log::warn!(
+                "AppState unavailable while updating send_focus_context_enabled; watcher lifecycle unchanged"
+            );
+        }
+    }
+
     log::info!("Send focus context enabled: {enabled}");
     Ok(())
 }

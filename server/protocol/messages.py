@@ -15,7 +15,7 @@ from enum import StrEnum
 from typing import Annotated, Literal
 
 from loguru import logger
-from pydantic import BaseModel, ConfigDict, Field, RootModel, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, RootModel, ValidationError, field_validator
 
 from protocol.providers import LLMProviderSelection, STTProviderSelection
 
@@ -102,6 +102,26 @@ class StartRecordingData(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     focus_context: FocusContextSnapshot | None = None
+
+    @field_validator("focus_context", mode="before")
+    @classmethod
+    def parse_focus_context_or_clear(
+        cls,
+        raw_focus_context: object,
+    ) -> FocusContextSnapshot | None:
+        """Treat malformed optional focus context as absent metadata."""
+        if raw_focus_context is None:
+            return None
+        if isinstance(raw_focus_context, FocusContextSnapshot):
+            return raw_focus_context
+        if not isinstance(raw_focus_context, Mapping):
+            logger.debug("Ignoring non-mapping focus_context payload")
+            return None
+        try:
+            return FocusContextSnapshot.model_validate(raw_focus_context)
+        except ValidationError:
+            logger.debug("Ignoring malformed focus_context payload")
+            return None
 
 
 class StartRecordingMessage(BaseModel):

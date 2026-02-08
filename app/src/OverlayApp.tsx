@@ -354,10 +354,10 @@ function RecordingControl() {
 				// LLM formatting is now controlled globally via the config API
 				// Use safe send to detect communication failures and trigger reconnection
 				const startRecordingData =
-					settings?.send_focus_context_enabled === false ||
-					!latestFocusContextRef.current
-						? {}
-						: { focus_context: latestFocusContextRef.current };
+					settings?.send_focus_context_enabled === true &&
+					latestFocusContextRef.current
+						? { focus_context: latestFocusContextRef.current }
+						: {};
 				console.debug(
 					"[Focus Context] Sending start-recording payload:",
 					startRecordingData,

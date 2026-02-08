@@ -122,6 +122,20 @@ pub fn start_focus_watcher_in_app(app: &AppHandle) -> FocusWatcherHandle {
     start_focus_watcher(app.clone())
 }
 
+pub fn sync_focus_watcher_enabled(
+    app: &AppHandle,
+    focus_watcher_handle: &mut Option<FocusWatcherHandle>,
+    send_focus_context_enabled: bool,
+) {
+    if send_focus_context_enabled {
+        if focus_watcher_handle.is_none() {
+            *focus_watcher_handle = Some(start_focus_watcher_in_app(app));
+        }
+    } else if let Some(existing_focus_watcher_handle) = focus_watcher_handle.take() {
+        existing_focus_watcher_handle.stop();
+    }
+}
+
 #[cfg(test)]
 #[path = "../tests/focus_shared_tests.rs"]
 mod focus_shared_tests;

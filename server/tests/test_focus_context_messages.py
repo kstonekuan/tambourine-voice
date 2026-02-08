@@ -41,3 +41,32 @@ def test_start_recording_focus_context_for_recording_returns_none_for_missing_da
     assert isinstance(parsed_message, StartRecordingMessage)
 
     assert parsed_message.focus_context_for_recording() is None
+
+
+def test_start_recording_with_malformed_focus_context_still_parses() -> None:
+    parsed_message = parse_client_message(
+        {
+            "type": "start-recording",
+            "data": {
+                "focus_context": {
+                    "focused_application": {"display_name": "Code"},
+                    # Missing required captured_at should not reject start-recording.
+                }
+            },
+        }
+    )
+    assert isinstance(parsed_message, StartRecordingMessage)
+
+    assert parsed_message.focus_context_for_recording() is None
+
+
+def test_start_recording_with_non_mapping_focus_context_still_parses() -> None:
+    parsed_message = parse_client_message(
+        {
+            "type": "start-recording",
+            "data": {"focus_context": "invalid-payload-shape"},
+        }
+    )
+    assert isinstance(parsed_message, StartRecordingMessage)
+
+    assert parsed_message.focus_context_for_recording() is None

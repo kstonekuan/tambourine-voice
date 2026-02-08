@@ -14,7 +14,7 @@ mod focus;
 mod history;
 
 use events::EventName;
-use focus::{get_current_focus_context, start_focus_watcher_in_app};
+use focus::{get_current_focus_context, sync_focus_watcher_enabled};
 mod mic_capture;
 mod settings;
 mod state;
@@ -518,9 +518,21 @@ pub fn run() {
 
             if let Some(app_state) = app.try_state::<AppState>() {
                 if let Ok(mut watcher_guard) = app_state.focus_watcher.lock() {
-                    if watcher_guard.is_none() {
-                        *watcher_guard = Some(start_focus_watcher_in_app(app.handle()));
-                    }
+                    #[cfg(desktop)]
+                    let send_focus_context_enabled = get_setting_from_store(
+                        app.handle(),
+                        StoreKey::SendFocusContextEnabled,
+                        true,
+                    );
+
+                    #[cfg(not(desktop))]
+                    let send_focus_context_enabled = true;
+
+                    sync_focus_watcher_enabled(
+                        app.handle(),
+                        &mut watcher_guard,
+                        send_focus_context_enabled,
+                    );
                 }
             }
 
