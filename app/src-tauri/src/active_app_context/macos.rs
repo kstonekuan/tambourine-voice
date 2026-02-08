@@ -18,8 +18,8 @@ use super::shared::{
     normalize_browser_document_origin, normalize_non_empty_focus_text,
 };
 use crate::active_app_context::{
-    ActiveAppContextSnapshot, FocusConfidenceLevel, FocusEventSource, FocusedApplication,
-    FocusedBrowserTab, FocusedWindow, SupportedBrowser,
+    ActiveAppContextSnapshot, FocusEventSource, FocusedApplication, FocusedBrowserTab,
+    FocusedWindow, SupportedBrowser,
 };
 
 type AccessibilityUiElementRef = *const c_void;
