@@ -161,18 +161,24 @@ export async function createNativeAudioBridge(): Promise<NativeAudioBridge> {
 	};
 
 	const stop = (): void => {
-		invoke("stop_native_mic");
+		invoke("stop_native_mic").catch((err) =>
+			console.warn("[nativeAudio] stop_native_mic failed:", err),
+		);
 		resolvePendingFirstFrameWaiters(false);
 		unlisten?.();
 		unlisten = undefined;
 	};
 
 	const pause = (): void => {
-		invoke("pause_native_mic");
+		invoke("pause_native_mic").catch((err) =>
+			console.warn("[nativeAudio] pause_native_mic failed:", err),
+		);
 	};
 
 	const resume = (): void => {
-		invoke("resume_native_mic");
+		invoke("resume_native_mic").catch((err) =>
+			console.warn("[nativeAudio] resume_native_mic failed:", err),
+		);
 	};
 
 	return { track, start, stop, pause, resume };
