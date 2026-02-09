@@ -25,6 +25,11 @@ import {
 	toSTTProviderSelection,
 } from "../lib/tauri";
 
+// Connection timing constants
+const CONNECTION_TIMEOUT_MS = 30000;
+const INITIAL_RETRY_DELAY_MS = 1000;
+const MAX_RETRY_DELAY_MS = 30000;
+
 /**
  * Clears the transport's keepAliveInterval to prevent "InvalidStateError" spam.
  * The library's stop() has a bug where the interval isn't cleared on abrupt disconnects.
@@ -502,10 +507,13 @@ export const connectionMachine = setup({
 		},
 	},
 	delays: {
-		connectionTimeout: 30000,
+		connectionTimeout: CONNECTION_TIMEOUT_MS,
 		// Exponential backoff: 1s, 2s, 4s, 8s... capped at 30s
 		retryDelay: ({ context }) =>
-			Math.min(1000 * 2 ** context.retryCount, 30000),
+			Math.min(
+				INITIAL_RETRY_DELAY_MS * 2 ** context.retryCount,
+				MAX_RETRY_DELAY_MS,
+			),
 	},
 }).createMachine({
 	id: "connection",
