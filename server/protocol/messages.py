@@ -284,6 +284,7 @@ class RecordingCompleteMessage(BaseModel):
 
     type: Literal["recording-complete"] = "recording-complete"
     hasContent: bool = False
+    message: str | None = None
 
 
 class RawTranscriptionMessage(BaseModel):

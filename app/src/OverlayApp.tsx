@@ -36,6 +36,7 @@ import type { ConnectionMachineStateValue } from "./machines/connectionMachine";
 import "./overlay-global.css";
 
 const SERVER_RESPONSE_TIMEOUT_MS = 10_000;
+const EMPTY_RECORDING_NOTICE_TIMEOUT_MS = 2_000;
 const NATIVE_AUDIO_FIRST_FRAME_READY_TIMEOUT_MS = 500;
 const PIPECAT_LOCAL_PARTICIPANT = {
 	id: "local",
@@ -48,6 +49,7 @@ const KnownServerMessageSchema = z.discriminatedUnion("type", [
 	z.object({
 		type: z.literal("recording-complete"),
 		hasContent: z.boolean().optional(),
+		message: z.string().optional(),
 	}),
 	// Raw transcription (LLM bypassed) - sent when LLM formatting is disabled
 	z.object({
@@ -194,6 +196,48 @@ const ErrorDisplay = ({
 	</button>
 );
 
+const EmptyRecordingNotice = ({
+	message,
+	onDismiss,
+	onStartRecording,
+}: {
+	message: string;
+	onDismiss: () => void;
+	onStartRecording?: () => void;
+}) => (
+	<button
+		type="button"
+		onClick={() => {
+			onDismiss();
+			onStartRecording?.();
+		}}
+		style={{
+			minWidth: 48,
+			width: "fit-content",
+			minHeight: 48,
+			display: "flex",
+			alignItems: "center",
+			justifyContent: "center",
+			cursor: "pointer",
+			padding: "4px 10px",
+			background: "none",
+			border: "none",
+		}}
+	>
+		<span
+			style={{
+				fontSize: 11,
+				color: "#d1d5db",
+				textAlign: "center",
+				lineHeight: 1.2,
+				whiteSpace: "nowrap",
+			}}
+		>
+			{message}
+		</span>
+	</button>
+);
+
 type DisplayState =
 	| "disconnected"
 	| "connecting"
@@ -280,6 +324,8 @@ function RecordingControl() {
 
 	// Error display state (persists until user records again)
 	const [showError, setShowError] = useState(false);
+	const [emptyRecordingNoticeMessage, setEmptyRecordingNoticeMessage] =
+		useState<string | null>(null);
 
 	const { start: startResponseTimeout, clear: clearResponseTimeout } =
 		useTimeout(() => {
@@ -296,6 +342,13 @@ function RecordingControl() {
 				send({ type: "RESPONSE_RECEIVED" });
 			}
 		}, SERVER_RESPONSE_TIMEOUT_MS);
+
+	const {
+		start: startEmptyRecordingNoticeTimeout,
+		clear: clearEmptyRecordingNoticeTimeout,
+	} = useTimeout(() => {
+		setEmptyRecordingNoticeMessage(null);
+	}, EMPTY_RECORDING_NOTICE_TIMEOUT_MS);
 
 	// Clear response timeout when leaving processing state (reconnection, disconnection, etc.)
 	// This prevents the timeout from firing after we've already transitioned away
@@ -340,6 +393,8 @@ function RecordingControl() {
 		const startRecordingFromMachineState = async () => {
 			// Clear error state when starting recording
 			setShowError(false);
+			setEmptyRecordingNoticeMessage(null);
+			clearEmptyRecordingNoticeTimeout();
 
 			// Reset accumulators for new recording
 			// Important: rawTranscriptionRef is reset here (not on BotLlmStarted)
@@ -511,6 +566,7 @@ function RecordingControl() {
 		settings?.selected_mic_id,
 		settings?.send_active_app_context_enabled,
 		connectionActor,
+		clearEmptyRecordingNoticeTimeout,
 		getCurrentNativeAudioTrack,
 		send,
 		startNativeCapture,
@@ -878,8 +934,14 @@ function RecordingControl() {
 				const parsed = parseServerMessage(message);
 
 				match(parsed)
-					.with({ type: "recording-complete" }, () => {
+					.with({ type: "recording-complete" }, ({ hasContent, message }) => {
 						clearResponseTimeout();
+						if (hasContent === false) {
+							setEmptyRecordingNoticeMessage(
+								message?.trim() ? message.trim() : "No words detected",
+							);
+							startEmptyRecordingNoticeTimeout();
+						}
 						activeAppContextSentForCurrentRecordingRef.current = null;
 						send({ type: "RESPONSE_RECEIVED" });
 					})
@@ -930,7 +992,13 @@ function RecordingControl() {
 					})
 					.exhaustive();
 			},
-			[clearResponseTimeout, send, typeTextMutation, addHistoryEntry],
+			[
+				clearResponseTimeout,
+				send,
+				typeTextMutation,
+				addHistoryEntry,
+				startEmptyRecordingNoticeTimeout,
+			],
 		),
 	);
 
@@ -1029,17 +1097,19 @@ function RecordingControl() {
 		? ("error" as const)
 		: isMicAcquiring
 			? ("loading" as const)
-			: match(displayState)
-					.with(
-						"startingRecording",
-						"processing",
-						"disconnected",
-						"connecting",
-						"reconnecting",
-						() => "loading" as const,
-					)
-					.with("idle", "recording", () => "active" as const)
-					.exhaustive();
+			: emptyRecordingNoticeMessage
+				? ("emptyRecordingNotice" as const)
+				: match(displayState)
+						.with(
+							"startingRecording",
+							"processing",
+							"disconnected",
+							"connecting",
+							"reconnecting",
+							() => "loading" as const,
+						)
+						.with("idle", "recording", () => "active" as const)
+						.exhaustive();
 
 	return (
 		<div
@@ -1062,6 +1132,18 @@ function RecordingControl() {
 				.with("error", () => (
 					<ErrorDisplay
 						onDismiss={() => setShowError(false)}
+						onStartRecording={
+							displayState === "idle" ? onStartRecording : undefined
+						}
+					/>
+				))
+				.with("emptyRecordingNotice", () => (
+					<EmptyRecordingNotice
+						message={emptyRecordingNoticeMessage ?? "No words detected"}
+						onDismiss={() => {
+							setEmptyRecordingNoticeMessage(null);
+							clearEmptyRecordingNoticeTimeout();
+						}}
 						onStartRecording={
 							displayState === "idle" ? onStartRecording : undefined
 						}

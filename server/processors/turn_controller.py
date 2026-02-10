@@ -391,5 +391,10 @@ class TurnController(FrameProcessor):
 
     async def _emit_empty_response(self, direction: FrameDirection) -> None:
         """Send an empty response message to the client."""
-        frame = RTVIServerMessageFrame(data=RecordingCompleteMessage(hasContent=False).model_dump())
+        frame = RTVIServerMessageFrame(
+            data=RecordingCompleteMessage(
+                hasContent=False,
+                message="No words detected",
+            ).model_dump()
+        )
         await self.push_frame(frame, direction)
