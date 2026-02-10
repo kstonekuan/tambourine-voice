@@ -1,0 +1,28 @@
+services:
+  server:
+    image: <AWS_ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/tambourine-server:latest
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      # Set in EB environment properties
+      TURN_SERVER_URL: "${TURN_SERVER_URL}"
+      TURN_SHARED_SECRET: "${TURN_SHARED_SECRET}"
+      TURN_CREDENTIAL_TTL: "${TURN_CREDENTIAL_TTL:-3600}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  coturn:
+    image: <AWS_ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/coturn-turn-server:latest
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      # Must match server TURN_SHARED_SECRET
+      TURN_SHARED_SECRET: "${TURN_SHARED_SECRET}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

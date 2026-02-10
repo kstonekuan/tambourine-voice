@@ -867,7 +867,7 @@ function createApiClient(serverUrl: string) {
 
 export const configAPI = {
 	// =========================================================================
-	// Static endpoints (no client UUID needed)
+	// Static endpoints
 	// =========================================================================
 
 	// Static prompt defaults
@@ -907,11 +907,16 @@ export const configAPI = {
 		return api.get("api/providers").json<AvailableProvidersData>();
 	},
 
-	// Get ICE servers with fresh TURN credentials
-	getIceServers: async (serverUrl: string): Promise<IceServerConfig[]> => {
+	// Get ICE servers with fresh TURN credentials (requires registered UUID)
+	getIceServers: async (
+		serverUrl: string,
+		clientUUID: string,
+	): Promise<IceServerConfig[]> => {
 		const api = createApiClient(serverUrl);
 		const response = await api
-			.get("api/ice-servers")
+			.get("api/ice-servers", {
+				headers: { "X-Client-UUID": clientUUID },
+			})
 			.json<IceServersResponse>();
 		return response.ice_servers;
 	},

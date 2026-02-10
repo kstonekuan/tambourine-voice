@@ -2,6 +2,8 @@
 
 Deploy coturn TURN server to AWS Elastic Beanstalk for Tambourine WebRTC NAT traversal.
 
+This Elastic Beanstalk setup uses Docker Compose with `network_mode: host` so coturn relay UDP ports (`49152-65535`) are reachable for media.
+
 ## Prerequisites
 
 - AWS CLI configured with appropriate permissions
@@ -41,17 +43,22 @@ docker tag coturn-turn-server:latest <AWS_ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws
 docker push <AWS_ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/coturn-turn-server:latest
 ```
 
-## 3. Update Dockerrun.aws.json
+## 3. Update `docker-compose.yml`
 
-Edit `elasticbeanstalk/Dockerrun.aws.json` and replace:
+Edit `elasticbeanstalk/turn/docker-compose.yml` and replace:
 - `<AWS_ACCOUNT_ID>` with your AWS account ID
 - `<REGION>` with your region (e.g., `us-east-1`)
 
-## 4. Create Elastic Beanstalk Application
+## 4. Package Elastic Beanstalk Config
 
 ```bash
-cd elasticbeanstalk
+cd elasticbeanstalk/turn
+zip -r coturn-eb-config.zip docker-compose.yml .ebextensions/
+```
 
+## 5. Create Elastic Beanstalk Application
+
+```bash
 # Initialize EB application
 eb init coturn-turn-server --platform docker --region <REGION>
 
@@ -62,7 +69,7 @@ eb create coturn-prod \
   --envvars TURN_SHARED_SECRET=<your-secret-here>
 ```
 
-## 5. Allocate Elastic IP
+## 6. Allocate Elastic IP
 
 TURN servers need a stable IP address:
 
@@ -81,9 +88,9 @@ INSTANCE_ID=$(aws elasticbeanstalk describe-environment-resources \
 aws ec2 associate-address --instance-id $INSTANCE_ID --allocation-id <AllocationId>
 ```
 
-## 6. Configure Tambourine Server
+## 7. Configure Tambourine Server
 
-Add these environment variables to your Tambourine server EB environment:
+Add these environment variables to your Tambourine server environment:
 
 ```bash
 eb setenv \
@@ -94,13 +101,13 @@ eb setenv \
 
 Or update your `.env` file for local development:
 
-```
+```bash
 TURN_SERVER_URL=turn:localhost:3478
 TURN_SHARED_SECRET=<your-secret>
 TURN_CREDENTIAL_TTL=3600
 ```
 
-## 7. Verify Deployment
+## 8. Verify Deployment
 
 ### Test TURN Server
 
@@ -118,11 +125,20 @@ turnutils_uclient -t -u $TIMESTAMP -w $PASSWORD <ELASTIC_IP>
 
 ### Test ICE Servers Endpoint
 
+The endpoint now requires a registered client UUID:
+
 ```bash
-curl https://your-tambourine-server/api/ice-servers
+SERVER_URL=https://your-tambourine-server
+
+# Register a client UUID
+CLIENT_UUID=$(curl -s -X POST "$SERVER_URL/api/client/register" | jq -r '.uuid')
+
+# Request ICE servers with UUID header
+curl -H "X-Client-UUID: $CLIENT_UUID" "$SERVER_URL/api/ice-servers"
 ```
 
 Should return:
+
 ```json
 {
   "ice_servers": [
@@ -135,8 +151,8 @@ Should return:
 ### End-to-End Test
 
 1. Connect from a restrictive network (corporate NAT, mobile hotspot)
-2. Check browser DevTools → WebRTC internals
-3. Look for "relay" candidates in ICE gathering
+2. Check browser DevTools -> WebRTC internals
+3. Look for `relay` candidates in ICE gathering
 
 ## Troubleshooting
 
@@ -154,6 +170,7 @@ Should return:
 ### No Relay Candidates
 
 - STUN is working but TURN is not
+- Verify the EB environment is single-instance and using host networking
 - Check TURN server is reachable: `nc -u <ip> 3478`
 - Verify client is sending credentials
 

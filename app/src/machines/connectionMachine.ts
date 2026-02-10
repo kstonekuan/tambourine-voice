@@ -91,23 +91,6 @@ const createClientActor = fromPromise<
 >(async ({ input }) => {
 	const { serverUrl } = input;
 
-	// Fetch ICE servers from the server (includes TURN credentials if configured)
-	// Fall back to default STUN if server endpoint is unreachable
-	let iceServers: IceServerConfig[];
-	try {
-		iceServers = await configAPI.getIceServers(serverUrl);
-		console.debug(
-			"[XState] Fetched ICE servers from server:",
-			iceServers.map((s) => s.urls),
-		);
-	} catch (error) {
-		console.warn(
-			"[XState] Failed to fetch ICE servers, using default STUN:",
-			error,
-		);
-		iceServers = DEFAULT_ICE_SERVERS;
-	}
-
 	// Ensure we have a registered UUID (register if needed, verify if exists)
 	let clientUUID = await tauriAPI.getClientUUID();
 	if (clientUUID) {
@@ -139,6 +122,23 @@ const createClientActor = fromPromise<
 		clientUUID = await configAPI.registerClient(serverUrl);
 		await tauriAPI.setClientUUID(clientUUID);
 		console.debug("[XState] Registered and stored new UUID:", clientUUID);
+	}
+
+	// Fetch ICE servers from the server (includes TURN credentials if configured)
+	// Fall back to default STUN if server endpoint is unreachable
+	let iceServers: IceServerConfig[];
+	try {
+		iceServers = await configAPI.getIceServers(serverUrl, clientUUID);
+		console.debug(
+			"[XState] Fetched ICE servers from server:",
+			iceServers.map((s) => s.urls),
+		);
+	} catch (error) {
+		console.warn(
+			"[XState] Failed to fetch ICE servers, using default STUN:",
+			error,
+		);
+		iceServers = DEFAULT_ICE_SERVERS;
 	}
 
 	// Create transport with dynamic ICE servers (STUN + TURN if configured)

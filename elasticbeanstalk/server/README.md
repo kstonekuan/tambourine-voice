@@ -16,7 +16,7 @@ Edit `Dockerrun.aws.json` and replace `<YOUR_ECR_URI>` with your ECR repository 
 ### 2. Create Deployment ZIP
 
 ```bash
-cd server/elasticbeanstalk
+cd elasticbeanstalk/server
 zip -r tambourine-eb-config.zip Dockerrun.aws.json .ebextensions/
 ```
 

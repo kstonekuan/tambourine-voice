@@ -1,0 +1,67 @@
+# Full local stack: Tambourine server + coturn TURN server
+# Linux host networking is required for reliable WebRTC/TURN UDP behavior.
+services:
+  coturn:
+    build:
+      context: ./turn-server
+      dockerfile: Dockerfile
+    network_mode: host
+    environment:
+      # Local-only default. Override from shell for anything beyond local testing.
+      TURN_SHARED_SECRET: "${TURN_SHARED_SECRET:-replace-with-local-dev-secret}"
+    restart: unless-stopped
+
+  server:
+    privileged: false
+    depends_on:
+      - coturn
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+      args:
+        # Override at build-time to use a different CUDA base image if needed.
+        # Has to be 12.9.1 for Whisper.
+        BASE_IMAGE: ${BASE_IMAGE:-nvidia/cuda:12.9.1-cudnn-runtime-ubuntu24.04}
+    network_mode: host
+    # Keep provider API keys and other server settings in server/.env.
+    env_file:
+      - ./server/.env
+    environment:
+      # Shared TURN config. These values are injected into server settings.
+      TURN_SERVER_URL: "${TURN_SERVER_URL:-turn:127.0.0.1:3478}"
+      TURN_SHARED_SECRET: "${TURN_SHARED_SECRET:-replace-with-local-dev-secret}"
+      TURN_CREDENTIAL_TTL: "${TURN_CREDENTIAL_TTL:-3600}"
+      # Persist model/hub caches to speed up rebuilds.
+      HF_HOME: /cache/huggingface
+      HUGGINGFACE_HUB_CACHE: /cache/huggingface
+      TORCH_HOME: /cache/torch
+      XDG_CACHE_HOME: /cache
+      # Local Whisper runtime defaults.
+      WHISPER_DEVICE: "${WHISPER_DEVICE:-cuda}"
+      WHISPER_MODEL: "${WHISPER_MODEL:-medium}"
+    volumes:
+      - server_hf_cache:/cache/huggingface
+      - server_torch_cache:/cache/torch
+      - server_propcache:/cache/propcache
+      - server_pipecat_cache:/cache/pipecat
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # GPU attachment is mutually exclusive between Docker and Podman.
+    # Podman GPU support:
+    # devices:
+    #   - nvidia.com/gpu=all
+    # Docker GPU support:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  server_hf_cache:
+  server_torch_cache:
+  server_propcache:
+  server_pipecat_cache:

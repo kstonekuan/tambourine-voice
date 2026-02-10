@@ -18,7 +18,7 @@ from typing import Annotated, Final, cast
 
 import typer
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
@@ -74,6 +74,7 @@ from utils.observers import PipelineLogObserver
 from utils.rate_limiter import (
     RATE_LIMIT_HEALTH,
     RATE_LIMIT_ICE,
+    RATE_LIMIT_ICE_SERVERS,
     RATE_LIMIT_OFFER,
     RATE_LIMIT_REGISTRATION,
     RATE_LIMIT_VERIFY,
@@ -407,8 +408,8 @@ def initialize_services(settings: Settings) -> AppServices | None:
 
     # Build ICE servers (STUN always, TURN if configured)
     # Note: For the request handler, we pass the base config. Fresh TURN
-    # credentials are generated per-request via the /api/ice-servers endpoint
-    # which clients should call before connecting.
+    # credentials are generated per-request via the authenticated
+    # /api/ice-servers endpoint, which clients should call before connecting.
     ice_servers = build_ice_servers(settings)
 
     if settings.turn_server_url:
@@ -506,18 +507,35 @@ async def health_check(request: Request) -> dict[str, str]:
 
 
 @app.get("/api/ice-servers", response_model=IceServersResponse)
-async def get_ice_servers(request: Request) -> IceServersResponse:
+@limiter.limit(RATE_LIMIT_ICE_SERVERS, key_func=get_ip_only)
+async def get_ice_servers(
+    request: Request,
+    x_client_uuid: Annotated[str | None, Header()] = None,
+) -> IceServersResponse:
     """Get ICE servers with fresh TURN credentials.
 
     Returns the ICE server configuration that clients should use for WebRTC
     connections. This endpoint generates fresh TURN credentials on each request,
     ensuring clients always have valid, unexpired credentials.
 
+    Requires a registered client UUID in the X-Client-UUID header to prevent
+    anonymous TURN credential minting.
+
     Returns:
         IceServersResponse with ice_servers list containing STUN server (always)
         and TURN server with credentials (if configured).
     """
     services: AppServices = request.app.state.services
+    if not x_client_uuid:
+        raise HTTPException(
+            status_code=401,
+            detail="Client UUID required. Please register first.",
+        )
+    if not services.client_manager.is_registered(x_client_uuid):
+        raise HTTPException(
+            status_code=401,
+            detail="Unregistered client UUID. Please register first.",
+        )
 
     # Generate fresh ICE servers with new TURN credentials
     ice_servers = build_ice_servers(services.settings)
