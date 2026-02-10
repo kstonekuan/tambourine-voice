@@ -345,7 +345,7 @@ function RecordingControl() {
 		}, SERVER_RESPONSE_TIMEOUT_MS);
 
 	const {
-		start: startEmptyRecordingNoticeTimeout,
+		start: startOverlayNoticeTimeout,
 		clear: clearEmptyRecordingNoticeTimeout,
 	} = useTimeout(() => {
 		setOverlayNoticeMessage(null);
@@ -938,7 +938,7 @@ function RecordingControl() {
 					.with({ type: "recording-complete-with-zero-words" }, () => {
 						clearResponseTimeout();
 						setOverlayNoticeMessage("No words detected");
-						startEmptyRecordingNoticeTimeout();
+						startOverlayNoticeTimeout();
 						activeAppContextSentForCurrentRecordingRef.current = null;
 						send({ type: "RESPONSE_RECEIVED" });
 					})
@@ -994,7 +994,7 @@ function RecordingControl() {
 				send,
 				typeTextMutation,
 				addHistoryEntry,
-				startEmptyRecordingNoticeTimeout,
+				startOverlayNoticeTimeout,
 			],
 		),
 	);
