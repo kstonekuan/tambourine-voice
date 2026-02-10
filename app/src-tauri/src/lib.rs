@@ -4,6 +4,7 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager,
 };
+use tauri_plugin_positioner::{Position as WindowPosition, WindowExt};
 use tauri_utils::config::BackgroundThrottlingPolicy;
 
 mod active_app_context;
@@ -450,6 +451,7 @@ pub fn run() {
     }
 
     builder
+        .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_http::init())
@@ -612,20 +614,7 @@ pub fn run() {
                 }
             }
 
-            // Position bottom-right
-            if let Ok(Some(monitor)) = overlay.current_monitor() {
-                let size = monitor.size();
-                let scale = monitor.scale_factor();
-                // Truncation is intentional: pixel coordinates don't need sub-pixel precision
-                #[allow(clippy::cast_possible_truncation)]
-                let x = (f64::from(size.width) / scale) as i32 - 150;
-                #[allow(clippy::cast_possible_truncation)]
-                let y = (f64::from(size.height) / scale) as i32 - 100;
-                let _ = overlay.set_position(tauri::Position::Logical(tauri::LogicalPosition {
-                    x: f64::from(x),
-                    y: f64::from(y),
-                }));
-            }
+            let _ = overlay.move_window(WindowPosition::BottomRight);
 
             // Setup system tray
             setup_tray(app.handle())?;
