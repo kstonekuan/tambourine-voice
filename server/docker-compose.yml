@@ -33,10 +33,10 @@ services:
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # GPU attachment may need to comment one of these out
+    # GPU attachment is mutually exclusive between Docker and Podman.
     # Podman GPU Support
-    devices:
-      - nvidia.com/gpu=all
+    # devices:
+    #   - nvidia.com/gpu=all
     # Docker GPU support
     deploy:
       resources:
@@ -44,7 +44,7 @@ services:
           devices:
             - driver: nvidia
               count: all
-              capabilities: [ gpu ]
+              capabilities: [gpu]
 
 volumes:
   server_hf_cache:

@@ -310,12 +310,17 @@ class TurnController(FrameProcessor):
                         f"Timeout waiting for speech stopped after "
                         f"{self._transcription_wait_timeout}s"
                     )
-                    if has_content:
-                        logger.info("Timeout, signaling turn end")
-                        await self._emit_turn_end(state.direction)
-                    else:
-                        await self._emit_empty_response(direction)
-                    self._state = IdleState()
+                    # Speech-stopped may be delayed with slower local STT providers
+                    # (e.g., Whisper CPU). Enter draining instead of forcing idle so
+                    # late transcriptions can still be captured and finalized.
+                    self._state = DrainingState(
+                        has_content=has_content,
+                        direction=state.direction,
+                    )
+                    self._draining_event.clear()
+                    self._draining_task = asyncio.create_task(
+                        self._draining_task_handler(state.direction)
+                    )
                 case _:
                     pass  # State changed, nothing to do
         except asyncio.CancelledError:

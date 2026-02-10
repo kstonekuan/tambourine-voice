@@ -44,7 +44,7 @@ Open-source alternative to [Wispr Flow](https://wisprflow.ai), [Superwhisper](ht
 **Why not proprietary tools?** Unlike Wispr Flow or Superwhisper, this project gives you full control and transparency.
 
 **Fully customizable.** This is your voice interface, built your way:
-- **Choose your AI providers** — Pick your STT (Cartesia, Deepgram, AssemblyAI, Speechmatics, Azure, AWS, Google, Groq, OpenAI) and LLM (Cerebras, OpenAI, Anthropic, Gemini, Groq, OpenRouter), run fully local with Whisper and Ollama, or add more from [Pipecat's supported services](https://docs.pipecat.ai/server/services/supported-services)
+- **Choose your AI providers** — Pick your STT (Cartesia, Deepgram, AssemblyAI, Speechmatics, Azure, AWS, Google, Groq, OpenAI, Nemotron) and LLM (Cerebras, OpenAI, Anthropic, Gemini, Groq, OpenRouter), run fully local with Whisper and Ollama, or add more from [Pipecat's supported services](https://docs.pipecat.ai/server/services/supported-services)
 - **Customize the formatting** — Modify prompts, add custom rules, build your personal dictionary
 - **Extend freely** — Built on [Pipecat](https://github.com/pipecat-ai/pipecat)'s modular pipeline, fully open-source
 
@@ -157,6 +157,7 @@ On macOS, Tambourine needs accessibility permissions to type text at your cursor
 **For fully local deployment:**
 - Set `OLLAMA_BASE_URL=http://localhost:11434` in `.env`
 - Set `WHISPER_ENABLED=true` for local STT
+- Optional: set `WHISPER_DEVICE` (`cpu` or `cuda`), `WHISPER_MODEL` (for example `tiny`, `base`, `small`, `medium`, `large`), and `WHISPER_COMPUTE_TYPE` (for example `int8`, `float16`)
 
 ### 2. Set Up the Server
 
@@ -199,7 +200,7 @@ pnpm dev
 ```bash
 cd server
 
-# Start server (default: localhost:8765)
+# Start server (default: 127.0.0.1:8765)
 uv run python main.py
 
 # Start with custom host/port
@@ -212,9 +213,9 @@ uv run python main.py --verbose
 ## Docker Deployment
 
 Run the server in Docker instead of installing Python dependencies locally.
-Server requires network mode to be host due to RTP server's random port assignments. 
+Server requires host networking due to RTP/WebRTC random UDP port assignments.
 
-To use GPU accelleration for a locally hosted Whisper model you need to setup GPU access for your container daemon
+To use GPU acceleration for a locally hosted Whisper model, set up GPU access for your container daemon:
 
 https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html#installing-with-yum-or-dnf
 https://podman-desktop.io/docs/podman/gpu
@@ -239,6 +240,14 @@ docker compose down && docker compose up --build -d
 ```
 
 The `.env` file is read at runtime (not baked into the image), so your API keys stay secure.
+
+### Docker Networking Troubleshooting
+
+If the container shows as running and logs print `Tambourine Server Ready!`, but the client still cannot connect (or `http://127.0.0.1:8765/health` fails from your host), verify that host networking is actually enabled/supported by your Docker runtime.
+
+This project uses `network_mode: "host"` in `server/docker-compose.yml` for WebRTC/RTP reliability. If host networking is disabled in your Docker setup, the container can appear healthy while still being unreachable from the app.
+
+If you see `CDI device injection failed: unresolvable CDI devices nvidia.com/gpu=all`, your runtime is likely trying to use the Podman GPU stanza with Docker. In `server/docker-compose.yml`, keep the GPU block that matches your runtime and disable the other one.
 
 ## App Commands
 
@@ -268,11 +277,11 @@ See `server/main.py` and `server/api/config_api.py` for all endpoints. All endpo
 
 Copy `.env.example` to `.env` and add API keys for at least one STT and one LLM provider. See the example file for all supported providers including Deepgram, Cartesia, OpenAI, Anthropic, Cerebras, Groq, AWS, and more. Additional [Pipecat-supported providers](https://docs.pipecat.ai/server/services/supported-services) can be added easily.
 
-New: You can optionally configure Silero VAD parameters via environment variables (see `server/.env.example` for `VAD_SAMPLE_RATE`, `VAD_CONFIDENCE`, `VAD_START_SECS`, `VAD_STOP_SECS`, and `VAD_MIN_VOLUME`).
+You can optionally configure Silero VAD parameters via environment variables (see `server/.env.example` for `VAD_CONFIDENCE`, `VAD_START_SECS`, `VAD_STOP_SECS`, and `VAD_MIN_VOLUME`).
 
 ### App Configuration
 
-The app connects to `localhost:8765` by default via WebRTC. Settings are persisted locally and include:
+The app connects to `http://127.0.0.1:8765` by default via WebRTC. Settings are persisted locally and include:
 
 - **Providers** - Select active STT and LLM providers from available options
 - **Audio** - Microphone selection, sound feedback, auto-mute during recording

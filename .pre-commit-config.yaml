@@ -68,7 +68,7 @@ repos:
       - id: cargo-clippy
         name: cargo clippy
         entry: >-
-          cargo clippy --all-targets --all-features
+          cargo clippy --all-targets --all-features --locked
           --manifest-path app/src-tauri/Cargo.toml -- -D warnings
         language: system
         types: [rust]
@@ -88,7 +88,7 @@ repos:
 
       - id: cargo-test
         name: cargo test
-        entry: cargo test --quiet --manifest-path app/src-tauri/Cargo.toml
+        entry: cargo test --quiet --locked --manifest-path app/src-tauri/Cargo.toml
         language: system
         types: [rust]
         pass_filenames: false

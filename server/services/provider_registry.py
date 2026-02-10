@@ -289,6 +289,7 @@ STT_PROVIDERS: Final[dict[STTProviderId, STTProviderConfig]] = {
             field_mapping={
                 "whisper_model": "model",
                 "whisper_device": "device",
+                "whisper_compute_type": "compute_type",
             },
         ),
     ),

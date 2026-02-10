@@ -64,8 +64,8 @@ uv run ty check          # Type checking
 ### Rust (app/src-tauri/)
 
 ```bash
-cargo clippy --all-targets --all-features  # Linting
-cargo fmt                                   # Formatting
+cargo clippy --all-targets --all-features --locked  # Linting
+cargo fmt                                            # Formatting
 ```
 
 Or use the pnpm wrapper from the app directory:
@@ -87,7 +87,7 @@ cd server && uv run pytest
 
 # Rust
 cd app && pnpm cargo:test
-# or: cd app/src-tauri && cargo test
+# or: cd app/src-tauri && cargo test --locked
 ```
 
 ## Commit Conventions

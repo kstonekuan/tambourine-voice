@@ -62,9 +62,10 @@ def _create_stt_service_from_config(
         ]
         raise ValueError(f"{config.display_name} requires: {', '.join(missing)}")
 
-    # Build kwargs from credential mapper + default kwargs
-    kwargs = config.credential_mapper.map_credentials(settings)
-    kwargs.update(config.default_kwargs)
+    # Build kwargs from default kwargs + credential mapper.
+    # Credential-mapped values (e.g., from .env) must win over defaults.
+    kwargs = dict(config.default_kwargs)
+    kwargs.update(config.credential_mapper.map_credentials(settings))
 
     logger.info(f"Creating STT service: {config.provider_id.value}")
 
@@ -96,9 +97,10 @@ def _create_llm_service_from_config(
         ]
         raise ValueError(f"{config.display_name} requires: {', '.join(missing)}")
 
-    # Build kwargs from credential mapper + default kwargs
-    kwargs = config.credential_mapper.map_credentials(settings)
-    kwargs.update(config.default_kwargs)
+    # Build kwargs from default kwargs + credential mapper.
+    # Credential-mapped values (e.g., from .env) must win over defaults.
+    kwargs = dict(config.default_kwargs)
+    kwargs.update(config.credential_mapper.map_credentials(settings))
 
     logger.info(f"Creating LLM service: {config.provider_id.value}")
 

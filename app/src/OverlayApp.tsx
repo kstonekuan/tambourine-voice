@@ -519,6 +519,10 @@ function RecordingControl() {
 	]);
 
 	const onStopRecording = useCallback(() => {
+		if (displayState === "processing") {
+			return;
+		}
+
 		setIsMicAcquiring(false);
 		micPreparedRef.current = false;
 

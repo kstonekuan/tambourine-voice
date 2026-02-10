@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     whisper_model: str | None = Field(
         None, description="Model for local Whisper STT (tiny|base|small|medium|large, optional)"
     )
+    whisper_compute_type: str | None = Field(
+        None,
+        description=(
+            "Compute type for local Whisper STT (default|auto|int8|int16|float16|float32, optional)"
+        ),
+    )
     nemotron_asr_url: str | None = Field(
         None, description="Nemotron ASR WebSocket URL (ws:// or wss://)"
     )
