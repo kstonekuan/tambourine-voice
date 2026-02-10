@@ -36,11 +36,7 @@ jobs:
             libappindicator3-dev librsvg2-dev patchelf libxdo-dev \
             libasound2-dev
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run lint
-      - run: pnpm run typecheck
-      - run: pnpm run knip
-      - run: pnpm test
-      - run: pnpm run cargo
+      - run: pnpm run check
 
   server-checks:
     runs-on: ubuntu-latest
