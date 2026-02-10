@@ -41,6 +41,8 @@ use tauri_plugin_global_shortcut::{
 #[cfg(desktop)]
 use commands::settings::get_setting_from_store;
 
+const OVERLAY_BOTTOM_EDGE_CLEARANCE_IN_PIXELS: i32 = 64;
+
 /// Events that can trigger state transitions in the shortcut state machine
 #[cfg(desktop)]
 #[derive(Debug, Clone, Copy)]
@@ -615,6 +617,18 @@ pub fn run() {
             }
 
             let _ = overlay.move_window(WindowPosition::BottomRight);
+
+            if let Ok(overlay_position_after_anchor) = overlay.outer_position() {
+                let overlay_position_with_bottom_clearance = tauri::PhysicalPosition {
+                    x: overlay_position_after_anchor.x,
+                    y: overlay_position_after_anchor
+                        .y
+                        .saturating_sub(OVERLAY_BOTTOM_EDGE_CLEARANCE_IN_PIXELS),
+                };
+                let _ = overlay.set_position(tauri::Position::Physical(
+                    overlay_position_with_bottom_clearance,
+                ));
+            }
 
             // Setup system tray
             setup_tray(app.handle())?;
