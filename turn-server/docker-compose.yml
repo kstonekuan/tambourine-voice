@@ -17,5 +17,3 @@ services:
       # Generate a real secret for testing with:
       # openssl rand -hex 32
       - TURN_SHARED_SECRET=your_test_secret_here_replace_me
-    # For better performance on Linux hosts
-    network_mode: host
