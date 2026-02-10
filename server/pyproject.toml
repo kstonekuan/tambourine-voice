@@ -11,7 +11,7 @@ dependencies = [
     "pydantic-settings>=2.12.0",
     "loguru>=0.7.3",
     "typer>=0.21.1",
-    "fastapi>=0.128.6",
+    "fastapi>=0.128.7",
     "uvicorn>=0.40.0",
     "pydantic>=2.12.5",
     "slowapi>=0.1.9",
@@ -30,7 +30,7 @@ dev = [
 
 [build-system]
 requires = [
-    "uv_build>=0.10.0", #
+    "uv_build>=0.10.1", #
 ]
 build-backend = "uv_build"
 
