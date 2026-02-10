@@ -406,10 +406,9 @@ def initialize_services(settings: Settings) -> AppServices | None:
     logger.info(f"Available STT providers: {[p.value for p in available_stt]}")
     logger.info(f"Available LLM providers: {[p.value for p in available_llm]}")
 
-    # Build ICE servers (STUN always, TURN if configured)
-    # Note: For the request handler, we pass the base config. Fresh TURN
-    # credentials are generated per-request via the authenticated
-    # /api/ice-servers endpoint, which clients should call before connecting.
+    # Build initial ICE servers (STUN always, TURN if configured).
+    # TURN credentials are refreshed per request in both /api/ice-servers and
+    # /api/offer to avoid stale credentials after TTL expiry.
     ice_servers = build_ice_servers(settings)
 
     if settings.turn_server_url:
@@ -646,6 +645,10 @@ async def webrtc_offer(
             status_code=401,
             detail="Unregistered client UUID. Please register first.",
         )
+
+    # Refresh ICE servers for every accepted offer so TURN credentials stay fresh.
+    refreshed_ice_servers = build_ice_servers(services.settings)
+    services.webrtc_handler.update_ice_servers(refreshed_ice_servers)
 
     # Handle existing connection with same UUID (one client = one connection)
     # 1. Synchronously remove old connection from tracking (frees UUID slot immediately)
