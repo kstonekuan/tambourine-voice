@@ -47,7 +47,7 @@ const PIPECAT_LOCAL_PARTICIPANT = {
 // Server message schemas as a discriminated union for single-parse handling
 const KnownServerMessageSchema = z.discriminatedUnion("type", [
 	z.object({
-		type: z.literal("recording-complete"),
+		type: z.literal("recording-complete-with-zero-words"),
 		hasContent: z.boolean().optional(),
 		message: z.string().optional(),
 	}),
@@ -196,7 +196,7 @@ const ErrorDisplay = ({
 	</button>
 );
 
-const EmptyRecordingNotice = ({
+const OverlayNotice = ({
 	message,
 	onDismiss,
 	onStartRecording,
@@ -324,8 +324,9 @@ function RecordingControl() {
 
 	// Error display state (persists until user records again)
 	const [showError, setShowError] = useState(false);
-	const [emptyRecordingNoticeMessage, setEmptyRecordingNoticeMessage] =
-		useState<string | null>(null);
+	const [overlayNoticeMessage, setOverlayNoticeMessage] = useState<
+		string | null
+	>(null);
 
 	const { start: startResponseTimeout, clear: clearResponseTimeout } =
 		useTimeout(() => {
@@ -347,7 +348,7 @@ function RecordingControl() {
 		start: startEmptyRecordingNoticeTimeout,
 		clear: clearEmptyRecordingNoticeTimeout,
 	} = useTimeout(() => {
-		setEmptyRecordingNoticeMessage(null);
+		setOverlayNoticeMessage(null);
 	}, EMPTY_RECORDING_NOTICE_TIMEOUT_MS);
 
 	// Clear response timeout when leaving processing state (reconnection, disconnection, etc.)
@@ -393,7 +394,7 @@ function RecordingControl() {
 		const startRecordingFromMachineState = async () => {
 			// Clear error state when starting recording
 			setShowError(false);
-			setEmptyRecordingNoticeMessage(null);
+			setOverlayNoticeMessage(null);
 			clearEmptyRecordingNoticeTimeout();
 
 			// Reset accumulators for new recording
@@ -934,14 +935,10 @@ function RecordingControl() {
 				const parsed = parseServerMessage(message);
 
 				match(parsed)
-					.with({ type: "recording-complete" }, ({ hasContent, message }) => {
+					.with({ type: "recording-complete-with-zero-words" }, () => {
 						clearResponseTimeout();
-						if (hasContent === false) {
-							setEmptyRecordingNoticeMessage(
-								message?.trim() ? message.trim() : "No words detected",
-							);
-							startEmptyRecordingNoticeTimeout();
-						}
+						setOverlayNoticeMessage("No words detected");
+						startEmptyRecordingNoticeTimeout();
 						activeAppContextSentForCurrentRecordingRef.current = null;
 						send({ type: "RESPONSE_RECEIVED" });
 					})
@@ -1093,23 +1090,23 @@ function RecordingControl() {
 	);
 
 	// Determine view state for render
-	const viewState = showError
-		? ("error" as const)
-		: isMicAcquiring
-			? ("loading" as const)
-			: emptyRecordingNoticeMessage
-				? ("emptyRecordingNotice" as const)
-				: match(displayState)
-						.with(
-							"startingRecording",
-							"processing",
-							"disconnected",
-							"connecting",
-							"reconnecting",
-							() => "loading" as const,
-						)
-						.with("idle", "recording", () => "active" as const)
-						.exhaustive();
+	const viewState = (() => {
+		if (showError) return "error" as const;
+		if (isMicAcquiring) return "loading" as const;
+		if (overlayNoticeMessage) return "informational" as const;
+
+		return match(displayState)
+			.with(
+				"startingRecording",
+				"processing",
+				"disconnected",
+				"connecting",
+				"reconnecting",
+				() => "loading" as const,
+			)
+			.with("idle", "recording", () => "active" as const)
+			.exhaustive();
+	})();
 
 	return (
 		<div
@@ -1137,11 +1134,11 @@ function RecordingControl() {
 						}
 					/>
 				))
-				.with("emptyRecordingNotice", () => (
-					<EmptyRecordingNotice
-						message={emptyRecordingNoticeMessage ?? "No words detected"}
+				.with("informational", () => (
+					<OverlayNotice
+						message={overlayNoticeMessage ?? "No words detected"}
 						onDismiss={() => {
-							setEmptyRecordingNoticeMessage(null);
+							setOverlayNoticeMessage(null);
 							clearEmptyRecordingNoticeTimeout();
 						}}
 						onStartRecording={

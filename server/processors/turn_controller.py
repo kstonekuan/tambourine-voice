@@ -34,7 +34,7 @@ from pipecat.frames.frames import (
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.processors.frameworks.rtvi import RTVIServerMessageFrame
 
-from protocol.messages import RecordingCompleteMessage
+from protocol.messages import EmptyTranscriptMessage
 from utils.logger import logger
 
 if TYPE_CHECKING:
@@ -392,9 +392,7 @@ class TurnController(FrameProcessor):
     async def _emit_empty_response(self, direction: FrameDirection) -> None:
         """Send an empty response message to the client."""
         frame = RTVIServerMessageFrame(
-            data=RecordingCompleteMessage(
-                hasContent=False,
-                message="No words detected",
+            data=EmptyTranscriptMessage(
             ).model_dump()
         )
         await self.push_frame(frame, direction)

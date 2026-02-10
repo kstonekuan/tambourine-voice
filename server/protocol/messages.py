@@ -279,12 +279,10 @@ def parse_client_message(raw: Mapping[str, object]) -> _ClientMessageUnion | Unk
 # =============================================================================
 
 
-class RecordingCompleteMessage(BaseModel):
+class EmptyTranscriptMessage(BaseModel):
     """Server notification that recording processing is complete (no content)."""
 
-    type: Literal["recording-complete"] = "recording-complete"
-    hasContent: bool = False
-    message: str | None = None
+    type: Literal["recording-complete-with-zero-words"] = "recording-complete-with-zero-words"
 
 
 class RawTranscriptionMessage(BaseModel):
@@ -316,6 +314,6 @@ class ConfigErrorMessage(BaseModel):
 
 
 ServerMessage = Annotated[
-    RecordingCompleteMessage | RawTranscriptionMessage | ConfigUpdatedMessage | ConfigErrorMessage,
+    EmptyTranscriptMessage | RawTranscriptionMessage | ConfigUpdatedMessage | ConfigErrorMessage,
     Field(discriminator="type"),
 ]

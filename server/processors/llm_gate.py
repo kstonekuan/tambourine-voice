@@ -27,7 +27,7 @@ from pipecat.frames.frames import (
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.processors.frameworks.rtvi import RTVIServerMessageFrame
 
-from protocol.messages import RawTranscriptionMessage, RecordingCompleteMessage
+from protocol.messages import RawTranscriptionMessage, EmptyTranscriptMessage
 from utils.logger import logger
 
 
@@ -105,7 +105,7 @@ class LLMGateFilter(FrameProcessor):
                     else:
                         await self.push_frame(
                             RTVIServerMessageFrame(
-                                data=RecordingCompleteMessage(hasContent=False).model_dump()
+                                data=EmptyTranscriptMessage().model_dump()
                             ),
                             direction,
                         )
