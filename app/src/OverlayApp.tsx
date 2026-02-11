@@ -48,8 +48,6 @@ const PIPECAT_LOCAL_PARTICIPANT = {
 const KnownServerMessageSchema = z.discriminatedUnion("type", [
 	z.object({
 		type: z.literal("recording-complete-with-zero-words"),
-		hasContent: z.boolean().optional(),
-		message: z.string().optional(),
 	}),
 	// Raw transcription (LLM bypassed) - sent when LLM formatting is disabled
 	z.object({
@@ -346,7 +344,7 @@ function RecordingControl() {
 
 	const {
 		start: startOverlayNoticeTimeout,
-		clear: clearEmptyRecordingNoticeTimeout,
+		clear: clearOverlayNoticeTimeout,
 	} = useTimeout(() => {
 		setOverlayNoticeMessage(null);
 	}, EMPTY_RECORDING_NOTICE_TIMEOUT_MS);
@@ -395,7 +393,7 @@ function RecordingControl() {
 			// Clear error state when starting recording
 			setShowError(false);
 			setOverlayNoticeMessage(null);
-			clearEmptyRecordingNoticeTimeout();
+			clearOverlayNoticeTimeout();
 
 			// Reset accumulators for new recording
 			// Important: rawTranscriptionRef is reset here (not on BotLlmStarted)
@@ -567,7 +565,7 @@ function RecordingControl() {
 		settings?.selected_mic_id,
 		settings?.send_active_app_context_enabled,
 		connectionActor,
-		clearEmptyRecordingNoticeTimeout,
+		clearOverlayNoticeTimeout,
 		getCurrentNativeAudioTrack,
 		send,
 		startNativeCapture,
@@ -1136,10 +1134,10 @@ function RecordingControl() {
 				))
 				.with("informational", () => (
 					<OverlayNotice
-						message={overlayNoticeMessage ?? "No words detected"}
+						message={overlayNoticeMessage ?? ""}
 						onDismiss={() => {
 							setOverlayNoticeMessage(null);
-							clearEmptyRecordingNoticeTimeout();
+							clearOverlayNoticeTimeout();
 						}}
 						onStartRecording={
 							displayState === "idle" ? onStartRecording : undefined
