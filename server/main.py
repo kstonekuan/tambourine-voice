@@ -406,12 +406,19 @@ def initialize_services(settings: Settings) -> AppServices | None:
     logger.info(f"Available STT providers: {[p.value for p in available_stt]}")
     logger.info(f"Available LLM providers: {[p.value for p in available_llm]}")
 
+    if settings.turn_server_url and not settings.turn_shared_secret:
+        logger.error(
+            "TURN_SERVER_URL is set but TURN_SHARED_SECRET is missing. "
+            "Refusing to start with partial TURN configuration."
+        )
+        return None
+
     # Build initial ICE servers (STUN always, TURN if configured).
     # TURN credentials are refreshed per request in both /api/ice-servers and
     # /api/offer to avoid stale credentials after TTL expiry.
     ice_servers = build_ice_servers(settings)
 
-    if settings.turn_server_url:
+    if settings.turn_server_url and settings.turn_shared_secret:
         logger.info(f"TURN server configured: {settings.turn_server_url}")
     else:
         logger.info("No TURN server configured (STUN only)")
