@@ -20,6 +20,7 @@ Reference: https://tools.ietf.org/html/draft-uberti-behave-turn-rest-00
 import base64
 import hmac
 import time
+import hashlib
 from dataclasses import dataclass
 
 
@@ -33,7 +34,7 @@ class TurnCredentials:
 
 
 def generate_turn_credentials(secret: str, ttl: int = 3600) -> TurnCredentials:
-    """Generate time-limited TURN credentials using HMAC-SHA1.
+    """Generate time-limited TURN credentials using HMAC-SHA256.
 
     Args:
         secret: The shared secret configured on both the TURN server
@@ -45,7 +46,7 @@ def generate_turn_credentials(secret: str, ttl: int = 3600) -> TurnCredentials:
     Returns:
         TurnCredentials containing:
         - username: The expiry timestamp (Unix time)
-        - password: HMAC-SHA1(secret, username) base64-encoded
+        - password: HMAC-SHA256(secret, username) base64-encoded
         - ttl: The credential validity period in seconds
 
     Example:
@@ -56,12 +57,12 @@ def generate_turn_credentials(secret: str, ttl: int = 3600) -> TurnCredentials:
     expiry_timestamp = int(time.time()) + ttl
     username = str(expiry_timestamp)
 
-    # Generate HMAC-SHA1 of the username using the shared secret
-    # This matches coturn's validation: hmac(secret, username)
+    # Generate HMAC-SHA256 of the username using the shared secret
+    # This matches coturn-style validation: hmac(secret, username)
     hmac_digest = hmac.new(
         key=secret.encode("utf-8"),
         msg=username.encode("utf-8"),
-        digestmod="sha1",
+        digestmod=hashlib.sha256,
     ).digest()
 
     # Base64 encode the HMAC digest for the password
