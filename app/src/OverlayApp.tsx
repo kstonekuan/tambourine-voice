@@ -288,6 +288,8 @@ function RecordingControl() {
 	const connectionState = useConnectionState();
 	const send = useConnectionSend();
 	const displayState = getDisplayState(connectionState);
+	const displayStateRef = useRef<DisplayState>(displayState);
+	const llmTimeoutRawFallbackEnabledRef = useRef<boolean>(false);
 
 	// Use Mantine's useResizeObserver hook
 	const [containerRef, rect] = useResizeObserver();
@@ -320,9 +322,55 @@ function RecordingControl() {
 
 	const streamedLlmResponseChunksRef = useRef("");
 	const rawTranscriptionRef = useRef("");
+	const isTurnFinalizedRef = useRef(false);
 
 	const typeTextMutation = useTypeText();
 	const addHistoryEntry = useAddHistoryEntry();
+
+	const finalizeTurnIfPending = useCallback((): boolean => {
+		if (isTurnFinalizedRef.current) {
+			return false;
+		}
+		isTurnFinalizedRef.current = true;
+		return true;
+	}, []);
+
+	const insertRawFallbackIfEnabled = useCallback(
+		async (
+			reason: "timeout" | "server-error" | "empty-final-text",
+		): Promise<boolean> => {
+			const fallbackEnabled = llmTimeoutRawFallbackEnabledRef.current;
+			const rawText = rawTranscriptionRef.current.trim();
+			const activeAppContextSentForCurrentRecording =
+				activeAppContextSentForCurrentRecordingRef.current;
+
+			// Prevent delayed events from reusing turn-local buffers.
+			streamedLlmResponseChunksRef.current = "";
+			rawTranscriptionRef.current = "";
+
+			if (!(fallbackEnabled && rawText)) {
+				return false;
+			}
+
+			console.debug(
+				`[Pipecat] ${reason} fallback to raw transcription:`,
+				rawText,
+			);
+			try {
+				await typeTextMutation.mutateAsync(rawText);
+			} catch (error) {
+				console.error("[Pipecat] Failed to type fallback text:", error);
+			}
+			addHistoryEntry.mutate({
+				text: rawText,
+				rawText,
+				activeAppContext: activeAppContextSentForCurrentRecording,
+			});
+			activeAppContextSentForCurrentRecordingRef.current = null;
+			return true;
+		},
+		[typeTextMutation, addHistoryEntry],
+	);
 
 	// Error display state (persists until user records again)
 	const [showError, setShowError] = useState(false);
@@ -332,7 +380,20 @@ function RecordingControl() {
 
 	const { start: startResponseTimeout, clear: clearResponseTimeout } =
 		useTimeout(() => {
-			if (displayState === "processing") {
+			const currentDisplayState = displayStateRef.current;
+			if (currentDisplayState !== "processing") {
+				return;
+			}
+			if (!finalizeTurnIfPending()) {
+				return;
+			}
+
+			const tryRawTimeoutFallback = async () => {
+				if (await insertRawFallbackIfEnabled("timeout")) {
+					send({ type: "RESPONSE_RECEIVED" });
+					return;
+				}
+
 				// Show simple error in overlay
 				setShowError(true);
 
@@ -341,11 +402,21 @@ function RecordingControl() {
 					message: "Response timed out - the server took too long to respond",
 					fatal: false,
 				});
-
+				activeAppContextSentForCurrentRecordingRef.current = null;
 				send({ type: "RESPONSE_RECEIVED" });
-			}
+			};
+
+			void tryRawTimeoutFallback();
 		}, SERVER_RESPONSE_TIMEOUT_MS);
 
+	useEffect(() => {
+		displayStateRef.current = displayState;
+	}, [displayState]);
+
+	useEffect(() => {
+		llmTimeoutRawFallbackEnabledRef.current =
+			settings?.llm_timeout_raw_fallback_enabled === true;
+	}, [settings?.llm_timeout_raw_fallback_enabled]);
 	const { start: startOverlayNoticeTimeout, clear: clearOverlayNoticeTimeout } =
 		useTimeout(() => {
 			setOverlayNoticeMessage(null);
@@ -402,6 +473,7 @@ function RecordingControl() {
 			// because UserTranscript events arrive DURING recording, before LLM processes
 			streamedLlmResponseChunksRef.current = "";
 			rawTranscriptionRef.current = "";
+			isTurnFinalizedRef.current = false;
 			activeAppContextSentForCurrentRecordingRef.current = null;
 
 			// Always show loading indicator during mic acquisition and recording start
@@ -899,13 +971,14 @@ function RecordingControl() {
 	useRTVIClientEvent(
 		RTVIEvent.BotLlmStopped,
 		useCallback(async () => {
+			if (!finalizeTurnIfPending()) {
+				return;
+			}
 			clearResponseTimeout();
 			const text = streamedLlmResponseChunksRef.current.trim();
 			const rawText = rawTranscriptionRef.current.trim();
 			const activeAppContextSentForCurrentRecording =
 				activeAppContextSentForCurrentRecordingRef.current;
-			streamedLlmResponseChunksRef.current = "";
-			rawTranscriptionRef.current = "";
 
 			if (text) {
 				console.debug("[Pipecat] LLM response:", text);
@@ -920,10 +993,28 @@ function RecordingControl() {
 					rawText,
 					activeAppContext: activeAppContextSentForCurrentRecording,
 				});
+				streamedLlmResponseChunksRef.current = "";
+				rawTranscriptionRef.current = "";
+			} else if (!(await insertRawFallbackIfEnabled("empty-final-text"))) {
+				setShowError(true);
+				tauriAPI.emitLLMError({
+					message: "Response was empty - no text was generated",
+					fatal: false,
+				});
+				activeAppContextSentForCurrentRecordingRef.current = null;
+				streamedLlmResponseChunksRef.current = "";
+				rawTranscriptionRef.current = "";
 			}
 			activeAppContextSentForCurrentRecordingRef.current = null;
 			send({ type: "RESPONSE_RECEIVED" });
-		}, [clearResponseTimeout, typeTextMutation, addHistoryEntry, send]),
+		}, [
+			clearResponseTimeout,
+			typeTextMutation,
+			addHistoryEntry,
+			send,
+			finalizeTurnIfPending,
+			insertRawFallbackIfEnabled,
+		]),
 	);
 
 	// RTVI ServerMessage handler for custom payloads
@@ -936,6 +1027,9 @@ function RecordingControl() {
 
 				match(parsed)
 					.with({ type: "recording-complete-with-zero-words" }, () => {
+						if (!finalizeTurnIfPending()) {
+							return;
+						}
 						clearResponseTimeout();
 						setOverlayNoticeMessage("No words detected");
 						startOverlayNoticeTimeout();
@@ -943,6 +1037,9 @@ function RecordingControl() {
 						send({ type: "RESPONSE_RECEIVED" });
 					})
 					.with({ type: "raw-transcription" }, async ({ text }) => {
+						if (!finalizeTurnIfPending()) {
+							return;
+						}
 						// Raw transcription received (LLM bypassed)
 						clearResponseTimeout();
 						const activeAppContextSentForCurrentRecording =
@@ -994,6 +1091,7 @@ function RecordingControl() {
 				send,
 				typeTextMutation,
 				addHistoryEntry,
+				finalizeTurnIfPending,
 				startOverlayNoticeTimeout,
 			],
 		),
@@ -1010,20 +1108,38 @@ function RecordingControl() {
 					const errorData = parsed.data.data;
 					const message = errorData?.message ?? "Unknown error";
 
-					// Show simple "Try again" in overlay
-					setShowError(true);
-
-					// Send detailed error to main window toast
-					tauriAPI.emitLLMError({
-						message,
-						fatal: errorData?.fatal ?? false,
-					});
-
 					// Return to idle if in processing state (error means no content coming)
 					if (displayState === "processing") {
+						if (!finalizeTurnIfPending()) {
+							return;
+						}
 						clearResponseTimeout();
-						activeAppContextSentForCurrentRecordingRef.current = null;
-						send({ type: "RESPONSE_RECEIVED" });
+
+						const tryRawErrorFallback = async () => {
+							if (await insertRawFallbackIfEnabled("server-error")) {
+								send({ type: "RESPONSE_RECEIVED" });
+								return;
+							}
+
+							// Show simple "Try again" in overlay
+							setShowError(true);
+
+							// Send detailed error to main window toast
+							tauriAPI.emitLLMError({
+								message,
+								fatal: errorData?.fatal ?? false,
+							});
+							activeAppContextSentForCurrentRecordingRef.current = null;
+							send({ type: "RESPONSE_RECEIVED" });
+						};
+						void tryRawErrorFallback();
+					} else {
+						// Outside processing, just surface the error in UI and main window.
+						setShowError(true);
+						tauriAPI.emitLLMError({
+							message,
+							fatal: errorData?.fatal ?? false,
+						});
 					}
 
 					// Fatal errors also trigger reconnection after showing the error
@@ -1035,7 +1151,13 @@ function RecordingControl() {
 					}
 				}
 			},
-			[send, displayState, clearResponseTimeout],
+			[
+				send,
+				displayState,
+				clearResponseTimeout,
+				finalizeTurnIfPending,
+				insertRawFallbackIfEnabled,
+			],
 		),
 	);
 

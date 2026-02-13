@@ -500,6 +500,27 @@ export function useUpdateLLMFormattingEnabled() {
 	});
 }
 
+// LLM timeout raw fallback enabled mutation
+export function useUpdateLLMTimeoutRawFallbackEnabled() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (enabled: boolean) =>
+			tauriAPI.updateLLMTimeoutRawFallbackEnabled(enabled),
+		onSuccess: (_data, enabled) => {
+			queryClient.invalidateQueries({ queryKey: ["settings"] });
+			tauriAPI.emitSettingsChanged();
+			showSettingsSuccess(
+				`LLM timeout raw fallback ${enabled ? "enabled" : "disabled"}`,
+			);
+		},
+		onError: (error) => {
+			showSettingsError(
+				`Failed to update LLM timeout raw fallback: ${error.message}`,
+			);
+		},
+	});
+}
+
 // Active app context sending enabled mutation
 export function useUpdateSendActiveAppContextEnabled() {
 	const queryClient = useQueryClient();

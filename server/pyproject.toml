@@ -7,11 +7,11 @@ license = "AGPL-3.0-only"
 readme = "../README.md"
 requires-python = "~=3.13.0"
 dependencies = [
-    "pipecat-ai[anthropic,speechmatics,assemblyai,aws,azure,cartesia,cerebras,deepgram,google,groq,openai,openrouter,silero,webrtc,whisper]>=0.0.101",
+    "pipecat-ai[anthropic,speechmatics,assemblyai,aws,azure,cartesia,cerebras,deepgram,google,groq,openai,openrouter,silero,webrtc,whisper]>=0.0.102",
     "pydantic-settings>=2.12.0",
     "loguru>=0.7.3",
-    "typer>=0.21.1",
-    "fastapi>=0.128.7",
+    "typer>=0.23.1",
+    "fastapi>=0.129.0",
     "uvicorn>=0.40.0",
     "pydantic>=2.12.5",
     "slowapi>=0.1.9",
@@ -23,14 +23,14 @@ tambourine-voice-server = "main:app"
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
-    "ruff>=0.15.0",
-    "ty>=0.0.15",       #
+    "ruff>=0.15.1",
+    "ty>=0.0.17",       #
     "yamllint>=1.38.0",
 ]
 
 [build-system]
 requires = [
-    "uv_build>=0.10.1", #
+    "uv_build>=0.10.2", #
 ]
 build-backend = "uv_build"
 

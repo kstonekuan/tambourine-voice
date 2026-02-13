@@ -436,6 +436,11 @@ export interface AppSettings {
 	server_url: string;
 	/** LLM formatting enabled (true = format with LLM, false = raw transcription) */
 	llm_formatting_enabled: boolean;
+	/**
+	 * If true, timeout during LLM formatting inserts accumulated raw STT text once.
+	 * If false, timeout shows an error without inserting fallback text.
+	 */
+	llm_timeout_raw_fallback_enabled: boolean;
 	/** Send active app context to server for prompt injection */
 	send_active_app_context_enabled: boolean;
 }
@@ -596,6 +601,9 @@ export const tauriAPI = {
 
 	async updateLLMFormattingEnabled(enabled: boolean): Promise<void> {
 		return invoke("update_llm_formatting_enabled", { enabled });
+	},
+	async updateLLMTimeoutRawFallbackEnabled(enabled: boolean): Promise<void> {
+		return invoke("update_llm_timeout_raw_fallback_enabled", { enabled });
 	},
 	async updateSendActiveAppContextEnabled(enabled: boolean): Promise<void> {
 		return invoke("update_send_active_app_context_enabled", { enabled });

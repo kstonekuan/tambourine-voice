@@ -231,6 +231,11 @@ pub fn get_settings(app: AppHandle) -> Result<AppSettings, String> {
             HttpSyncedSetting::LlmFormattingEnabled,
             true,
         ),
+        llm_timeout_raw_fallback_enabled: get_setting_from_store(
+            &app,
+            LocalOnlySetting::LlmTimeoutRawFallbackEnabled,
+            false,
+        ),
         send_active_app_context_enabled: get_setting_from_store(
             &app,
             LocalOnlySetting::SendActiveAppContextEnabled,
@@ -486,6 +491,32 @@ pub async fn update_llm_formatting_enabled(
 #[cfg(not(desktop))]
 #[tauri::command]
 pub async fn update_llm_formatting_enabled(_app: AppHandle, _enabled: bool) -> Result<(), String> {
+    Ok(())
+}
+
+/// Update LLM timeout raw fallback setting
+#[cfg(desktop)]
+#[tauri::command]
+pub async fn update_llm_timeout_raw_fallback_enabled(
+    app: AppHandle,
+    enabled: bool,
+) -> Result<(), String> {
+    persist_local_only_setting(
+        &app,
+        LocalOnlySetting::LlmTimeoutRawFallbackEnabled,
+        &enabled,
+    )
+    .map_err(|error| format!("{error:#}"))?;
+    log::info!("LLM timeout raw fallback enabled: {enabled}");
+    Ok(())
+}
+
+#[cfg(not(desktop))]
+#[tauri::command]
+pub async fn update_llm_timeout_raw_fallback_enabled(
+    _app: AppHandle,
+    _enabled: bool,
+) -> Result<(), String> {
     Ok(())
 }
 

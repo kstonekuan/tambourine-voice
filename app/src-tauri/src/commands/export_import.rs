@@ -47,6 +47,7 @@ pub struct SettingsExportData {
     pub auto_mute_audio: bool,
     pub stt_timeout_seconds: Option<f64>,
     pub llm_formatting_enabled: bool,
+    pub llm_timeout_raw_fallback_enabled: bool,
     pub server_url: String,
     pub send_active_app_context_enabled: bool,
 }
@@ -70,6 +71,7 @@ impl From<AppSettings> for SettingsExportData {
             auto_mute_audio: settings.auto_mute_audio,
             stt_timeout_seconds: settings.stt_timeout_seconds,
             llm_formatting_enabled: settings.llm_formatting_enabled,
+            llm_timeout_raw_fallback_enabled: settings.llm_timeout_raw_fallback_enabled,
             server_url: settings.server_url,
             send_active_app_context_enabled: settings.send_active_app_context_enabled,
         }
@@ -91,6 +93,7 @@ impl From<SettingsExportData> for AppSettings {
             auto_mute_audio: exported_settings.auto_mute_audio,
             stt_timeout_seconds: exported_settings.stt_timeout_seconds,
             llm_formatting_enabled: exported_settings.llm_formatting_enabled,
+            llm_timeout_raw_fallback_enabled: exported_settings.llm_timeout_raw_fallback_enabled,
             server_url: exported_settings.server_url,
             send_active_app_context_enabled: exported_settings.send_active_app_context_enabled,
         }
@@ -455,7 +458,7 @@ pub fn detect_export_file_type(content: String) -> DetectedFileType {
 // SETTINGS IMPORT/RESET STORE MAPPING
 // ============================================================================
 
-const IMPORT_EXPORT_SETTING_CLASSES: [SettingClass; 12] = [
+const IMPORT_EXPORT_SETTING_CLASSES: [SettingClass; 13] = [
     SettingClass::LocalOnly(LocalOnlySetting::ToggleHotkey),
     SettingClass::LocalOnly(LocalOnlySetting::HoldHotkey),
     SettingClass::LocalOnly(LocalOnlySetting::PasteLastHotkey),
@@ -467,10 +470,11 @@ const IMPORT_EXPORT_SETTING_CLASSES: [SettingClass; 12] = [
     SettingClass::ServerSyncedHttp(HttpSyncedSetting::SttTimeoutSeconds),
     SettingClass::ServerSyncedHttp(HttpSyncedSetting::LlmFormattingEnabled),
     SettingClass::LocalOnly(LocalOnlySetting::ServerUrl),
+    SettingClass::LocalOnly(LocalOnlySetting::LlmTimeoutRawFallbackEnabled),
     SettingClass::LocalOnly(LocalOnlySetting::SendActiveAppContextEnabled),
 ];
 
-const FACTORY_RESET_SETTING_CLASSES: [SettingClass; 9] = [
+const FACTORY_RESET_SETTING_CLASSES: [SettingClass; 10] = [
     SettingClass::LocalOnly(LocalOnlySetting::ToggleHotkey),
     SettingClass::LocalOnly(LocalOnlySetting::HoldHotkey),
     SettingClass::LocalOnly(LocalOnlySetting::PasteLastHotkey),
@@ -479,6 +483,7 @@ const FACTORY_RESET_SETTING_CLASSES: [SettingClass; 9] = [
     SettingClass::ServerSyncedRtvi(RtviSyncedSetting::LlmProvider),
     SettingClass::LocalOnly(LocalOnlySetting::AutoMuteAudio),
     SettingClass::LocalOnly(LocalOnlySetting::ServerUrl),
+    SettingClass::LocalOnly(LocalOnlySetting::LlmTimeoutRawFallbackEnabled),
     SettingClass::LocalOnly(LocalOnlySetting::SendActiveAppContextEnabled),
 ];
 
@@ -497,6 +502,9 @@ fn serialized_value_for_setting_class(
             LocalOnlySetting::SoundEnabled => serde_json::to_value(app_settings.sound_enabled),
             LocalOnlySetting::AutoMuteAudio => serde_json::to_value(app_settings.auto_mute_audio),
             LocalOnlySetting::ServerUrl => serde_json::to_value(&app_settings.server_url),
+            LocalOnlySetting::LlmTimeoutRawFallbackEnabled => {
+                serde_json::to_value(app_settings.llm_timeout_raw_fallback_enabled)
+            }
             LocalOnlySetting::SendActiveAppContextEnabled => {
                 serde_json::to_value(app_settings.send_active_app_context_enabled)
             }

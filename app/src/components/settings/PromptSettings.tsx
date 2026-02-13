@@ -7,6 +7,7 @@ import {
 	useSettings,
 	useUpdateCleanupPromptSections,
 	useUpdateLLMFormattingEnabled,
+	useUpdateLLMTimeoutRawFallbackEnabled,
 	useUpdateSendActiveAppContextEnabled,
 } from "../../lib/queries";
 import type { CleanupPromptSections, PromptSection } from "../../lib/tauri";
@@ -27,6 +28,7 @@ export function PromptSettings() {
 		useDefaultSections();
 	const updateCleanupPromptSections = useUpdateCleanupPromptSections();
 	const llmFormattingMutation = useUpdateLLMFormattingEnabled();
+	const llmTimeoutRawFallbackMutation = useUpdateLLMTimeoutRawFallbackEnabled();
 	const activeAppContextMutation = useUpdateSendActiveAppContextEnabled();
 
 	// Modal for warning when disabling LLM formatting
@@ -238,6 +240,29 @@ export function PromptSettings() {
 							handleLLMFormattingToggle(event.currentTarget.checked)
 						}
 						disabled={llmFormattingMutation.isPending}
+						size="md"
+						color="gray"
+					/>
+				</div>
+				<div className="settings-row">
+					<div>
+						<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+							<p className="settings-label">
+								Fallback to Raw STT on LLM Timeout
+							</p>
+							<StatusIndicator status={llmTimeoutRawFallbackMutation.status} />
+						</div>
+						<p className="settings-description">
+							If formatting times out, insert raw transcription instead of
+							dropping text
+						</p>
+					</div>
+					<Switch
+						checked={settings?.llm_timeout_raw_fallback_enabled ?? false}
+						onChange={(event) =>
+							llmTimeoutRawFallbackMutation.mutate(event.currentTarget.checked)
+						}
+						disabled={llmTimeoutRawFallbackMutation.isPending}
 						size="md"
 						color="gray"
 					/>

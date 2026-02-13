@@ -40,6 +40,7 @@ pub enum LocalOnlySetting {
     SoundEnabled,
     AutoMuteAudio,
     ServerUrl,
+    LlmTimeoutRawFallbackEnabled,
     SendActiveAppContextEnabled,
 }
 
@@ -53,6 +54,7 @@ impl LocalOnlySetting {
             Self::SoundEnabled => "sound_enabled",
             Self::AutoMuteAudio => "auto_mute_audio",
             Self::ServerUrl => "server_url",
+            Self::LlmTimeoutRawFallbackEnabled => "llm_timeout_raw_fallback_enabled",
             Self::SendActiveAppContextEnabled => "send_active_app_context_enabled",
         }
     }
@@ -352,6 +354,8 @@ pub struct AppSettings {
     #[serde(default = "default_enabled")]
     pub llm_formatting_enabled: bool,
     #[serde(default = "default_disabled")]
+    pub llm_timeout_raw_fallback_enabled: bool,
+    #[serde(default = "default_disabled")]
     pub send_active_app_context_enabled: bool,
 }
 
@@ -370,6 +374,7 @@ impl Default for AppSettings {
             stt_timeout_seconds: None,
             server_url: DEFAULT_SERVER_URL.to_string(),
             llm_formatting_enabled: true,
+            llm_timeout_raw_fallback_enabled: false,
             send_active_app_context_enabled: false,
         }
     }

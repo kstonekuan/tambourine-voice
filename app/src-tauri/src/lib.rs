@@ -441,6 +441,11 @@ pub fn run() {
 
     #[cfg(desktop)]
     {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|_app, _argv, _cwd| {
+            // Intentionally avoid showing/focusing windows on duplicate launch.
+            // The second process should terminate without side effects.
+            log::warn!("Ignoring duplicate app launch; primary instance remains active");
+        }));
         builder = builder.plugin(build_global_shortcut_plugin());
     }
 
@@ -476,6 +481,7 @@ pub fn run() {
             commands::settings::update_stt_timeout,
             commands::settings::update_server_url,
             commands::settings::update_llm_formatting_enabled,
+            commands::settings::update_llm_timeout_raw_fallback_enabled,
             commands::settings::update_send_active_app_context_enabled,
             commands::settings::reset_hotkeys_to_defaults,
             is_audio_mute_supported,
