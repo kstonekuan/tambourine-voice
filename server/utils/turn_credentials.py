@@ -18,9 +18,9 @@ Reference: https://tools.ietf.org/html/draft-uberti-behave-turn-rest-00
 """
 
 import base64
+import hashlib
 import hmac
 import time
-import hashlib
 from dataclasses import dataclass
 
 
