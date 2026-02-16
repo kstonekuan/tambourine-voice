@@ -105,10 +105,13 @@ class DictationContextManager:
 
     The aggregator pair uses ExternalUserTurnStrategies, meaning turn boundaries
     are controlled externally via UserStartedSpeakingFrame/UserStoppedSpeakingFrame
-    emitted by TranscriptionBufferProcessor.
+    emitted by the turn controller.
     """
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        **kwargs: Any,
+    ) -> None:
         """Initialize the dictation context manager."""
         # Prompt section configuration (same structure as TranscriptionToLLMConverter)
         self._main_custom: str | None = None

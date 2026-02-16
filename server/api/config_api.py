@@ -195,7 +195,6 @@ async def get_default_sections(request: Request) -> DefaultSectionsResponse:
 
     Rate limited to prevent abuse, though this endpoint serves static data.
     """
-    _ = request  # Required for rate limiter but unused in handler
     return DefaultSectionsResponse(
         main=MAIN_PROMPT_DEFAULT,
         advanced=ADVANCED_PROMPT_DEFAULT,

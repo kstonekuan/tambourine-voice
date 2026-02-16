@@ -1,6 +1,6 @@
 import type { PipecatClient } from "@pipecat-ai/client-js";
 import type { SmallWebRTCTransport } from "@pipecat-ai/small-webrtc-transport";
-import { match } from "ts-pattern";
+import { match, P } from "ts-pattern";
 import type { LLMProviderSelection, STTProviderSelection } from "./tauri";
 
 // Discriminated union for type-safe config messages
@@ -75,13 +75,30 @@ export function safeSendClientMessage(
 	data: unknown,
 	onCommunicationError?: (error: string) => void,
 ): SendResult {
-	// Check transport state before sending
-	const transport = client.transport as SmallWebRTCTransport;
-	if (transport.state !== "ready") {
-		const error = `Transport not ready: ${transport.state}`;
-		console.warn(`[safeSend] ${error}`);
-		onCommunicationError?.(error);
-		return { success: false, reason: "not_ready" };
+	const maybeTransport = client.transport as
+		| SmallWebRTCTransport
+		| undefined
+		| null;
+
+	const transportNotReadyResult = match(maybeTransport)
+		.with(P.nullish, () => {
+			const error = "Transport not available";
+			return { success: false, reason: "not_ready", error } as const;
+		})
+		.with({ state: "ready" }, () => null)
+		.with({ state: P.string }, (transport) => {
+			const error = `Transport not ready: ${transport.state}`;
+			return { success: false, reason: "not_ready", error } as const;
+		})
+		.otherwise(() => {
+			const error = "Transport not available";
+			return { success: false, reason: "not_ready", error } as const;
+		});
+
+	if (transportNotReadyResult !== null) {
+		console.warn(`[safeSend] ${transportNotReadyResult.error}`);
+		onCommunicationError?.(transportNotReadyResult.error);
+		return transportNotReadyResult;
 	}
 
 	try {
