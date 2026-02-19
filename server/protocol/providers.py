@@ -37,6 +37,7 @@ class STTProviderId(StrEnum):
     NEMOTRON = "nemotron"
     OPENAI = "openai"
     WHISPER = "whisper"
+    WHISPER_MLX = "whisper_mlx"
 
 
 class LLMProviderId(StrEnum):

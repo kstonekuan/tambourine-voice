@@ -28,6 +28,12 @@ def test_parse_known_stt_provider_selection_returns_known_provider() -> None:
     assert parsed_stt_provider_selection.provider_id == STTProviderId.DEEPGRAM
 
 
+def test_parse_known_mlx_stt_provider_selection_returns_known_provider() -> None:
+    parsed_stt_provider_selection = parse_stt_provider_selection("whisper_mlx")
+    assert isinstance(parsed_stt_provider_selection, KnownSTTProvider)
+    assert parsed_stt_provider_selection.provider_id == STTProviderId.WHISPER_MLX
+
+
 def test_parse_unknown_stt_provider_selection_returns_other_provider() -> None:
     parsed_stt_provider_selection = parse_stt_provider_selection("future-stt-provider")
     assert isinstance(parsed_stt_provider_selection, OtherSTTProvider)
