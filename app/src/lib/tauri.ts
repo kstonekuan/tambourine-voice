@@ -26,6 +26,7 @@ export const STT_KNOWN_PROVIDER_IDS = [
 	"nemotron",
 	"openai",
 	"whisper",
+	"whisper_mlx",
 ] as const;
 
 /** All STT provider IDs including "auto" */

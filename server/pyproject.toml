@@ -7,12 +7,12 @@ license = "AGPL-3.0-only"
 readme = "../README.md"
 requires-python = "~=3.13.0"
 dependencies = [
-    "pipecat-ai[anthropic,speechmatics,assemblyai,aws,azure,cartesia,cerebras,deepgram,google,groq,openai,openrouter,silero,webrtc,whisper]>=0.0.102",
-    "pydantic-settings>=2.12.0",
+    "pipecat-ai[anthropic,speechmatics,assemblyai,aws,azure,cartesia,cerebras,deepgram,google,groq,openai,openrouter,silero,webrtc,whisper,mlx-whisper]>=0.0.102",
+    "pydantic-settings>=2.13.0",
     "loguru>=0.7.3",
-    "typer>=0.23.1",
+    "typer>=0.24.0",
     "fastapi>=0.129.0",
-    "uvicorn>=0.40.0",
+    "uvicorn>=0.41.0",
     "pydantic>=2.12.5",
     "slowapi>=0.1.9",
 ]
@@ -30,7 +30,7 @@ dev = [
 
 [build-system]
 requires = [
-    "uv_build>=0.10.2", #
+    "uv_build>=0.10.4", #
 ]
 build-backend = "uv_build"
 

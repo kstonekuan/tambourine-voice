@@ -52,3 +52,5 @@ htmlcov/
 **/*.zip
 package-lock.json
 app/package-lock.json
+
+.pnpm-store/

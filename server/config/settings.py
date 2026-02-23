@@ -47,6 +47,14 @@ class Settings(BaseSettings):
             "Compute type for local Whisper STT (default|auto|int8|int16|float16|float32, optional)"
         ),
     )
+    whisper_mlx_enabled: bool = Field(
+        False,
+        description="Enable local Whisper STT with MLX backend (Apple Silicon)",
+    )
+    whisper_mlx_model: str | None = Field(
+        None,
+        description=("Model repo for MLX Whisper STT (e.g., mlx-community/whisper-large-v3-turbo)"),
+    )
     nemotron_asr_url: str | None = Field(
         None, description="Nemotron ASR WebSocket URL (ws:// or wss://)"
     )

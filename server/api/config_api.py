@@ -411,7 +411,7 @@ async def get_available_providers(request: Request) -> AvailableProvidersRespons
         stt_providers = build_provider_list(
             services=stt_services,
             labels=get_stt_provider_labels(),
-            local_provider_ids={STTProviderId.WHISPER},
+            local_provider_ids={STTProviderId.WHISPER, STTProviderId.WHISPER_MLX},
         )
         llm_providers = build_provider_list(
             services=llm_services,

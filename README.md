@@ -156,8 +156,10 @@ On macOS, Tambourine needs accessibility permissions to type text at your cursor
 
 **For fully local deployment:**
 - Set `OLLAMA_BASE_URL=http://localhost:11434` in `.env`
-- Set `WHISPER_ENABLED=true` for local STT
-- Optional: set `WHISPER_DEVICE` (`cpu` or `cuda`), `WHISPER_MODEL` (for example `tiny`, `base`, `small`, `medium`, `large`), and `WHISPER_COMPUTE_TYPE` (for example `int8`, `float16`)
+- For Faster-Whisper local STT: set `WHISPER_ENABLED=true` (model pre-downloads at server startup)
+- Optional Faster-Whisper tuning: `WHISPER_DEVICE` (`cpu` or `cuda`), `WHISPER_MODEL` (for example `tiny`, `base`, `small`, `medium`, `large`), and `WHISPER_COMPUTE_TYPE` (for example `int8`, `float16`)
+- For Apple Silicon MLX Whisper local STT: set `WHISPER_MLX_ENABLED=true` (model pre-downloads at server startup)
+- Optional MLX model override: set `WHISPER_MLX_MODEL` (for example `mlx-community/whisper-large-v3-turbo`)
 
 ### 2. Set Up the Server
 

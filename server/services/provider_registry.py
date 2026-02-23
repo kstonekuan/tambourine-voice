@@ -31,7 +31,7 @@ from pipecat.services.openai.stt import OpenAISTTService
 from pipecat.services.openrouter.llm import OpenRouterLLMService
 from pipecat.services.speechmatics.stt import SpeechmaticsSTTService
 from pipecat.services.stt_service import STTService
-from pipecat.services.whisper.stt import WhisperSTTService
+from pipecat.services.whisper.stt import WhisperSTTService, WhisperSTTServiceMLX
 
 # Provider ID enums from protocol (single source of truth)
 from protocol.providers import LLMProviderId, STTProviderId
@@ -290,6 +290,17 @@ STT_PROVIDERS: Final[dict[STTProviderId, STTProviderConfig]] = {
                 "whisper_model": "model",
                 "whisper_device": "device",
                 "whisper_compute_type": "compute_type",
+            },
+        ),
+    ),
+    STTProviderId.WHISPER_MLX: STTProviderConfig(
+        provider_id=STTProviderId.WHISPER_MLX,
+        display_name="Whisper (MLX)",
+        service_class=WhisperSTTServiceMLX,
+        credential_mapper=NoAuthMapper(
+            availability_fields=("whisper_mlx_enabled",),
+            field_mapping={
+                "whisper_mlx_model": "model",
             },
         ),
     ),
