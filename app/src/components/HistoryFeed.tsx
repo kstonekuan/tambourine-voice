@@ -227,6 +227,12 @@ export function HistoryFeed() {
 		});
 	};
 
+	const handleCopyAll = useCallback(() => {
+		if (!history) return;
+		const fullText = history.map((entry) => entry.text).join("\n");
+		clipboard.copy(fullText);
+	}, [history, clipboard]);
+
 	// useMemo must be called unconditionally (before any early returns)
 	const groupedHistory = useMemo(
 		() => groupHistoryByDate(history ?? []),
@@ -283,15 +289,25 @@ export function HistoryFeed() {
 		<div className="animate-in animate-in-delay-2">
 			<div className="section-header">
 				<span className="section-title">History</span>
-				<Button
-					variant="subtle"
-					size="compact-sm"
-					color="gray"
-					onClick={openConfirm}
-					disabled={clearHistory.isPending}
-				>
-					Clear All
-				</Button>
+				<Group gap="xs">
+					<Button
+						variant="subtle"
+						size="compact-sm"
+						color="gray"
+						onClick={handleCopyAll}
+					>
+						Copy All
+					</Button>
+					<Button
+						variant="subtle"
+						size="compact-sm"
+						color="gray"
+						onClick={openConfirm}
+						disabled={clearHistory.isPending}
+					>
+						Clear All
+					</Button>
+				</Group>
 			</div>
 
 			<Modal
