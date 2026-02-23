@@ -66,6 +66,7 @@ from services.providers import (
     STTProviderId,
     create_all_available_llm_services,
     create_all_available_stt_services,
+    create_stt_service,
     get_available_llm_providers,
     get_available_stt_providers,
 )
@@ -85,6 +86,11 @@ from utils.rate_limiter import (
 ICE_SERVERS: Final[list[IceServer]] = [
     IceServer(urls="stun:stun.l.google.com:19302"),
 ]
+
+LOCAL_STT_PREWARM_PROVIDER_IDS: Final[set[STTProviderId]] = {
+    STTProviderId.WHISPER,
+    STTProviderId.WHISPER_MLX,
+}
 
 # Pattern to match mDNS ICE candidates in SDP (e.g., "abc123-def4.local")
 # These candidates only work for local network peers and cause aioice state
@@ -374,6 +380,12 @@ def initialize_services(settings: Settings) -> AppServices | None:
     logger.info(f"Available STT providers: {[p.value for p in available_stt]}")
     logger.info(f"Available LLM providers: {[p.value for p in available_llm]}")
 
+    try:
+        prewarm_enabled_local_stt_models(settings, available_stt)
+    except Exception as e:
+        logger.error(f"Failed to prewarm local STT model(s): {e}")
+        return None
+
     return AppServices(
         settings=settings,
         webrtc_handler=SmallWebRTCRequestHandler(ice_servers=ICE_SERVERS),
@@ -382,6 +394,65 @@ def initialize_services(settings: Settings) -> AppServices | None:
         available_stt_providers=available_stt,
         available_llm_providers=available_llm,
     )
+
+
+def prewarm_enabled_local_stt_models(
+    settings: Settings, available_stt_providers: list[STTProviderId]
+) -> None:
+    """Pre-download enabled local STT models at server startup.
+
+    This prevents first-recording latency from model downloads.
+    """
+    enabled_local_providers = [
+        provider_id
+        for provider_id in available_stt_providers
+        if provider_id in LOCAL_STT_PREWARM_PROVIDER_IDS
+    ]
+
+    if not enabled_local_providers:
+        return
+
+    logger.info(
+        "Prewarming local STT providers at startup: "
+        f"{[provider_id.value for provider_id in enabled_local_providers]}"
+    )
+
+    for provider_id in enabled_local_providers:
+        match provider_id:
+            case STTProviderId.WHISPER:
+                _prewarm_faster_whisper_model(settings)
+            case STTProviderId.WHISPER_MLX:
+                _prewarm_mlx_whisper_model(settings)
+            case _:
+                # Should never happen due LOCAL_STT_PREWARM_PROVIDER_IDS filter.
+                pass
+
+
+def _prewarm_faster_whisper_model(settings: Settings) -> None:
+    """Create local Whisper STT service once to trigger model download/load."""
+    logger.info("Prewarming local Whisper (faster-whisper) model...")
+    _ = create_stt_service(STTProviderId.WHISPER, settings)
+    logger.success("Local Whisper (faster-whisper) model is ready")
+
+
+def _prewarm_mlx_whisper_model(settings: Settings) -> None:
+    """Run one tiny MLX Whisper transcription to trigger model download/cache."""
+    import mlx_whisper
+    import numpy as np
+    from pipecat.services.whisper.stt import MLXModel
+
+    model_name = settings.whisper_mlx_model or MLXModel.TINY.value
+    logger.info(f"Prewarming local Whisper (MLX) model: {model_name}")
+
+    # 1 second of silence at 16kHz as a lightweight warm-up input.
+    warmup_audio = np.zeros(16000, dtype=np.float32)
+    mlx_whisper.transcribe(
+        warmup_audio,
+        path_or_hf_repo=model_name,
+        language="en",
+        temperature=0.0,
+    )
+    logger.success("Local Whisper (MLX) model is ready")
 
 
 @asynccontextmanager
