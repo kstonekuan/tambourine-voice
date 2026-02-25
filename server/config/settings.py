@@ -108,7 +108,7 @@ class Settings(BaseSettings):
         None, description="TURN shared secret for HMAC credential generation"
     )
     turn_credential_ttl: int = Field(
-        3600, description="TURN credential TTL in seconds (default: 1 hour)"
+        3600, gt=0, description="TURN credential TTL in seconds (default: 1 hour)"
     )
 
     # Silero VAD configuration (optional - leave unset to use library defaults)

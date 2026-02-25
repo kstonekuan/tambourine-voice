@@ -441,6 +441,12 @@ def initialize_services(settings: Settings) -> AppServices | None:
             "Refusing to start with partial TURN configuration."
         )
         return None
+    if settings.turn_shared_secret and not settings.turn_server_url:
+        logger.error(
+            "TURN_SHARED_SECRET is set but TURN_SERVER_URL is missing. "
+            "Refusing to start with partial TURN configuration."
+        )
+        return None
 
     # Build initial ICE servers (STUN always, TURN if configured).
     # TURN credentials are refreshed per request in both /api/ice-servers and

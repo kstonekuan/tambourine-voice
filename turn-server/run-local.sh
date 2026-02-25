@@ -8,8 +8,6 @@ script_directory_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repository_root_path="$(cd "${script_directory_path}/.." && pwd)"
 server_directory_path="${repository_root_path}/server"
 server_environment_file_path="${server_directory_path}/.env"
-turn_server_template_config_path="${script_directory_path}/turnserver.conf"
-rendered_turn_server_config_path="/tmp/tambourine-turnserver.local.conf"
 
 ensure_required_command_exists() {
   local required_command_name="$1"
@@ -57,11 +55,6 @@ validate_turn_environment_configuration() {
   export TURN_SHARED_SECRET
 }
 
-render_turn_server_configuration_file() {
-  sed "s|\${TURN_SHARED_SECRET}|${TURN_SHARED_SECRET}|g" \
-    "${turn_server_template_config_path}" > "${rendered_turn_server_config_path}"
-}
-
 cleanup_turn_server_process() {
   if [ -n "${turn_server_process_id:-}" ] && kill -0 "${turn_server_process_id}" >/dev/null 2>&1; then
     kill "${turn_server_process_id}" >/dev/null 2>&1 || true
@@ -74,11 +67,13 @@ main() {
 
   load_existing_server_environment_file
   validate_turn_environment_configuration
-  render_turn_server_configuration_file
   echo "Active TURN_SHARED_SECRET: ${TURN_SHARED_SECRET}"
   echo "Starting local stack: coturn TURN + Tambourine (Pipecat) server"
 
-  turnserver -c "${rendered_turn_server_config_path}" -n &
+  turnserver \
+    -c "${script_directory_path}/turnserver.conf" \
+    -n \
+    --static-auth-secret="${TURN_SHARED_SECRET}" &
   turn_server_process_id=$!
   trap cleanup_turn_server_process EXIT INT TERM
 
