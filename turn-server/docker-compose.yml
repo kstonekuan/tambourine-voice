@@ -10,9 +10,8 @@ services:
       - "3478:3478/udp"
       - "3478:3478/tcp"
       - "5349:5349/tcp"
-      # Note: For local testing, we use a smaller relay range than production.
-      # Keep this in sync with turnserver.conf max-port.
-      - "49152-49252:49152-49252/udp"
+      # Keep this in sync with turnserver.conf relay range.
+      - "49152-65535:49152-65535/udp"
     environment:
       # Generate a real secret for testing with:
       # openssl rand -hex 32
