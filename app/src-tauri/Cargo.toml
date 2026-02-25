@@ -32,11 +32,11 @@ tauri-plugin-os = "2.3.2"
 # Serialization
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-anyhow = "1.0.101"
+anyhow = "1.0.102"
 
 # Logging
 log = "0.4.29"
-env_logger = "0.11.8"
+env_logger = "0.11.9"
 
 # Keyboard automation
 enigo = "0.6.1"
@@ -46,18 +46,18 @@ arboard = "3.6.1"
 tokio = { version = "1.49.0", features = ["rt", "sync"] }
 
 # Settings and history
-chrono = { version = "0.4.43", features = ["serde"] }
-uuid = { version = "1.20.0", features = ["v4", "serde"] }
-tempfile = "3.24.0"
+chrono = { version = "0.4.44", features = ["serde"] }
+uuid = { version = "1.21.0", features = ["v4", "serde"] }
+tempfile = "3.26.0"
 
 # Audio playback
-rodio = { version = "0.21.1", default-features = false, features = [
+rodio = { version = "0.22.1", default-features = false, features = [
     "mp3",
     "playback",
 ] }
 
 # Native audio capture (cross-platform: CoreAudio on macOS, WASAPI on Windows)
-cpal = "0.17.1"
+cpal = "0.17.3"
 tauri-plugin-single-instance = "2.4.0"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]

@@ -9,8 +9,9 @@ If you find Tambourine useful, consider giving the repo a star — it helps othe
 ### Prerequisites
 
 - **Rust** (use `rustup`)
+- **[cargo-edit](https://github.com/killercup/cargo-edit)** (required for `cargo upgrade`; `pnpm run update` depends on this)
 - **Node.js 22+** and **pnpm**
-- **Python 3.13+** and **uv**
+- **Python 3.13+** via **uv**
 - **Linux only**: `libwebkit2gtk-4.1-dev`, `build-essential`, `libxdo-dev`, `libssl-dev`, and other Tauri dependencies
 
 ### Server Setup

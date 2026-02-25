@@ -1,5 +1,5 @@
 use rodio::source::Source;
-use rodio::{Decoder, OutputStreamBuilder};
+use rodio::{Decoder, DeviceSinkBuilder};
 use std::io::Cursor;
 use std::thread;
 use std::time::Duration;
@@ -27,7 +27,8 @@ pub fn play_sound(sound_type: SoundType) {
 fn play_sound_blocking(
     sound_type: SoundType,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let stream = OutputStreamBuilder::open_default_stream()?;
+    let mut sink = DeviceSinkBuilder::open_default_sink()?;
+    sink.log_on_drop(false);
 
     let sound_data = match sound_type {
         SoundType::RecordingStart => START_SOUND,
@@ -41,7 +42,7 @@ fn play_sound_blocking(
         .total_duration()
         .unwrap_or(Duration::from_millis(DEFAULT_AUDIO_PLAYBACK_DURATION_MS));
 
-    stream.mixer().add(source);
+    sink.mixer().add(source);
     thread::sleep(duration + Duration::from_millis(50));
 
     Ok(())
