@@ -2,6 +2,7 @@ import { Kbd, Switch, Tooltip } from "@mantine/core";
 import { AlertCircle } from "lucide-react";
 import { useEffect } from "react";
 import { useRecordHotkeys } from "react-hotkeys-hook";
+import { formatKeyForPlatform } from "../lib/platformKeys";
 import type { HotkeyConfig } from "../lib/tauri";
 import {
 	type MutationStatus,
@@ -168,10 +169,11 @@ function keysToConfig(
 }
 
 /**
- * Format a key for display (e.g., "ctrl" -> "Ctrl", "Space" -> "Space")
+ * Format a key for display using platform-appropriate symbols.
+ * On macOS: "ctrl" -> "⌃", "alt" -> "⌥". On other platforms: "ctrl" -> "Ctrl".
  */
 function formatKeyForDisplay(key: string): string {
-	return key.charAt(0).toUpperCase() + key.slice(1);
+	return formatKeyForPlatform(key);
 }
 
 export function HotkeyInput({

@@ -16,6 +16,7 @@ import {
 	DEFAULT_PASTE_LAST_HOTKEY,
 	DEFAULT_TOGGLE_HOTKEY,
 } from "./lib/hotkeyDefaults";
+import { formatKeyForPlatform } from "./lib/platformKeys";
 import {
 	useRefreshServerQueriesOnConnect,
 	useSettings,
@@ -140,8 +141,8 @@ function HotkeyDisplay({
 }) {
 	const isDisabled = config.enabled === false;
 	const parts = [
-		...config.modifiers.map((m) => m.charAt(0).toUpperCase() + m.slice(1)),
-		config.key,
+		...config.modifiers.map((m) => formatKeyForPlatform(m)),
+		formatKeyForPlatform(config.key),
 	];
 
 	return (
