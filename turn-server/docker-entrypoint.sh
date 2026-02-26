@@ -6,6 +6,14 @@ if [ -z "${TURN_SHARED_SECRET:-}" ]; then
   exit 1
 fi
 
+if [ -n "${TURN_EXTERNAL_IP:-}" ]; then
+  exec turnserver \
+    -c /etc/turnserver.conf \
+    -n \
+    --static-auth-secret="${TURN_SHARED_SECRET}" \
+    --external-ip="${TURN_EXTERNAL_IP}"
+fi
+
 exec turnserver \
   -c /etc/turnserver.conf \
   -n \

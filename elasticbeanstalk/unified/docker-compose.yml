@@ -52,6 +52,8 @@ services:
     environment:
       # Must match server TURN_SHARED_SECRET
       TURN_SHARED_SECRET: "${TURN_SHARED_SECRET}"
+      # For Elastic IP / NAT deployments so coturn advertises reachable relay candidates
+      TURN_EXTERNAL_IP: "${TURN_EXTERNAL_IP:-}"
     logging:
       driver: json-file
       options:

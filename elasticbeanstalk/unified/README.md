@@ -41,8 +41,12 @@ eb init tambourine-unified --platform docker --region <REGION>
 eb create tambourine-unified-prod \
   --single \
   --instance-type t3.medium \
-  --envvars TURN_SHARED_SECRET=<your-secret>,TURN_CREDENTIAL_TTL=3600
+  --envvars TURN_SERVER_URL=turn:<TURN_HOST_OR_IP>:3478,TURN_SHARED_SECRET=<your-secret>,TURN_EXTERNAL_IP=<TURN_PUBLIC_IP_OR_MAPPING>,TURN_CREDENTIAL_TTL=3600
 ```
+
+Set `TURN_SERVER_URL` and `TURN_SHARED_SECRET` together (or neither). Do not set only one of them.
+For NAT/Elastic IP deployments, also set `TURN_EXTERNAL_IP` so coturn advertises reachable relay candidates.
+If you do not know the final TURN host/IP yet, omit all `TURN_*` vars in `eb create` and set them together in step 6.
 
 ## 5. Allocate and attach an Elastic IP
 
@@ -64,12 +68,14 @@ Set all required Tambourine API keys plus TURN URL/secret:
 eb setenv \
   TURN_SERVER_URL=turn:<ELASTIC_IP>:3478 \
   TURN_SHARED_SECRET=<same-secret-as-coturn> \
+  TURN_EXTERNAL_IP=<ELASTIC_IP> \
   TURN_CREDENTIAL_TTL=3600 \
   OPENAI_API_KEY=<...> \
   DEEPGRAM_API_KEY=<...>
 ```
 
 `TURN_SERVER_URL` must be publicly reachable by clients (do not use `localhost`).
+`TURN_EXTERNAL_IP` should be the same public IP advertised in `TURN_SERVER_URL` (or `<PUBLIC_IP>/<PRIVATE_IP>` when explicit NAT mapping is required).
 
 ## 7. Verify
 

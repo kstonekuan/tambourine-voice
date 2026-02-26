@@ -86,7 +86,12 @@ INSTANCE_ID=$(aws elasticbeanstalk describe-environment-resources \
 
 # Associate Elastic IP
 aws ec2 associate-address --instance-id $INSTANCE_ID --allocation-id <AllocationId>
+
+# Ensure coturn advertises the public relay address (required behind NAT / Elastic IP)
+eb setenv TURN_EXTERNAL_IP=<ELASTIC_IP>
 ```
+
+If your deployment requires explicit NAT mapping, set `TURN_EXTERNAL_IP=<PUBLIC_IP>/<PRIVATE_IP>` instead.
 
 ## 7. Configure Tambourine Server
 
@@ -171,6 +176,7 @@ Should return:
 
 - STUN is working but TURN is not
 - Verify the EB environment is single-instance and using host networking
+- Verify `TURN_EXTERNAL_IP` is set to your Elastic IP (or `PUBLIC_IP/PRIVATE_IP` mapping)
 - Check TURN server is reachable: `nc -u <ip> 3478`
 - Verify client is sending credentials
 
