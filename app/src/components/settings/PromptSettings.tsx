@@ -1,13 +1,23 @@
-import { Accordion, Button, Loader, Modal, Switch, Text } from "@mantine/core";
+import {
+	Accordion,
+	Button,
+	Loader,
+	Modal,
+	Switch,
+	Text,
+	Textarea,
+} from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useCallback, useEffect, useState } from "react";
 import { match } from "ts-pattern";
 import {
 	useDefaultSections,
+	useMemoryMarkdownView,
 	useSettings,
 	useUpdateCleanupPromptSections,
 	useUpdateLLMFormattingEnabled,
 	useUpdateLLMTimeoutRawFallbackEnabled,
+	useUpdateMemoryEnabled,
 	useUpdateSendActiveAppContextEnabled,
 } from "../../lib/queries";
 import type { CleanupPromptSections, PromptSection } from "../../lib/tauri";
@@ -30,10 +40,21 @@ export function PromptSettings() {
 	const llmFormattingMutation = useUpdateLLMFormattingEnabled();
 	const llmTimeoutRawFallbackMutation = useUpdateLLMTimeoutRawFallbackEnabled();
 	const activeAppContextMutation = useUpdateSendActiveAppContextEnabled();
+	const memoryEnabledMutation = useUpdateMemoryEnabled();
+	const isMemoryEnabled = settings?.memory_enabled ?? false;
+	const {
+		data: memoryMarkdown,
+		error: memoryMarkdownError,
+		isError: hasMemoryMarkdownLoadError,
+		isFetching: isMemoryMarkdownFetching,
+		isLoading: isMemoryMarkdownLoading,
+		refetch: refetchMemoryMarkdown,
+	} = useMemoryMarkdownView(isMemoryEnabled);
 
 	// Modal for warning when disabling LLM formatting
 	const [disableWarningOpened, disableWarningHandlers] = useDisclosure(false);
 	const [focusWarningOpened, focusWarningHandlers] = useDisclosure(false);
+	const [memoryWarningOpened, memoryWarningHandlers] = useDisclosure(false);
 
 	// Consolidated local state for all sections using discriminated union
 	const [localSections, setLocalSections] =
@@ -191,6 +212,10 @@ export function PromptSettings() {
 
 	// Check if LLM formatting is disabled
 	const isLLMFormattingDisabled = settings?.llm_formatting_enabled === false;
+	const memoryMarkdownErrorMessage =
+		memoryMarkdownError instanceof Error
+			? memoryMarkdownError.message
+			: "Unable to load memory markdown.";
 
 	const handleLLMFormattingToggle = (checked: boolean) => {
 		if (!checked) {
@@ -218,6 +243,19 @@ export function PromptSettings() {
 	const confirmEnableActiveAppContext = () => {
 		activeAppContextMutation.mutate(true);
 		focusWarningHandlers.close();
+	};
+
+	const handleMemoryToggle = (checked: boolean) => {
+		if (checked) {
+			memoryWarningHandlers.open();
+		} else {
+			memoryEnabledMutation.mutate(false);
+		}
+	};
+
+	const confirmEnableMemory = () => {
+		memoryEnabledMutation.mutate(true);
+		memoryWarningHandlers.close();
 	};
 
 	return (
@@ -289,6 +327,107 @@ export function PromptSettings() {
 						size="md"
 						color="gray"
 					/>
+				</div>
+				<div style={{ paddingTop: 12 }}>
+					<Accordion variant="separated" radius="md">
+						<Accordion.Item value="memory-markdown">
+							<Accordion.Control>
+								<div
+									style={{
+										display: "flex",
+										justifyContent: "space-between",
+										alignItems: "center",
+										width: "100%",
+										paddingRight: 12,
+									}}
+								>
+									<div>
+										<div
+											style={{ display: "flex", alignItems: "center", gap: 8 }}
+										>
+											<p className="settings-label">Enable Memory</p>
+											<StatusIndicator status={memoryEnabledMutation.status} />
+										</div>
+										<p className="settings-description">
+											Store cross-session context in a local markdown file
+										</p>
+									</div>
+									<Switch
+										checked={isMemoryEnabled}
+										onChange={(event) => {
+											event.stopPropagation();
+											handleMemoryToggle(event.currentTarget.checked);
+										}}
+										onClick={(event) => event.stopPropagation()}
+										disabled={memoryEnabledMutation.isPending}
+										size="md"
+										color="gray"
+									/>
+								</div>
+							</Accordion.Control>
+							<Accordion.Panel>
+								{!isMemoryEnabled ? (
+									<Text size="sm" c="dimmed">
+										Memory content is hidden while memory is disabled.
+									</Text>
+								) : isMemoryMarkdownLoading ? (
+									<div
+										style={{
+											display: "flex",
+											justifyContent: "center",
+											padding: "12px 0",
+											width: "100%",
+										}}
+									>
+										<Loader size="sm" color="gray" />
+									</div>
+								) : hasMemoryMarkdownLoadError ? (
+									<div
+										style={{
+											width: "100%",
+											display: "flex",
+											flexDirection: "column",
+											gap: 8,
+										}}
+									>
+										<Text size="sm" c="red">
+											Failed to load memory content:{" "}
+											{memoryMarkdownErrorMessage}
+										</Text>
+										<div>
+											<Button
+												variant="light"
+												size="xs"
+												onClick={() => {
+													void refetchMemoryMarkdown();
+												}}
+												loading={isMemoryMarkdownFetching}
+											>
+												Retry
+											</Button>
+										</div>
+									</div>
+								) : (
+									<Textarea
+										value={memoryMarkdown ?? ""}
+										readOnly
+										autosize
+										minRows={6}
+										maxRows={14}
+										styles={{
+											input: {
+												backgroundColor: "var(--bg-elevated)",
+												borderColor: "var(--border-default)",
+												color: "var(--text-primary)",
+												fontFamily: "monospace",
+												fontSize: "13px",
+											},
+										}}
+									/>
+								)}
+							</Accordion.Panel>
+						</Accordion.Item>
+					</Accordion>
 				</div>
 			</div>
 
@@ -434,6 +573,28 @@ export function PromptSettings() {
 					</Button>
 					<Button color="orange" onClick={confirmEnableActiveAppContext}>
 						Enable Active App Context
+					</Button>
+				</div>
+			</Modal>
+			<Modal
+				opened={memoryWarningOpened}
+				onClose={memoryWarningHandlers.close}
+				title="Enable memory?"
+				centered
+				size="md"
+			>
+				<Text size="sm" mb="md">
+					This experimental feature can improve dictation quality by adapting
+					formatting to your active app or window. It might send personal data
+					about your active app/window to the server, and if you connect to a
+					cloud service, that data will be sent to the cloud service as well.
+				</Text>
+				<div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+					<Button variant="default" onClick={memoryWarningHandlers.close}>
+						Cancel
+					</Button>
+					<Button color="orange" onClick={confirmEnableMemory}>
+						Enable Memory
 					</Button>
 				</div>
 			</Modal>

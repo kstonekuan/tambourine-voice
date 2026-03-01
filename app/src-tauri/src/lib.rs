@@ -13,6 +13,7 @@ mod commands;
 mod config_sync;
 pub mod events;
 mod history;
+mod memory;
 
 use active_app_context::get_current_active_app_context;
 use events::EventName;
@@ -25,6 +26,7 @@ mod tests;
 
 use audio_mute::AudioMuteManager;
 use history::HistoryStorage;
+use memory::{new_memory_sync_trigger_queue, MemoryStorage};
 use mic_capture::{AudioDeviceInfo, MicCapture, MicCaptureManager};
 use settings::{HotkeyConfig, HotkeyType, LocalOnlySetting, SettingClass};
 use state::{AppState, ShortcutState};
@@ -483,12 +485,17 @@ pub fn run() {
             commands::settings::update_llm_formatting_enabled,
             commands::settings::update_llm_timeout_raw_fallback_enabled,
             commands::settings::update_send_active_app_context_enabled,
+            commands::settings::update_memory_enabled,
             commands::settings::reset_hotkeys_to_defaults,
             is_audio_mute_supported,
             commands::history::add_history_entry,
             commands::history::get_history,
             commands::history::delete_history_entry,
             commands::history::clear_history,
+            commands::memory::initialize_memory_file,
+            commands::memory::read_memory_markdown,
+            commands::memory::replace_memory_markdown,
+            commands::memory::run_memory_sync_if_due,
             commands::export_import::generate_settings_export,
             commands::export_import::generate_history_export,
             commands::export_import::generate_prompt_exports,
@@ -515,8 +522,39 @@ pub fn run() {
                 .app_data_dir()
                 .expect("Failed to get app data directory");
 
-            let history_storage = HistoryStorage::new(app_data_dir);
+            let history_storage = HistoryStorage::new(app_data_dir.clone());
             app.manage(history_storage);
+
+            let memory_storage = MemoryStorage::new(app_data_dir);
+            if let Err(error) = memory_storage.hydrate_cache_from_disk_if_present() {
+                log::warn!("Failed to hydrate memory cache during startup: {error:#}");
+            }
+            app.manage(memory_storage);
+            let (memory_sync_trigger_queue, mut memory_sync_trigger_receiver) =
+                new_memory_sync_trigger_queue();
+            app.manage(memory_sync_trigger_queue);
+
+            #[cfg(desktop)]
+            {
+                let app_handle_for_memory_sync_worker = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    while memory_sync_trigger_receiver.recv().await.is_some() {
+                        if let Err(error) =
+                            commands::memory::run_memory_sync_if_due_from_app_handle(
+                                &app_handle_for_memory_sync_worker,
+                            )
+                            .await
+                        {
+                            log::warn!(
+                                "Failed to run background memory sync from worker queue: {error}"
+                            );
+                        }
+                    }
+                });
+            }
+
+            #[cfg(not(desktop))]
+            let _ = memory_sync_trigger_receiver;
 
             // Initialize audio mute manager (may be None on unsupported platforms)
             if let Some(audio_mute_manager) = AudioMuteManager::new() {

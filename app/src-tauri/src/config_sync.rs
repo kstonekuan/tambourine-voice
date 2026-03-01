@@ -54,6 +54,15 @@ impl ConfigSyncState {
         self.server_url.is_some() && self.client_uuid.is_some()
     }
 
+    /// Clone HTTP client and connection identity for memory sync requests.
+    pub fn clone_memory_sync_http_request_context(&self) -> Option<(Client, String, String)> {
+        let (Some(server_url), Some(client_uuid)) = (&self.server_url, &self.client_uuid) else {
+            return None;
+        };
+
+        Some((self.client.clone(), server_url.clone(), client_uuid.clone()))
+    }
+
     /// Sync prompt sections to server (best-effort, logs errors)
     pub async fn sync_prompt_sections(&self, sections: &CleanupPromptSections) -> Result<()> {
         let (Some(server_url), Some(client_uuid)) = (&self.server_url, &self.client_uuid) else {

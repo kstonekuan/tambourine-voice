@@ -6,6 +6,8 @@ use tauri::{AppHandle, Manager};
 
 use crate::config_sync::{ConfigSync, DEFAULT_STT_TIMEOUT_SECONDS};
 use crate::history::{HistoryEntry, HistoryImportResult, HistoryImportStrategy, HistoryStorage};
+#[cfg(desktop)]
+use crate::memory::MemoryStorage;
 use crate::settings::{
     AppSettings, CleanupPromptSections, HttpSyncedSetting, LocalOnlySetting, PromptMode,
     PromptSection, PromptSectionType, RtviSyncedSetting, SettingClass,
@@ -50,6 +52,7 @@ pub struct SettingsExportData {
     pub llm_timeout_raw_fallback_enabled: bool,
     pub server_url: String,
     pub send_active_app_context_enabled: bool,
+    pub memory_enabled: bool,
 }
 
 impl Default for SettingsExportData {
@@ -74,6 +77,7 @@ impl From<AppSettings> for SettingsExportData {
             llm_timeout_raw_fallback_enabled: settings.llm_timeout_raw_fallback_enabled,
             server_url: settings.server_url,
             send_active_app_context_enabled: settings.send_active_app_context_enabled,
+            memory_enabled: settings.memory_enabled,
         }
     }
 }
@@ -96,6 +100,7 @@ impl From<SettingsExportData> for AppSettings {
             llm_timeout_raw_fallback_enabled: exported_settings.llm_timeout_raw_fallback_enabled,
             server_url: exported_settings.server_url,
             send_active_app_context_enabled: exported_settings.send_active_app_context_enabled,
+            memory_enabled: exported_settings.memory_enabled,
         }
     }
 }
@@ -458,7 +463,7 @@ pub fn detect_export_file_type(content: String) -> DetectedFileType {
 // SETTINGS IMPORT/RESET STORE MAPPING
 // ============================================================================
 
-const IMPORT_EXPORT_SETTING_CLASSES: [SettingClass; 13] = [
+const IMPORT_EXPORT_SETTING_CLASSES: [SettingClass; 14] = [
     SettingClass::LocalOnly(LocalOnlySetting::ToggleHotkey),
     SettingClass::LocalOnly(LocalOnlySetting::HoldHotkey),
     SettingClass::LocalOnly(LocalOnlySetting::PasteLastHotkey),
@@ -472,9 +477,10 @@ const IMPORT_EXPORT_SETTING_CLASSES: [SettingClass; 13] = [
     SettingClass::LocalOnly(LocalOnlySetting::ServerUrl),
     SettingClass::LocalOnly(LocalOnlySetting::LlmTimeoutRawFallbackEnabled),
     SettingClass::LocalOnly(LocalOnlySetting::SendActiveAppContextEnabled),
+    SettingClass::LocalOnly(LocalOnlySetting::MemoryEnabled),
 ];
 
-const FACTORY_RESET_SETTING_CLASSES: [SettingClass; 10] = [
+const FACTORY_RESET_SETTING_CLASSES: [SettingClass; 11] = [
     SettingClass::LocalOnly(LocalOnlySetting::ToggleHotkey),
     SettingClass::LocalOnly(LocalOnlySetting::HoldHotkey),
     SettingClass::LocalOnly(LocalOnlySetting::PasteLastHotkey),
@@ -485,6 +491,7 @@ const FACTORY_RESET_SETTING_CLASSES: [SettingClass; 10] = [
     SettingClass::LocalOnly(LocalOnlySetting::ServerUrl),
     SettingClass::LocalOnly(LocalOnlySetting::LlmTimeoutRawFallbackEnabled),
     SettingClass::LocalOnly(LocalOnlySetting::SendActiveAppContextEnabled),
+    SettingClass::LocalOnly(LocalOnlySetting::MemoryEnabled),
 ];
 
 fn serialized_value_for_setting_class(
@@ -508,6 +515,7 @@ fn serialized_value_for_setting_class(
             LocalOnlySetting::SendActiveAppContextEnabled => {
                 serde_json::to_value(app_settings.send_active_app_context_enabled)
             }
+            LocalOnlySetting::MemoryEnabled => serde_json::to_value(app_settings.memory_enabled),
         },
         SettingClass::ServerSyncedHttp(http_synced_setting) => match http_synced_setting {
             HttpSyncedSetting::CleanupPromptSections => {
@@ -731,6 +739,20 @@ pub async fn import_settings(
     // Import each setting
     let imported_settings: AppSettings = export.data.into();
 
+    if imported_settings.memory_enabled {
+        let memory_storage = app.state::<MemoryStorage>();
+        memory_storage.init().map_err(|error| {
+            format!("Failed to initialize memory file for imported settings: {error:#}")
+        })?;
+        crate::commands::memory::set_memory_sync_completed_session_counter(&app, 0).map_err(
+            |error| {
+                format!(
+                    "Failed to reset memory sync session counter for imported settings: {error:#}"
+                )
+            },
+        )?;
+    }
+
     // Save each setting individually so we can handle defaults properly.
     // Note: cleanup_prompt_sections is not imported here - prompts come from .md files.
     write_setting_classes_to_store(
@@ -827,6 +849,13 @@ pub async fn factory_reset(
     app: AppHandle,
     config_sync: tauri::State<'_, ConfigSync>,
 ) -> Result<FactoryResetOutcome, String> {
+    let memory_storage = app.state::<MemoryStorage>();
+    memory_storage
+        .clear_persisted_memory_artifacts()
+        .map_err(|error| {
+            format!("Failed to clear memory artifacts during factory reset: {error:#}")
+        })?;
+
     // Clear the settings store completely
     let store = app
         .store("settings.json")
@@ -869,7 +898,7 @@ pub async fn factory_reset(
     .await;
 
     if runtime_apply_outcome.warnings.is_empty() {
-        log::info!("Factory reset completed: settings and history cleared");
+        log::info!("Factory reset completed: settings, history, and memory artifacts cleared");
     } else {
         log::warn!(
             "Factory reset completed with {} runtime warnings",

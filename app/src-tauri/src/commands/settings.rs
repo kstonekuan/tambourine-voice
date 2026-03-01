@@ -241,6 +241,7 @@ pub fn get_settings(app: AppHandle) -> Result<AppSettings, String> {
             LocalOnlySetting::SendActiveAppContextEnabled,
             false,
         ),
+        memory_enabled: get_setting_from_store(&app, LocalOnlySetting::MemoryEnabled, false),
     })
 }
 
@@ -549,6 +550,38 @@ pub async fn update_send_active_app_context_enabled(
 pub async fn update_send_active_app_context_enabled(
     _app: AppHandle,
     _enabled: bool,
+) -> Result<(), String> {
+    Ok(())
+}
+
+/// Update memory enabled setting
+#[cfg(desktop)]
+#[tauri::command]
+pub async fn update_memory_enabled(
+    app: AppHandle,
+    enabled: bool,
+    memory_storage: tauri::State<'_, crate::memory::MemoryStorage>,
+) -> Result<(), String> {
+    if enabled {
+        memory_storage
+            .init()
+            .map_err(|error| format!("{error:#}"))?;
+    }
+
+    persist_local_only_setting(&app, LocalOnlySetting::MemoryEnabled, &enabled)
+        .map_err(|error| format!("{error:#}"))?;
+    crate::commands::memory::set_memory_sync_completed_session_counter(&app, 0)
+        .map_err(|error| format!("{error:#}"))?;
+    log::info!("Memory enabled: {enabled}");
+    Ok(())
+}
+
+#[cfg(not(desktop))]
+#[tauri::command]
+pub async fn update_memory_enabled(
+    _app: AppHandle,
+    _enabled: bool,
+    _memory_storage: tauri::State<'_, crate::memory::MemoryStorage>,
 ) -> Result<(), String> {
     Ok(())
 }

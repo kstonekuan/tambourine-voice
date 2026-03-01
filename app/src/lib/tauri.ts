@@ -444,6 +444,8 @@ export interface AppSettings {
 	llm_timeout_raw_fallback_enabled: boolean;
 	/** Send active app context to server for prompt injection */
 	send_active_app_context_enabled: boolean;
+	/** Enable local memory file tracking for cross-session context */
+	memory_enabled: boolean;
 }
 
 export const DEFAULT_SERVER_URL = "http://127.0.0.1:8765";
@@ -608,6 +610,21 @@ export const tauriAPI = {
 	},
 	async updateSendActiveAppContextEnabled(enabled: boolean): Promise<void> {
 		return invoke("update_send_active_app_context_enabled", { enabled });
+	},
+	async updateMemoryEnabled(enabled: boolean): Promise<void> {
+		return invoke("update_memory_enabled", { enabled });
+	},
+
+	async initializeMemoryFile(): Promise<void> {
+		return invoke("initialize_memory_file");
+	},
+
+	async readMemoryMarkdown(): Promise<string> {
+		return invoke("read_memory_markdown");
+	},
+
+	async replaceMemoryMarkdown(memoryMarkdown: string): Promise<void> {
+		return invoke("replace_memory_markdown", { memoryMarkdown });
 	},
 
 	async isAudioMuteSupported(): Promise<boolean> {

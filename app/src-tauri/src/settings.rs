@@ -42,6 +42,7 @@ pub enum LocalOnlySetting {
     ServerUrl,
     LlmTimeoutRawFallbackEnabled,
     SendActiveAppContextEnabled,
+    MemoryEnabled,
 }
 
 impl LocalOnlySetting {
@@ -56,6 +57,7 @@ impl LocalOnlySetting {
             Self::ServerUrl => "server_url",
             Self::LlmTimeoutRawFallbackEnabled => "llm_timeout_raw_fallback_enabled",
             Self::SendActiveAppContextEnabled => "send_active_app_context_enabled",
+            Self::MemoryEnabled => "memory_enabled",
         }
     }
 }
@@ -357,6 +359,8 @@ pub struct AppSettings {
     pub llm_timeout_raw_fallback_enabled: bool,
     #[serde(default = "default_disabled")]
     pub send_active_app_context_enabled: bool,
+    #[serde(default = "default_disabled")]
+    pub memory_enabled: bool,
 }
 
 impl Default for AppSettings {
@@ -376,6 +380,7 @@ impl Default for AppSettings {
             llm_formatting_enabled: true,
             llm_timeout_raw_fallback_enabled: false,
             send_active_app_context_enabled: false,
+            memory_enabled: false,
         }
     }
 }

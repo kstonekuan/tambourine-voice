@@ -1,5 +1,6 @@
 use crate::active_app_context::ActiveAppContextSnapshot;
 use crate::history::{HistoryEntry, HistoryStorage};
+use crate::memory::MemorySyncTriggerQueue;
 use tauri::State;
 
 /// Add a new entry to the dictation history
@@ -9,10 +10,21 @@ pub async fn add_history_entry(
     raw_text: String,
     active_app_context: Option<ActiveAppContextSnapshot>,
     history: State<'_, HistoryStorage>,
+    memory_sync_trigger_queue: State<'_, MemorySyncTriggerQueue>,
 ) -> Result<HistoryEntry, String> {
-    history
+    let added_history_entry = history
         .add_entry(text, raw_text, active_app_context)
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+
+    #[cfg(desktop)]
+    if let Err(error) = memory_sync_trigger_queue.enqueue_memory_sync_trigger() {
+        log::warn!("Failed to enqueue memory sync trigger after adding history entry: {error}");
+    }
+
+    #[cfg(not(desktop))]
+    let _ = memory_sync_trigger_queue;
+
+    Ok(added_history_entry)
 }
 
 /// Get dictation history entries

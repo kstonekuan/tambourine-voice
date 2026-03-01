@@ -12,10 +12,13 @@ Provider switching still uses RTVI since it requires frame injection into the pi
 
 from __future__ import annotations
 
+import json
+import re
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from loguru import logger
+from pipecat.processors.aggregators.llm_context import LLMContext
 from pydantic import BaseModel, Field
 
 from processors.llm import (
@@ -23,12 +26,19 @@ from processors.llm import (
     DICTIONARY_PROMPT_DEFAULT,
     MAIN_PROMPT_DEFAULT,
 )
+from protocol.providers import (
+    AutoProvider,
+    KnownLLMProvider,
+    OtherLLMProvider,
+    parse_llm_provider_selection,
+)
 from services.provider_registry import (
     LLMProviderId,
     STTProviderId,
     get_llm_provider_labels,
     get_stt_provider_labels,
 )
+from services.providers import create_llm_service
 from utils.rate_limiter import (
     RATE_LIMIT_CONFIG,
     RATE_LIMIT_PROVIDERS,
@@ -41,6 +51,49 @@ if TYPE_CHECKING:
     from processors.client_manager import ClientConnectionManager
 
 config_router = APIRouter(prefix="/api", tags=["config"])
+
+REQUIRED_MEMORY_SECTION_HEADERS = (
+    "## Long-Term Signals",
+    "## Ongoing Context",
+    "## Active Threads",
+    "## Recent Entities",
+    "## Observed Recurring Phrases",
+    "## Do Not Store",
+    "## Metadata",
+)
+
+MARKDOWN_CODE_FENCE_PATTERN = re.compile(
+    r"^```(?:markdown|md)?\s*(.*?)\s*```$",
+    re.DOTALL | re.IGNORECASE,
+)
+
+MEMORY_SYNC_SYSTEM_PROMPT = """
+You maintain a user memory file for dictation continuity.
+
+Output requirements:
+- Return only markdown, never wrap in code fences.
+- Never include YAML frontmatter.
+- Use exactly this section structure:
+  # User Memory
+
+  ## Long-Term Signals
+  ## Ongoing Context
+  ## Active Threads
+  ## Recent Entities
+  ## Observed Recurring Phrases
+  ## Do Not Store
+  ## Metadata
+
+Content policy:
+- Use only evidence from provided dictation history.
+- Prefer concise bullets.
+- If evidence is weak, keep placeholders rather than guessing.
+- Do not store passwords, API keys, one-time codes, personal identifiers, or protected health information.
+- In Metadata include:
+  - Version: 1
+  - Last Updated: <ISO-8601 UTC timestamp>
+  - Sync cadence: every 3 completed sessions.
+"""
 
 
 # =============================================================================
@@ -102,6 +155,28 @@ class LLMFormattingRequest(BaseModel):
     """
 
     enabled: bool
+
+
+class MemorySyncHistoryEntry(BaseModel):
+    """Single dictation entry used as memory evidence."""
+
+    timestamp: str
+    text: str
+    raw_text: str | None = None
+
+
+class MemorySyncRequest(BaseModel):
+    """Request body for server-backed memory synchronization."""
+
+    llm_provider: str
+    history_entries: list[MemorySyncHistoryEntry] = Field(min_length=1, max_length=50)
+    existing_memory_markdown: str | None = None
+
+
+class MemorySyncResponse(BaseModel):
+    """Response body containing the full replacement memory markdown."""
+
+    memory_markdown: str
 
 
 class ConfigSuccessResponse(BaseModel):
@@ -181,6 +256,150 @@ def build_provider_list(
         )
         for provider_id, service in services.items()
     ]
+
+
+def strip_markdown_code_fence(raw_markdown_text: str) -> str:
+    """Strip optional top-level markdown code fences returned by an LLM."""
+    normalized_markdown_text = raw_markdown_text.strip()
+    matched_code_fence = MARKDOWN_CODE_FENCE_PATTERN.match(normalized_markdown_text)
+    if matched_code_fence is None:
+        return normalized_markdown_text
+    return matched_code_fence.group(1).strip()
+
+
+def validate_generated_memory_markdown(memory_markdown: str) -> str:
+    """Validate the generated memory markdown matches the locked schema."""
+    normalized_markdown_text = strip_markdown_code_fence(memory_markdown)
+
+    if normalized_markdown_text.startswith("---"):
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "error": "Memory markdown must not start with YAML frontmatter",
+                "code": "INVALID_MEMORY_MARKDOWN",
+            },
+        )
+
+    if not normalized_markdown_text.startswith("# User Memory"):
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "error": "Memory markdown must begin with '# User Memory'",
+                "code": "INVALID_MEMORY_MARKDOWN",
+            },
+        )
+
+    missing_sections = [
+        required_section_header
+        for required_section_header in REQUIRED_MEMORY_SECTION_HEADERS
+        if required_section_header not in normalized_markdown_text
+    ]
+    if missing_sections:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "error": f"Memory markdown missing required sections: {', '.join(missing_sections)}",
+                "code": "INVALID_MEMORY_MARKDOWN",
+            },
+        )
+
+    return normalized_markdown_text
+
+
+def resolve_memory_sync_provider_id(
+    llm_provider_value: str,
+    request: Request,
+) -> LLMProviderId:
+    """Resolve the requested provider value to a known available provider ID."""
+    from main import AppServices
+
+    services: AppServices = request.app.state.services
+    parsed_provider_selection = parse_llm_provider_selection(llm_provider_value)
+
+    if parsed_provider_selection is None:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "Missing llm provider value", "code": "INVALID_LLM_PROVIDER"},
+        )
+
+    match parsed_provider_selection:
+        case AutoProvider():
+            configured_auto_llm_provider = services.settings.auto_llm_provider
+            if configured_auto_llm_provider is None:
+                available_llm_providers = services.available_llm_providers
+                if not available_llm_providers:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "error": "No LLM providers are available on server",
+                            "code": "INVALID_LLM_PROVIDER",
+                        },
+                    )
+                resolved_provider_id = available_llm_providers[0]
+                logger.info(
+                    "AUTO_LLM_PROVIDER is unset; memory sync auto resolved "
+                    f"to first available provider '{resolved_provider_id.value}'"
+                )
+            else:
+                try:
+                    resolved_provider_id = LLMProviderId(configured_auto_llm_provider)
+                except ValueError as error:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "error": (
+                                "Invalid auto LLM provider configured: "
+                                f"{configured_auto_llm_provider}"
+                            ),
+                            "code": "INVALID_LLM_PROVIDER",
+                        },
+                    ) from error
+        case KnownLLMProvider(provider_id=provider_id):
+            resolved_provider_id = provider_id
+        case OtherLLMProvider(provider_id=raw_provider_id):
+            try:
+                resolved_provider_id = LLMProviderId(raw_provider_id)
+            except ValueError as error:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": f"Unknown LLM provider: {raw_provider_id}",
+                        "code": "INVALID_LLM_PROVIDER",
+                    },
+                ) from error
+
+    if resolved_provider_id not in services.available_llm_providers:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": f"LLM provider '{resolved_provider_id.value}' is not available",
+                "code": "INVALID_LLM_PROVIDER",
+            },
+        )
+
+    return resolved_provider_id
+
+
+def build_memory_sync_user_prompt(body: MemorySyncRequest) -> str:
+    """Build the user prompt payload that the memory sync LLM consumes."""
+    history_payload = [
+        {
+            "timestamp": history_entry.timestamp,
+            "text": history_entry.text,
+            "raw_text": history_entry.raw_text or "",
+        }
+        for history_entry in body.history_entries
+    ]
+    serialized_history_payload = json.dumps(history_payload, ensure_ascii=False)
+    existing_memory_markdown = body.existing_memory_markdown or "(none)"
+
+    return (
+        "Current memory markdown (if any):\n"
+        f"{existing_memory_markdown}\n\n"
+        "Latest dictation history entries (JSON array):\n"
+        f"{serialized_history_payload}\n\n"
+        "Generate a full replacement markdown memory file that follows the required schema."
+    )
 
 
 # =============================================================================
@@ -369,6 +588,70 @@ async def update_stt_timeout(
 
     logger.info(f"Set STT timeout to {body.timeout_seconds}s for client: {x_client_uuid}")
     return ConfigSuccessResponse(setting="stt-timeout", value=body.timeout_seconds)
+
+
+@config_router.post(
+    "/config/memory-sync",
+    response_model=MemorySyncResponse,
+    responses={
+        400: {"model": ConfigErrorResponse, "description": "Invalid request"},
+        404: {"model": ConfigErrorResponse, "description": "Client not connected"},
+        502: {"model": ConfigErrorResponse, "description": "LLM generation failed"},
+    },
+)
+@limiter.limit(RATE_LIMIT_RUNTIME_CONFIG, key_func=get_ip_only)
+async def sync_memory_markdown(
+    body: MemorySyncRequest,
+    request: Request,
+    x_client_uuid: Annotated[str, Header()],
+) -> MemorySyncResponse:
+    """Generate full replacement memory markdown from history using an LLM."""
+    client_manager = get_client_manager(request)
+    connection = client_manager.get_connection(x_client_uuid)
+    if connection is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "Client not connected", "code": "CLIENT_NOT_FOUND"},
+        )
+
+    from main import AppServices
+
+    services: AppServices = request.app.state.services
+    provider_id = resolve_memory_sync_provider_id(body.llm_provider, request)
+    llm_service = create_llm_service(provider_id, services.settings)
+
+    llm_context = LLMContext(
+        messages=[
+            {"role": "system", "content": MEMORY_SYNC_SYSTEM_PROMPT},
+            {"role": "user", "content": build_memory_sync_user_prompt(body)},
+        ]
+    )
+    try:
+        generated_memory_markdown = await llm_service.run_inference(llm_context)
+    except Exception as inference_error:
+        logger.warning(
+            f"Memory sync inference failed for client {x_client_uuid}: {inference_error}"
+        )
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "error": "LLM memory generation failed",
+                "code": "LLM_GENERATION_FAILED",
+            },
+        ) from inference_error
+
+    if not generated_memory_markdown or not generated_memory_markdown.strip():
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "error": "LLM returned empty memory markdown",
+                "code": "EMPTY_MEMORY_MARKDOWN",
+            },
+        )
+
+    validated_memory_markdown = validate_generated_memory_markdown(generated_memory_markdown)
+    logger.info(f"Generated memory markdown for client {x_client_uuid}")
+    return MemorySyncResponse(memory_markdown=validated_memory_markdown)
 
 
 @config_router.get(
