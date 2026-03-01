@@ -515,7 +515,8 @@ def _prewarm_faster_whisper_model(settings: Settings) -> None:
 
 def _prewarm_mlx_whisper_model(settings: Settings) -> None:
     """Run one tiny MLX Whisper transcription to trigger model download/cache."""
-    import mlx_whisper
+    import importlib
+
     import numpy as np
     from pipecat.services.whisper.stt import MLXModel
 
@@ -524,7 +525,12 @@ def _prewarm_mlx_whisper_model(settings: Settings) -> None:
 
     # 1 second of silence at 16kHz as a lightweight warm-up input.
     warmup_audio = np.zeros(16000, dtype=np.float32)
-    mlx_whisper.transcribe(
+    mlx_whisper_module = importlib.import_module("mlx_whisper")
+    mlx_whisper_transcribe = getattr(mlx_whisper_module, "transcribe", None)
+    if not callable(mlx_whisper_transcribe):
+        raise RuntimeError("mlx_whisper.transcribe is unavailable")
+
+    mlx_whisper_transcribe(
         warmup_audio,
         path_or_hf_repo=model_name,
         language="en",
