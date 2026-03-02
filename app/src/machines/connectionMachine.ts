@@ -20,10 +20,16 @@ import {
 import {
 	type ConnectionState,
 	configAPI,
+	type IceServerConfig,
 	tauriAPI,
 	toLLMProviderSelection,
 	toSTTProviderSelection,
 } from "../lib/tauri";
+
+/** Default STUN server used as fallback if server ICE endpoint is unreachable */
+const DEFAULT_ICE_SERVERS: IceServerConfig[] = [
+	{ urls: "stun:stun.l.google.com:19302" },
+];
 
 // Connection timing constants
 const CONNECTION_TIMEOUT_MS = 30000;
@@ -118,8 +124,26 @@ const createClientActor = fromPromise<
 		console.debug("[XState] Registered and stored new UUID:", clientUUID);
 	}
 
+	// Fetch ICE servers from the server (includes TURN credentials if configured)
+	// Fall back to default STUN if server endpoint is unreachable
+	let iceServers: IceServerConfig[];
+	try {
+		iceServers = await configAPI.getIceServers(serverUrl, clientUUID);
+		console.debug(
+			"[XState] Fetched ICE servers from server:",
+			iceServers.map((s) => s.urls),
+		);
+	} catch (error) {
+		console.warn(
+			"[XState] Failed to fetch ICE servers, using default STUN:",
+			error,
+		);
+		iceServers = DEFAULT_ICE_SERVERS;
+	}
+
+	// Create transport with dynamic ICE servers (STUN + TURN if configured)
 	const transport = new SmallWebRTCTransport({
-		iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+		iceServers,
 	});
 	const client = new PipecatClient({
 		transport,

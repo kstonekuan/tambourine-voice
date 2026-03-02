@@ -848,6 +848,17 @@ export interface AvailableProvidersData {
 	llm: ProviderInfo[];
 }
 
+/** ICE server configuration matching WebRTC RTCIceServer interface */
+export interface IceServerConfig {
+	urls: string;
+	username?: string;
+	credential?: string;
+}
+
+/** Response from GET /api/ice-servers */
+export interface IceServersResponse {
+	ice_servers: IceServerConfig[];
+}
 const API_RETRY_LIMIT = 2;
 const API_TIMEOUT_MS = 10000;
 
@@ -865,7 +876,7 @@ function createApiClient(serverUrl: string) {
 
 export const configAPI = {
 	// =========================================================================
-	// Static endpoints (no client UUID needed)
+	// Static endpoints
 	// =========================================================================
 
 	// Static prompt defaults
@@ -903,5 +914,19 @@ export const configAPI = {
 	): Promise<AvailableProvidersData> => {
 		const api = createApiClient(serverUrl);
 		return api.get("api/providers").json<AvailableProvidersData>();
+	},
+
+	// Get ICE servers with fresh TURN credentials (requires registered UUID)
+	getIceServers: async (
+		serverUrl: string,
+		clientUUID: string,
+	): Promise<IceServerConfig[]> => {
+		const api = createApiClient(serverUrl);
+		const response = await api
+			.get("api/ice-servers", {
+				headers: { "X-Client-UUID": clientUUID },
+			})
+			.json<IceServersResponse>();
+		return response.ice_servers;
 	},
 };

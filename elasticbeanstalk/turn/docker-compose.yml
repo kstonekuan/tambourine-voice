@@ -1,0 +1,14 @@
+services:
+  coturn:
+    image: <AWS_ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/coturn-turn-server:latest
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      TURN_SHARED_SECRET: "${TURN_SHARED_SECRET}"
+      # For Elastic IP / NAT deployments so coturn advertises reachable relay candidates
+      TURN_EXTERNAL_IP: "${TURN_EXTERNAL_IP:-}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

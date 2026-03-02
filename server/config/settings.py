@@ -99,6 +99,18 @@ class Settings(BaseSettings):
     host: str = Field("127.0.0.1", description="Host to bind the server to")
     port: int = Field(8765, description="Port to listen on")
 
+    # TURN Server Configuration (Optional)
+    # When configured, the server generates time-limited HMAC credentials for NAT traversal
+    turn_server_url: str | None = Field(
+        None, description="TURN server URL (e.g., turn:your-turn-server:3478)"
+    )
+    turn_shared_secret: str | None = Field(
+        None, description="TURN shared secret for HMAC credential generation"
+    )
+    turn_credential_ttl: int = Field(
+        3600, gt=0, description="TURN credential TTL in seconds (default: 1 hour)"
+    )
+
     # Silero VAD configuration (optional - leave unset to use library defaults)
     vad_confidence: float | None = Field(
         None, description="Silero VAD confidence threshold (0.0 - 1.0)"

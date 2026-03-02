@@ -243,6 +243,26 @@ docker compose down && docker compose up --build -d
 
 The `.env` file is read at runtime (not baked into the image), so your API keys stay secure.
 
+### Run Server + TURN Together (Local)
+
+Use the root-level compose stack when you want Tambourine server and coturn in one local stack.
+
+```bash
+# from repo root
+cp server/.env.example server/.env
+
+# edit server/.env and set at least one STT + one LLM provider key
+# optional: override local TURN secret and URL
+export TURN_SHARED_SECRET='replace-with-a-random-local-secret'
+# export TURN_SERVER_URL='turn:127.0.0.1:3478'
+
+docker compose up --build -d
+docker compose logs -f
+docker compose down
+```
+
+This stack uses Linux host networking for both services. On non-Linux Docker runtimes, host networking may not behave as expected.
+
 ### Docker Networking Troubleshooting
 
 If the container shows as running and logs print `Tambourine Server Ready!`, but the client still cannot connect (or `http://127.0.0.1:8765/health` fails from your host), verify that host networking is actually enabled/supported by your Docker runtime.

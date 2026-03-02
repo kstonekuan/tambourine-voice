@@ -53,6 +53,9 @@ RATE_LIMIT_OFFER = "120/minute"
 # ICE candidate patches: WebRTC can be very chatty during setup
 RATE_LIMIT_ICE = "500/minute"
 
+# ICE server retrieval: frequent enough for reconnects, bounded against abuse
+RATE_LIMIT_ICE_SERVERS = "120/minute"
+
 # Static config endpoints: Allow frequent polling
 RATE_LIMIT_CONFIG = "200/minute"
 

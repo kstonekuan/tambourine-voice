@@ -18,7 +18,7 @@ from typing import Annotated, Final, cast
 
 import typer
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
@@ -41,6 +41,7 @@ from pipecat.transports.smallwebrtc.request_handler import (
     SmallWebRTCRequestHandler,
 )
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
+from pydantic import BaseModel
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -75,17 +76,71 @@ from utils.observers import PipelineLogObserver
 from utils.rate_limiter import (
     RATE_LIMIT_HEALTH,
     RATE_LIMIT_ICE,
+    RATE_LIMIT_ICE_SERVERS,
     RATE_LIMIT_OFFER,
     RATE_LIMIT_REGISTRATION,
     RATE_LIMIT_VERIFY,
     get_ip_only,
     limiter,
 )
+from utils.turn_credentials import generate_turn_credentials
 
-# ICE servers for WebRTC NAT traversal
-ICE_SERVERS: Final[list[IceServer]] = [
-    IceServer(urls="stun:stun.l.google.com:19302"),
-]
+# Default STUN server for WebRTC NAT traversal
+DEFAULT_STUN_SERVER: Final[IceServer] = IceServer(urls="stun:stun.l.google.com:19302")
+
+
+def build_ice_servers(settings: Settings) -> list[IceServer]:
+    """Build ICE servers list, including TURN server if configured.
+
+    Always includes Google STUN server. If TURN server is configured with
+    a shared secret, generates fresh time-limited HMAC credentials.
+
+    Args:
+        settings: Application settings containing TURN configuration
+
+    Returns:
+        List of ICE servers (STUN only, or STUN + TURN with credentials)
+    """
+    ice_servers: list[IceServer] = [DEFAULT_STUN_SERVER]
+
+    # Add TURN server with fresh credentials if configured
+    if settings.turn_server_url and settings.turn_shared_secret:
+        credentials = generate_turn_credentials(
+            secret=settings.turn_shared_secret,
+            ttl=settings.turn_credential_ttl,
+        )
+        turn_server = IceServer(
+            urls=settings.turn_server_url,
+            username=credentials.username,
+            credential=credentials.password,
+        )
+        ice_servers.append(turn_server)
+        logger.debug(
+            f"Generated TURN credentials (expires in {credentials.ttl}s): "
+            f"username={credentials.username}"
+        )
+
+    return ice_servers
+
+
+# =============================================================================
+# Pydantic models for ICE server response
+# =============================================================================
+
+
+class IceServerInfo(BaseModel):
+    """ICE server configuration matching WebRTC RTCIceServer interface."""
+
+    urls: str | list[str]
+    username: str | None = None
+    credential: str | None = None
+
+
+class IceServersResponse(BaseModel):
+    """Response containing ICE servers for WebRTC connection."""
+
+    ice_servers: list[IceServerInfo]
+
 
 LOCAL_STT_PREWARM_PROVIDER_IDS: Final[set[STTProviderId]] = {
     STTProviderId.WHISPER,
@@ -380,6 +435,29 @@ def initialize_services(settings: Settings) -> AppServices | None:
     logger.info(f"Available STT providers: {[p.value for p in available_stt]}")
     logger.info(f"Available LLM providers: {[p.value for p in available_llm]}")
 
+    if settings.turn_server_url and not settings.turn_shared_secret:
+        logger.error(
+            "TURN_SERVER_URL is set but TURN_SHARED_SECRET is missing. "
+            "Refusing to start with partial TURN configuration."
+        )
+        return None
+    if settings.turn_shared_secret and not settings.turn_server_url:
+        logger.error(
+            "TURN_SHARED_SECRET is set but TURN_SERVER_URL is missing. "
+            "Refusing to start with partial TURN configuration."
+        )
+        return None
+
+    # Build initial ICE servers (STUN always, TURN if configured).
+    # TURN credentials are refreshed per request in both /api/ice-servers and
+    # /api/offer to avoid stale credentials after TTL expiry.
+    ice_servers = build_ice_servers(settings)
+
+    if settings.turn_server_url and settings.turn_shared_secret:
+        logger.info(f"TURN server configured: {settings.turn_server_url}")
+    else:
+        logger.info("No TURN server configured (STUN only)")
+
     try:
         prewarm_enabled_local_stt_models(settings, available_stt)
     except Exception as e:
@@ -388,7 +466,7 @@ def initialize_services(settings: Settings) -> AppServices | None:
 
     return AppServices(
         settings=settings,
-        webrtc_handler=SmallWebRTCRequestHandler(ice_servers=ICE_SERVERS),
+        webrtc_handler=SmallWebRTCRequestHandler(ice_servers=ice_servers),
         active_pipeline_tasks=set(),
         client_manager=ClientConnectionManager(),
         available_stt_providers=available_stt,
@@ -437,7 +515,8 @@ def _prewarm_faster_whisper_model(settings: Settings) -> None:
 
 def _prewarm_mlx_whisper_model(settings: Settings) -> None:
     """Run one tiny MLX Whisper transcription to trigger model download/cache."""
-    import mlx_whisper
+    import importlib
+
     import numpy as np
     from pipecat.services.whisper.stt import MLXModel
 
@@ -446,7 +525,12 @@ def _prewarm_mlx_whisper_model(settings: Settings) -> None:
 
     # 1 second of silence at 16kHz as a lightweight warm-up input.
     warmup_audio = np.zeros(16000, dtype=np.float32)
-    mlx_whisper.transcribe(
+    mlx_whisper_module = importlib.import_module("mlx_whisper")
+    mlx_whisper_transcribe = getattr(mlx_whisper_module, "transcribe", None)
+    if not callable(mlx_whisper_transcribe):
+        raise RuntimeError("mlx_whisper.transcribe is unavailable")
+
+    mlx_whisper_transcribe(
         warmup_audio,
         path_or_hf_repo=model_name,
         language="en",
@@ -527,6 +611,58 @@ app.include_router(config_router)
 async def health_check(request: Request) -> dict[str, str]:
     """Health check endpoint for container orchestration (e.g., Lightsail)."""
     return {"status": "ok"}
+
+
+# =============================================================================
+# ICE Server Configuration Endpoint
+# =============================================================================
+
+
+@app.get("/api/ice-servers", response_model=IceServersResponse)
+@limiter.limit(RATE_LIMIT_ICE_SERVERS, key_func=get_ip_only)
+async def get_ice_servers(
+    request: Request,
+    x_client_uuid: Annotated[str | None, Header()] = None,
+) -> IceServersResponse:
+    """Get ICE servers with fresh TURN credentials.
+
+    Returns the ICE server configuration that clients should use for WebRTC
+    connections. This endpoint generates fresh TURN credentials on each request,
+    ensuring clients always have valid, unexpired credentials.
+
+    Requires a registered client UUID in the X-Client-UUID header to prevent
+    anonymous TURN credential minting.
+
+    Returns:
+        IceServersResponse with ice_servers list containing STUN server (always)
+        and TURN server with credentials (if configured).
+    """
+    services: AppServices = request.app.state.services
+    if not x_client_uuid:
+        raise HTTPException(
+            status_code=401,
+            detail="Client UUID required. Please register first.",
+        )
+    if not services.client_manager.is_registered(x_client_uuid):
+        raise HTTPException(
+            status_code=401,
+            detail="Unregistered client UUID. Please register first.",
+        )
+
+    # Generate fresh ICE servers with new TURN credentials
+    ice_servers = build_ice_servers(services.settings)
+
+    # Convert pipecat IceServer objects to Pydantic models
+    ice_server_infos = [
+        IceServerInfo(
+            urls=server.urls,
+            username=server.username,
+            credential=server.credential,
+        )
+        for server in ice_servers
+    ]
+
+    return IceServersResponse(ice_servers=ice_server_infos)
 
 
 # =============================================================================
@@ -622,6 +758,10 @@ async def webrtc_offer(
             status_code=401,
             detail="Unregistered client UUID. Please register first.",
         )
+
+    # Refresh ICE servers for every accepted offer so TURN credentials stay fresh.
+    refreshed_ice_servers = build_ice_servers(services.settings)
+    services.webrtc_handler.update_ice_servers(refreshed_ice_servers)
 
     # Handle existing connection with same UUID (one client = one connection)
     # 1. Synchronously remove old connection from tracking (frees UUID slot immediately)

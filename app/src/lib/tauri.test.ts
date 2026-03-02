@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+	configAPI,
 	type HotkeyConfig,
 	hotkeyIsSameAs,
 	validateHotkeyNotDuplicate,
@@ -153,5 +154,33 @@ describe("validateHotkeyNotDuplicate", () => {
 		expect(result).toBe(
 			"This shortcut is already used for the paste last hotkey",
 		);
+	});
+});
+
+describe("configAPI.getIceServers", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		vi.restoreAllMocks();
+	});
+
+	it("sends X-Client-UUID header when requesting ICE servers", async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					ice_servers: [{ urls: "stun:stun.l.google.com:19302" }],
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+
+		await configAPI.getIceServers("http://localhost:8765", "client-uuid-123");
+
+		const [request] = fetchMock.mock.calls[0] as [Request];
+		expect(request.url).toBe("http://localhost:8765/api/ice-servers");
+		expect(request.headers.get("X-Client-UUID")).toBe("client-uuid-123");
 	});
 });

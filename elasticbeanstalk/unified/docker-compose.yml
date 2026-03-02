@@ -1,0 +1,61 @@
+services:
+  server:
+    image: <AWS_ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/tambourine-server:latest
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      # Set in EB environment properties
+      TURN_SERVER_URL: "${TURN_SERVER_URL}"
+      TURN_SHARED_SECRET: "${TURN_SHARED_SECRET}"
+      TURN_CREDENTIAL_TTL: "${TURN_CREDENTIAL_TTL:-3600}"
+      # Optional provider credentials/config (pass-through from EB environment properties)
+      SPEECHMATICS_API_KEY:
+      ASSEMBLYAI_API_KEY:
+      CARTESIA_API_KEY:
+      DEEPGRAM_API_KEY:
+      AWS_ACCESS_KEY_ID:
+      AWS_SECRET_ACCESS_KEY:
+      AWS_SESSION_TOKEN:
+      AWS_REGION:
+      AZURE_SPEECH_KEY:
+      AZURE_SPEECH_REGION:
+      WHISPER_ENABLED:
+      WHISPER_DEVICE:
+      WHISPER_MODEL:
+      WHISPER_COMPUTE_TYPE:
+      WHISPER_MLX_ENABLED:
+      WHISPER_MLX_MODEL:
+      NEMOTRON_ASR_URL:
+      OPENAI_API_KEY:
+      OPENAI_BASE_URL:
+      GOOGLE_API_KEY:
+      ANTHROPIC_API_KEY:
+      CEREBRAS_API_KEY:
+      GROQ_API_KEY:
+      GOOGLE_APPLICATION_CREDENTIALS:
+      OLLAMA_BASE_URL:
+      OLLAMA_MODEL:
+      OPENROUTER_API_KEY:
+      AWS_BEDROCK_MODEL_ID:
+      AUTO_STT_PROVIDER:
+      AUTO_LLM_PROVIDER:
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  coturn:
+    image: <AWS_ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/coturn-turn-server:latest
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      # Must match server TURN_SHARED_SECRET
+      TURN_SHARED_SECRET: "${TURN_SHARED_SECRET}"
+      # For Elastic IP / NAT deployments so coturn advertises reachable relay candidates
+      TURN_EXTERNAL_IP: "${TURN_EXTERNAL_IP:-}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
