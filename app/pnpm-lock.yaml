@@ -60,8 +60,8 @@ importers:
         specifier: ^10.3.1
         version: 10.3.1(react@19.2.4)
       '@xstate/react':
-        specifier: ^6.0.0
-        version: 6.0.0(@types/react@19.2.14)(react@19.2.4)(xstate@5.28.0)
+        specifier: ^6.1.0
+        version: 6.1.0(@types/react@19.2.14)(react@19.2.4)(xstate@5.28.0)
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
@@ -1550,11 +1550,11 @@ packages:
   '@vitest/utils@4.0.18':
     resolution: {integrity: sha512-msMRKLMVLWygpK3u2Hybgi4MNjcYJvwTb0Ru09+fOyCXIgT5raYP041DRRdiJiI3k/2U6SEbAETB3YtBrUkCFA==}
 
-  '@xstate/react@6.0.0':
-    resolution: {integrity: sha512-xXlLpFJxqLhhmecAXclBECgk+B4zYSrDTl8hTfPZBogkn82OHKbm9zJxox3Z/YXoOhAQhKFTRLMYGdlbhc6T9A==}
+  '@xstate/react@6.1.0':
+    resolution: {integrity: sha512-ep9F0jGTI63B/jE8GHdMpUqtuz7yRebNaKv8EMUaiSi29NOglywc2X2YSOV/ygbIK+LtmgZ0q9anoEA2iBSEOw==}
     peerDependencies:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
-      xstate: ^5.20.0
+      xstate: ^5.28.0
     peerDependenciesMeta:
       xstate:
         optional: true
@@ -3676,7 +3676,7 @@ snapshots:
       '@vitest/pretty-format': 4.0.18
       tinyrainbow: 3.0.3
 
-  '@xstate/react@6.0.0(@types/react@19.2.14)(react@19.2.4)(xstate@5.28.0)':
+  '@xstate/react@6.1.0(@types/react@19.2.14)(react@19.2.4)(xstate@5.28.0)':
     dependencies:
       react: 19.2.4
       use-isomorphic-layout-effect: 1.2.1(@types/react@19.2.14)(react@19.2.4)

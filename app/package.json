@@ -41,7 +41,7 @@
 		"@tauri-apps/plugin-os": "^2.3.2",
 		"@tauri-apps/plugin-store": "^2.4.2",
 		"@use-gesture/react": "^10.3.1",
-		"@xstate/react": "^6.0.0",
+		"@xstate/react": "^6.1.0",
 		"date-fns": "^4.1.0",
 		"ky": "^1.14.3",
 		"lucide-react": "^0.575.0",
