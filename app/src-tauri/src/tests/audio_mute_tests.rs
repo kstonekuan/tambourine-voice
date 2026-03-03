@@ -9,6 +9,7 @@ struct FakeAudioControllerState {
     is_muted: bool,
     is_muted_error: Option<String>,
     begin_mute_error: Option<String>,
+    begin_mute_error_with_recovery_session: Option<String>,
     end_mute_error: Option<String>,
     begin_mute_call_count: usize,
     end_mute_call_count: usize,
@@ -81,6 +82,14 @@ impl SystemAudioControl for FakeAudioController {
 
         if let Some(error_message) = &state.begin_mute_error {
             return Err(AudioControlError::SetPropertyFailed(error_message.clone()));
+        }
+
+        if let Some(error_message) = state.begin_mute_error_with_recovery_session.clone() {
+            state.is_muted = true;
+            return Err(AudioControlError::MuteSessionStartFailed {
+                message: error_message,
+                recovery_session: Some(fake_active_mute_session()),
+            });
         }
 
         state.is_muted = true;
@@ -194,6 +203,57 @@ fn unmute_failure_keeps_muted_state_for_retry() {
     let state_after_retry = fake_controller_state.lock().unwrap();
     assert_eq!(state_after_retry.end_mute_call_count, 2);
     assert!(!state_after_retry.is_muted);
+}
+
+#[test]
+fn mute_failure_with_recovery_session_keeps_recovery_state_until_unmute() {
+    let fake_controller_state = Arc::new(Mutex::new(FakeAudioControllerState {
+        begin_mute_error_with_recovery_session: Some(
+            "partial mute and rollback failed".to_string(),
+        ),
+        ..Default::default()
+    }));
+    let fake_controller = FakeAudioController::new(fake_controller_state.clone());
+    let audio_mute_manager = AudioMuteManager::from_controller(Box::new(fake_controller));
+
+    assert!(audio_mute_manager.mute().is_err());
+    assert_eq!(
+        audio_mute_manager.current_state(),
+        MuteState::RecoveryPending
+    );
+
+    let state_after_failed_mute = fake_controller_state.lock().unwrap();
+    assert_eq!(state_after_failed_mute.begin_mute_call_count, 1);
+    assert_eq!(state_after_failed_mute.end_mute_call_count, 0);
+    assert!(state_after_failed_mute.is_muted);
+    drop(state_after_failed_mute);
+
+    audio_mute_manager.unmute().unwrap();
+    assert_eq!(audio_mute_manager.current_state(), MuteState::NotMuting);
+
+    let state_after_recovery = fake_controller_state.lock().unwrap();
+    assert_eq!(state_after_recovery.end_mute_call_count, 1);
+    assert!(!state_after_recovery.is_muted);
+}
+
+#[test]
+fn mute_returns_error_while_recovery_is_pending() {
+    let fake_controller_state = Arc::new(Mutex::new(FakeAudioControllerState {
+        begin_mute_error_with_recovery_session: Some(
+            "partial mute and rollback failed".to_string(),
+        ),
+        ..Default::default()
+    }));
+    let fake_controller = FakeAudioController::new(fake_controller_state);
+    let audio_mute_manager = AudioMuteManager::from_controller(Box::new(fake_controller));
+
+    assert!(audio_mute_manager.mute().is_err());
+    let second_mute_result = audio_mute_manager.mute();
+    assert!(matches!(
+        second_mute_result,
+        Err(AudioControlError::SetPropertyFailed(error_message))
+        if error_message.contains("recovery is pending")
+    ));
 }
 
 #[test]

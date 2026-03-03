@@ -334,12 +334,12 @@ impl MacOSAudioController {
         volume_zero_fallback_targets
     }
 
-    fn apply_volume_zero_fallback_and_capture_snapshot(
+    fn capture_settable_volume_targets_with_snapshot_scalars(
         device_id: u32,
-    ) -> Result<Vec<OutputVolumeScalarSnapshot>, AudioControlError> {
-        let volume_zero_fallback_targets = Self::build_volume_zero_fallback_targets(device_id);
+        volume_zero_fallback_targets: Vec<(u32, String)>,
+    ) -> (Vec<(u32, String, f32)>, Option<AudioControlError>) {
         let mut latest_volume_zero_error: Option<AudioControlError> = None;
-        let mut captured_volume_scalars: Vec<OutputVolumeScalarSnapshot> = Vec::new();
+        let mut volume_targets_with_snapshot_scalars: Vec<(u32, String, f32)> = Vec::new();
 
         for (volume_element, volume_element_label) in volume_zero_fallback_targets {
             match Self::is_property_settable(
@@ -375,6 +375,29 @@ impl MacOSAudioController {
                 }
             };
 
+            volume_targets_with_snapshot_scalars.push((
+                volume_element,
+                volume_element_label,
+                initial_volume_scalar,
+            ));
+        }
+
+        (
+            volume_targets_with_snapshot_scalars,
+            latest_volume_zero_error,
+        )
+    }
+
+    fn apply_volume_zero_to_captured_targets(
+        device_id: u32,
+        volume_targets_with_snapshot_scalars: Vec<(u32, String, f32)>,
+    ) -> (Vec<OutputVolumeScalarSnapshot>, Option<AudioControlError>) {
+        let mut latest_volume_zero_error: Option<AudioControlError> = None;
+        let mut captured_volume_scalars: Vec<OutputVolumeScalarSnapshot> = Vec::new();
+
+        for (volume_element, volume_element_label, initial_volume_scalar) in
+            volume_targets_with_snapshot_scalars
+        {
             match Self::set_f32_property(
                 device_id,
                 kAudioDevicePropertyVolumeScalar,
@@ -396,16 +419,121 @@ impl MacOSAudioController {
             }
         }
 
-        if !captured_volume_scalars.is_empty() {
+        (captured_volume_scalars, latest_volume_zero_error)
+    }
+
+    fn apply_volume_zero_fallback_and_capture_snapshot(
+        device_id: u32,
+    ) -> Result<Vec<OutputVolumeScalarSnapshot>, AudioControlError> {
+        let volume_zero_fallback_targets = Self::build_volume_zero_fallback_targets(device_id);
+        let (volume_targets_with_snapshot_scalars, latest_capture_error) =
+            Self::capture_settable_volume_targets_with_snapshot_scalars(
+                device_id,
+                volume_zero_fallback_targets,
+            );
+        let total_settable_target_count = volume_targets_with_snapshot_scalars.len();
+        let (captured_volume_scalars, latest_apply_error) =
+            Self::apply_volume_zero_to_captured_targets(
+                device_id,
+                volume_targets_with_snapshot_scalars,
+            );
+        let latest_volume_zero_error = latest_apply_error.or(latest_capture_error);
+
+        let all_settable_targets_muted_successfully = latest_volume_zero_error.is_none()
+            && !captured_volume_scalars.is_empty()
+            && captured_volume_scalars.len() == total_settable_target_count;
+
+        if all_settable_targets_muted_successfully {
             return Ok(captured_volume_scalars);
         }
+        if !captured_volume_scalars.is_empty() {
+            let partial_mute_error = Self::build_partial_volume_zero_fallback_mute_error(
+                captured_volume_scalars.len(),
+                total_settable_target_count,
+                latest_volume_zero_error,
+            );
+            let rollback_result = Self::rollback_partially_applied_volume_zero_fallback(
+                device_id,
+                &captured_volume_scalars,
+            );
 
-        Err(latest_volume_zero_error.unwrap_or_else(|| {
-            AudioControlError::SetPropertyFailed(
-                "Failed to apply volume-zero fallback: no settable volume controls were available"
-                    .to_string(),
-            )
-        }))
+            return match rollback_result {
+                Ok(()) => Err(partial_mute_error),
+                Err(rollback_error) => {
+                    log::warn!(
+                        "macOS volume-zero rollback failed: device_id={} muted_control_count={} total_settable_control_count={} rollback_error={}",
+                        device_id,
+                        captured_volume_scalars.len(),
+                        total_settable_target_count,
+                        rollback_error,
+                    );
+                    Err(Self::build_mute_session_start_error_with_recovery(
+                        partial_mute_error,
+                        rollback_error,
+                        device_id,
+                        captured_volume_scalars,
+                    ))
+                }
+            };
+        }
+
+        if total_settable_target_count == 0 {
+            return Err(latest_volume_zero_error.unwrap_or_else(|| {
+                AudioControlError::SetPropertyFailed(
+                    "Failed to apply volume-zero fallback: no settable volume controls were available"
+                        .to_string(),
+                )
+            }));
+        }
+
+        Err(Self::build_partial_volume_zero_fallback_mute_error(
+            captured_volume_scalars.len(),
+            total_settable_target_count,
+            latest_volume_zero_error,
+        ))
+    }
+
+    fn rollback_partially_applied_volume_zero_fallback(
+        device_id: u32,
+        captured_volume_scalars: &[OutputVolumeScalarSnapshot],
+    ) -> Result<(), AudioControlError> {
+        Self::restore_volume_zero_fallback_session(device_id, captured_volume_scalars)
+    }
+
+    fn build_partial_volume_zero_fallback_mute_error(
+        successful_mute_count: usize,
+        total_settable_target_count: usize,
+        latest_volume_zero_error: Option<AudioControlError>,
+    ) -> AudioControlError {
+        let partial_mute_error_message = match latest_volume_zero_error {
+            Some(partial_mute_error) => format!(
+                "Failed to apply volume-zero fallback to all settable controls ({successful_mute_count}/{total_settable_target_count} muted). Last error: {partial_mute_error}"
+            ),
+            None => format!(
+                "Failed to apply volume-zero fallback to all settable controls ({successful_mute_count}/{total_settable_target_count} muted)"
+            ),
+        };
+
+        AudioControlError::SetPropertyFailed(partial_mute_error_message)
+    }
+
+    fn build_mute_session_start_error_with_recovery(
+        partial_mute_error: AudioControlError,
+        rollback_error: AudioControlError,
+        output_device_id: u32,
+        captured_volume_scalars: Vec<OutputVolumeScalarSnapshot>,
+    ) -> AudioControlError {
+        let mute_session_start_error_message = format!(
+            "{partial_mute_error}. Failed to roll back partially-applied volume-zero fallback on device {output_device_id}: {rollback_error}"
+        );
+
+        AudioControlError::MuteSessionStartFailed {
+            message: mute_session_start_error_message,
+            recovery_session: Some(ActiveMuteSession::MacOsVolumeZeroFallback {
+                output_device_id,
+                captured_volume_scalars,
+            }),
+        }
     }
 
     fn restore_device_mute_session(
@@ -425,7 +553,7 @@ impl MacOSAudioController {
         captured_volume_scalars: &[OutputVolumeScalarSnapshot],
     ) -> Result<(), AudioControlError> {
         let mut latest_restore_error: Option<AudioControlError> = None;
-        let mut successfully_restored_any_volume = false;
+        let mut successfully_restored_volume_count = 0usize;
 
         for captured_volume_scalar in captured_volume_scalars {
             match Self::set_f32_property(
@@ -435,7 +563,7 @@ impl MacOSAudioController {
                 captured_volume_scalar.initial_volume_scalar,
             ) {
                 Ok(()) => {
-                    successfully_restored_any_volume = true;
+                    successfully_restored_volume_count += 1;
                 }
                 Err(error) => {
                     log::warn!(
@@ -447,16 +575,33 @@ impl MacOSAudioController {
             }
         }
 
-        if successfully_restored_any_volume {
+        if latest_restore_error.is_none()
+            && !captured_volume_scalars.is_empty()
+            && successfully_restored_volume_count == captured_volume_scalars.len()
+        {
             return Ok(());
         }
 
-        Err(latest_restore_error.unwrap_or_else(|| {
-            AudioControlError::SetPropertyFailed(
-                "Failed to restore macOS fallback volume: no captured controls were restorable"
+        if captured_volume_scalars.is_empty() {
+            return Err(AudioControlError::SetPropertyFailed(
+                "Failed to restore macOS fallback volume: no captured controls were available"
                     .to_string(),
-            )
-        }))
+            ));
+        }
+
+        let total_captured_volume_count = captured_volume_scalars.len();
+        let partial_restore_error_message = match latest_restore_error {
+            Some(partial_restore_error) => format!(
+                "Failed to restore macOS fallback volume on all captured controls ({successfully_restored_volume_count}/{total_captured_volume_count} restored). Last error: {partial_restore_error}"
+            ),
+            None => format!(
+                "Failed to restore macOS fallback volume on all captured controls ({successfully_restored_volume_count}/{total_captured_volume_count} restored)"
+            ),
+        };
+
+        Err(AudioControlError::SetPropertyFailed(
+            partial_restore_error_message,
+        ))
     }
 }
 

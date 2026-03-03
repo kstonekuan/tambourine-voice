@@ -14,37 +14,6 @@ mod stub;
 #[cfg(target_os = "windows")]
 mod windows;
 
-/// Error type for audio control operations
-#[derive(Debug)]
-#[allow(dead_code)] // Variants used on Windows/macOS, not Linux
-pub enum AudioControlError {
-    /// Platform-specific initialization failed
-    InitializationFailed(String),
-    /// Failed to get audio property
-    GetPropertyFailed(String),
-    /// Failed to set audio property
-    SetPropertyFailed(String),
-    /// Platform not supported
-    NotSupported,
-}
-
-impl fmt::Display for AudioControlError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::InitializationFailed(message) => write!(f, "Audio init failed: {message}"),
-            Self::GetPropertyFailed(message) => {
-                write!(f, "Failed to get audio property: {message}")
-            }
-            Self::SetPropertyFailed(message) => {
-                write!(f, "Failed to set audio property: {message}")
-            }
-            Self::NotSupported => write!(f, "Audio control not supported on this platform"),
-        }
-    }
-}
-
-impl std::error::Error for AudioControlError {}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct OutputVolumeScalarSnapshot {
     pub property_element: u32,
@@ -68,6 +37,80 @@ pub enum ActiveMuteSession {
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     StubNoOp,
 }
+
+impl ActiveMuteSession {
+    fn telemetry_summary(&self) -> String {
+        match self {
+            #[cfg(target_os = "windows")]
+            Self::WindowsEndpointMute => "windows_endpoint_mute".to_string(),
+            #[cfg(target_os = "macos")]
+            Self::MacOsDeviceMute {
+                output_device_id, ..
+            } => format!("macos_device_mute(output_device_id={output_device_id})"),
+            #[cfg(target_os = "macos")]
+            Self::MacOsVolumeZeroFallback {
+                output_device_id,
+                captured_volume_scalars,
+            } => format!(
+                "macos_volume_zero_fallback(output_device_id={output_device_id},captured_scalar_count={})",
+                captured_volume_scalars.len()
+            ),
+            #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+            Self::StubNoOp => "stub_no_op".to_string(),
+        }
+    }
+}
+
+/// Error type for audio control operations
+#[derive(Debug, Clone)]
+#[allow(dead_code)] // Variants used on Windows/macOS, not Linux
+pub enum AudioControlError {
+    /// Platform-specific initialization failed
+    InitializationFailed(String),
+    /// Failed to get audio property
+    GetPropertyFailed(String),
+    /// Failed to set audio property
+    SetPropertyFailed(String),
+    /// Failed to start mute session. May contain a recovery session that can be used to restore state.
+    MuteSessionStartFailed {
+        message: String,
+        recovery_session: Option<ActiveMuteSession>,
+    },
+    /// Platform not supported
+    NotSupported,
+}
+
+impl AudioControlError {
+    fn recovery_session(&self) -> Option<&ActiveMuteSession> {
+        match self {
+            Self::MuteSessionStartFailed {
+                recovery_session: Some(active_mute_session),
+                ..
+            } => Some(active_mute_session),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for AudioControlError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InitializationFailed(message) => write!(f, "Audio init failed: {message}"),
+            Self::GetPropertyFailed(message) => {
+                write!(f, "Failed to get audio property: {message}")
+            }
+            Self::SetPropertyFailed(message) => {
+                write!(f, "Failed to set audio property: {message}")
+            }
+            Self::MuteSessionStartFailed { message, .. } => {
+                write!(f, "Failed to start mute session: {message}")
+            }
+            Self::NotSupported => write!(f, "Audio control not supported on this platform"),
+        }
+    }
+}
+
+impl std::error::Error for AudioControlError {}
 
 /// Trait for controlling system audio mute state.
 ///
@@ -128,6 +171,7 @@ pub enum MuteState {
     #[default]
     NotMuting,
     MutedByUs,
+    RecoveryPending,
     AudioWasAlreadyMutedByUser,
 }
 
@@ -138,6 +182,10 @@ enum AudioMuteManagerState {
     MutedByUs {
         active_mute_session: ActiveMuteSession,
     },
+    RecoveryPending {
+        active_mute_session: ActiveMuteSession,
+        mute_error_message: String,
+    },
     AudioWasAlreadyMutedByUser,
 }
 
@@ -147,6 +195,7 @@ impl AudioMuteManagerState {
         match self {
             Self::NotMuting => MuteState::NotMuting,
             Self::MutedByUs { .. } => MuteState::MutedByUs,
+            Self::RecoveryPending { .. } => MuteState::RecoveryPending,
             Self::AudioWasAlreadyMutedByUser => MuteState::AudioWasAlreadyMutedByUser,
         }
     }
@@ -184,8 +233,26 @@ impl AudioMuteManager {
     pub fn mute(&self) -> Result<(), AudioControlError> {
         let mut state_guard = self.state.lock().unwrap();
 
-        if !matches!(*state_guard, AudioMuteManagerState::NotMuting) {
-            return Ok(());
+        match &*state_guard {
+            AudioMuteManagerState::NotMuting => {}
+            AudioMuteManagerState::MutedByUs { .. }
+            | AudioMuteManagerState::AudioWasAlreadyMutedByUser => return Ok(()),
+            AudioMuteManagerState::RecoveryPending {
+                active_mute_session,
+                mute_error_message,
+            } => {
+                let blocked_mute_error_message = format!(
+                    "Cannot start a new mute operation while recovery is pending from a previous mute failure: {mute_error_message}"
+                );
+                log::warn!(
+                    "Audio mute transition=BlockedMute reason=recovery_pending recovery_session={} previous_mute_error=\"{}\"",
+                    active_mute_session.telemetry_summary(),
+                    mute_error_message,
+                );
+                return Err(AudioControlError::SetPropertyFailed(
+                    blocked_mute_error_message,
+                ));
+            }
         }
 
         let audio_is_already_muted = self.controller.is_muted().unwrap_or(false);
@@ -195,12 +262,31 @@ impl AudioMuteManager {
             return Ok(());
         }
 
-        let active_mute_session = self.controller.begin_mute_session()?;
-        *state_guard = AudioMuteManagerState::MutedByUs {
-            active_mute_session,
-        };
-        log::info!("System audio muted for recording");
-        Ok(())
+        match self.controller.begin_mute_session() {
+            Ok(active_mute_session) => {
+                let active_mute_session_telemetry = active_mute_session.telemetry_summary();
+                *state_guard = AudioMuteManagerState::MutedByUs {
+                    active_mute_session,
+                };
+                log::info!(
+                    "System audio muted for recording using session {active_mute_session_telemetry}"
+                );
+                Ok(())
+            }
+            Err(begin_mute_error) => {
+                if let Some(recovery_session) = begin_mute_error.recovery_session() {
+                    let recovery_session_telemetry = recovery_session.telemetry_summary();
+                    *state_guard = AudioMuteManagerState::RecoveryPending {
+                        active_mute_session: recovery_session.clone(),
+                        mute_error_message: begin_mute_error.to_string(),
+                    };
+                    log::warn!(
+                        "Audio mute transition=RecoveryPending reason=begin_mute_failed recovery_session={recovery_session_telemetry} error={begin_mute_error}",
+                    );
+                }
+                Err(begin_mute_error)
+            }
+        }
     }
 
     pub fn unmute(&self) -> Result<(), AudioControlError> {
@@ -210,9 +296,36 @@ impl AudioMuteManager {
             AudioMuteManagerState::MutedByUs {
                 active_mute_session,
             } => {
-                self.controller.end_mute_session(active_mute_session)?;
+                let active_mute_session_telemetry = active_mute_session.telemetry_summary();
+                if let Err(end_mute_error) = self.controller.end_mute_session(active_mute_session) {
+                    log::warn!(
+                        "Audio mute transition=NotMuting failed_from=MutedByUs session={active_mute_session_telemetry} error={end_mute_error}"
+                    );
+                    return Err(end_mute_error);
+                }
                 *state_guard = AudioMuteManagerState::NotMuting;
-                log::info!("System audio unmuted after recording");
+                log::info!(
+                    "System audio unmuted after recording using session {active_mute_session_telemetry}"
+                );
+            }
+            AudioMuteManagerState::RecoveryPending {
+                active_mute_session,
+                ..
+            } => {
+                let recovery_session_telemetry = active_mute_session.telemetry_summary();
+                log::info!(
+                    "Audio mute transition=RecoveryAttempt recovery_session={recovery_session_telemetry}"
+                );
+                if let Err(recovery_error) = self.controller.end_mute_session(active_mute_session) {
+                    log::warn!(
+                        "Audio mute transition=RecoveryPending failed_from=RecoveryAttempt recovery_session={recovery_session_telemetry} error={recovery_error}"
+                    );
+                    return Err(recovery_error);
+                }
+                *state_guard = AudioMuteManagerState::NotMuting;
+                log::info!(
+                    "Audio mute transition=NotMuting completed_from=RecoveryPending recovery_session={recovery_session_telemetry}"
+                );
             }
             AudioMuteManagerState::AudioWasAlreadyMutedByUser => {
                 *state_guard = AudioMuteManagerState::NotMuting;
@@ -229,9 +342,14 @@ impl Drop for AudioMuteManager {
     fn drop(&mut self) {
         // Try to unmute on drop (app exit/crash)
         let state_guard = self.state.lock().unwrap();
-        if matches!(*state_guard, AudioMuteManagerState::MutedByUs { .. }) {
+        if matches!(
+            *state_guard,
+            AudioMuteManagerState::MutedByUs { .. } | AudioMuteManagerState::RecoveryPending { .. }
+        ) {
             drop(state_guard); // Release lock before calling unmute
-            let _ = self.unmute();
+            if let Err(drop_cleanup_error) = self.unmute() {
+                log::warn!("Audio mute transition=DropCleanupFailed error={drop_cleanup_error}");
+            }
         }
     }
 }
