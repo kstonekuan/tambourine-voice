@@ -2,7 +2,7 @@
 //!
 //! This provides a no-op implementation that logs warnings but doesn't fail.
 
-use super::{AudioControlError, SystemAudioControl};
+use super::{ActiveMuteSession, AudioControlError, SystemAudioControl};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Stub audio controller for unsupported platforms.
@@ -32,10 +32,24 @@ impl StubAudioController {
 impl SystemAudioControl for StubAudioController {
     fn is_muted(&self) -> Result<bool, AudioControlError> {
         self.warn_once();
-        Ok(false) // Pretend not muted
+        Ok(false)
     }
 
-    fn set_muted(&self, _muted: bool) -> Result<(), AudioControlError> {
+    fn begin_mute_session(&self) -> Result<ActiveMuteSession, AudioControlError> {
+        self.warn_once();
+        Ok(ActiveMuteSession::StubNoOp)
+    }
+
+    fn end_mute_session(
+        &self,
+        active_mute_session: &ActiveMuteSession,
+    ) -> Result<(), AudioControlError> {
+        if !matches!(active_mute_session, ActiveMuteSession::StubNoOp) {
+            return Err(AudioControlError::SetPropertyFailed(
+                "Received non-stub mute session in stub audio controller".to_string(),
+            ));
+        }
+
         self.warn_once();
         Ok(())
     }

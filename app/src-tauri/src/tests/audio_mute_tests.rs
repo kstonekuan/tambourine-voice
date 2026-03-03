@@ -1,16 +1,17 @@
 use std::sync::{Arc, Mutex};
 
-use super::shared::{
-    decide_mute_transition, decide_unmute_transition, MuteTransitionAction, MuteTransitionDecision,
+use super::{
+    ActiveMuteSession, AudioControlError, AudioMuteManager, MuteState, SystemAudioControl,
 };
-use super::{AudioControlError, AudioMuteManager, MuteState, SystemAudioControl};
 
 #[derive(Debug, Default)]
 struct FakeAudioControllerState {
     is_muted: bool,
     is_muted_error: Option<String>,
-    set_muted_error: Option<String>,
-    set_muted_calls: Vec<bool>,
+    begin_mute_error: Option<String>,
+    end_mute_error: Option<String>,
+    begin_mute_call_count: usize,
+    end_mute_call_count: usize,
 }
 
 #[derive(Clone)]
@@ -24,6 +25,46 @@ impl FakeAudioController {
     }
 }
 
+fn fake_active_mute_session() -> ActiveMuteSession {
+    #[cfg(target_os = "macos")]
+    {
+        ActiveMuteSession::MacOsDeviceMute {
+            output_device_id: 42,
+            initial_device_muted: false,
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        ActiveMuteSession::WindowsEndpointMute
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        ActiveMuteSession::StubNoOp
+    }
+}
+
+fn is_expected_fake_session(active_mute_session: &ActiveMuteSession) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        matches!(
+            active_mute_session,
+            ActiveMuteSession::MacOsDeviceMute { .. }
+        )
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        matches!(active_mute_session, ActiveMuteSession::WindowsEndpointMute)
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        matches!(active_mute_session, ActiveMuteSession::StubNoOp)
+    }
+}
+
 impl SystemAudioControl for FakeAudioController {
     fn is_muted(&self) -> Result<bool, AudioControlError> {
         let state = self.state.lock().unwrap();
@@ -34,68 +75,42 @@ impl SystemAudioControl for FakeAudioController {
         Ok(state.is_muted)
     }
 
-    fn set_muted(&self, muted: bool) -> Result<(), AudioControlError> {
+    fn begin_mute_session(&self) -> Result<ActiveMuteSession, AudioControlError> {
         let mut state = self.state.lock().unwrap();
-        state.set_muted_calls.push(muted);
-        if let Some(error_message) = &state.set_muted_error {
+        state.begin_mute_call_count += 1;
+
+        if let Some(error_message) = &state.begin_mute_error {
             return Err(AudioControlError::SetPropertyFailed(error_message.clone()));
         }
 
-        state.is_muted = muted;
+        state.is_muted = true;
+        Ok(fake_active_mute_session())
+    }
+
+    fn end_mute_session(
+        &self,
+        active_mute_session: &ActiveMuteSession,
+    ) -> Result<(), AudioControlError> {
+        let mut state = self.state.lock().unwrap();
+        state.end_mute_call_count += 1;
+
+        if !is_expected_fake_session(active_mute_session) {
+            return Err(AudioControlError::SetPropertyFailed(
+                "unexpected fake mute session type".to_string(),
+            ));
+        }
+
+        if let Some(error_message) = &state.end_mute_error {
+            return Err(AudioControlError::SetPropertyFailed(error_message.clone()));
+        }
+
+        state.is_muted = false;
         Ok(())
     }
 }
 
 #[test]
-fn decide_mute_transition_for_not_muting_and_already_muted_returns_no_op() {
-    let transition_decision = decide_mute_transition(MuteState::NotMuting, true);
-    assert_eq!(
-        transition_decision,
-        MuteTransitionDecision {
-            next_state: MuteState::AudioWasAlreadyMutedByUser,
-            action: MuteTransitionAction::NoOp,
-        }
-    );
-}
-
-#[test]
-fn decide_mute_transition_for_not_muting_and_not_muted_sets_muted() {
-    let transition_decision = decide_mute_transition(MuteState::NotMuting, false);
-    assert_eq!(
-        transition_decision,
-        MuteTransitionDecision {
-            next_state: MuteState::MutedByUs,
-            action: MuteTransitionAction::SetMuted(true),
-        }
-    );
-}
-
-#[test]
-fn decide_unmute_transition_from_muted_by_us_unmutes_and_resets_state() {
-    let transition_decision = decide_unmute_transition(MuteState::MutedByUs);
-    assert_eq!(
-        transition_decision,
-        MuteTransitionDecision {
-            next_state: MuteState::NotMuting,
-            action: MuteTransitionAction::SetMuted(false),
-        }
-    );
-}
-
-#[test]
-fn decide_unmute_transition_from_user_muted_keeps_audio_muted_and_resets_state() {
-    let transition_decision = decide_unmute_transition(MuteState::AudioWasAlreadyMutedByUser);
-    assert_eq!(
-        transition_decision,
-        MuteTransitionDecision {
-            next_state: MuteState::NotMuting,
-            action: MuteTransitionAction::NoOp,
-        }
-    );
-}
-
-#[test]
-fn mute_and_unmute_perform_expected_set_muted_calls() {
+fn mute_and_unmute_perform_expected_session_calls() {
     let fake_controller_state = Arc::new(Mutex::new(FakeAudioControllerState::default()));
     let fake_controller = FakeAudioController::new(fake_controller_state.clone());
     let audio_mute_manager = AudioMuteManager::from_controller(Box::new(fake_controller));
@@ -104,7 +119,9 @@ fn mute_and_unmute_perform_expected_set_muted_calls() {
     audio_mute_manager.unmute().unwrap();
 
     let state_after_operations = fake_controller_state.lock().unwrap();
-    assert_eq!(state_after_operations.set_muted_calls, vec![true, false]);
+    assert_eq!(state_after_operations.begin_mute_call_count, 1);
+    assert_eq!(state_after_operations.end_mute_call_count, 1);
+    assert!(!state_after_operations.is_muted);
 }
 
 #[test]
@@ -117,7 +134,7 @@ fn mute_is_idempotent_when_already_muted_by_manager() {
     audio_mute_manager.mute().unwrap();
 
     let state_after_operations = fake_controller_state.lock().unwrap();
-    assert_eq!(state_after_operations.set_muted_calls, vec![true]);
+    assert_eq!(state_after_operations.begin_mute_call_count, 1);
 }
 
 #[test]
@@ -133,7 +150,8 @@ fn mute_and_unmute_preserve_user_muted_audio() {
     audio_mute_manager.unmute().unwrap();
 
     let state_after_operations = fake_controller_state.lock().unwrap();
-    assert_eq!(state_after_operations.set_muted_calls, Vec::<bool>::new());
+    assert_eq!(state_after_operations.begin_mute_call_count, 0);
+    assert_eq!(state_after_operations.end_mute_call_count, 0);
     assert!(state_after_operations.is_muted);
 }
 
@@ -149,7 +167,33 @@ fn mute_falls_back_to_not_muted_when_is_muted_query_fails() {
     audio_mute_manager.mute().unwrap();
 
     let state_after_operations = fake_controller_state.lock().unwrap();
-    assert_eq!(state_after_operations.set_muted_calls, vec![true]);
+    assert_eq!(state_after_operations.begin_mute_call_count, 1);
+}
+
+#[test]
+fn unmute_failure_keeps_muted_state_for_retry() {
+    let fake_controller_state = Arc::new(Mutex::new(FakeAudioControllerState {
+        end_mute_error: Some("restore failure".to_string()),
+        ..Default::default()
+    }));
+    let fake_controller = FakeAudioController::new(fake_controller_state.clone());
+    let audio_mute_manager = AudioMuteManager::from_controller(Box::new(fake_controller));
+
+    audio_mute_manager.mute().unwrap();
+    assert!(audio_mute_manager.unmute().is_err());
+    assert_eq!(audio_mute_manager.current_state(), MuteState::MutedByUs);
+
+    {
+        let mut state_for_retry = fake_controller_state.lock().unwrap();
+        state_for_retry.end_mute_error = None;
+    }
+
+    audio_mute_manager.unmute().unwrap();
+    assert_eq!(audio_mute_manager.current_state(), MuteState::NotMuting);
+
+    let state_after_retry = fake_controller_state.lock().unwrap();
+    assert_eq!(state_after_retry.end_mute_call_count, 2);
+    assert!(!state_after_retry.is_muted);
 }
 
 #[test]
@@ -163,5 +207,7 @@ fn drop_unmutes_when_manager_muted_audio() {
     }
 
     let state_after_drop = fake_controller_state.lock().unwrap();
-    assert_eq!(state_after_drop.set_muted_calls, vec![true, false]);
+    assert_eq!(state_after_drop.begin_mute_call_count, 1);
+    assert_eq!(state_after_drop.end_mute_call_count, 1);
+    assert!(!state_after_drop.is_muted);
 }

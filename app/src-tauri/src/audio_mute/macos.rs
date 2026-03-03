@@ -3,7 +3,7 @@
 //! Uses the `CoreAudio` framework to control the default audio output device's
 //! mute state via `AudioObject` property APIs.
 
-use super::{AudioControlError, SystemAudioControl};
+use super::{ActiveMuteSession, AudioControlError, OutputVolumeScalarSnapshot, SystemAudioControl};
 use objc2_core_audio::{
     kAudioDevicePropertyMute, kAudioDevicePropertyPreferredChannelsForStereo,
     kAudioDevicePropertyScopeOutput, kAudioDevicePropertyVolumeScalar,
@@ -14,7 +14,6 @@ use objc2_core_audio::{
 };
 use std::ffi::c_void;
 use std::ptr::NonNull;
-use std::sync::Mutex;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MuteStrategy {
@@ -22,19 +21,8 @@ enum MuteStrategy {
     VolumeZeroFallback,
 }
 
-#[derive(Debug, Clone, Copy)]
-struct MacOsOutputStateSnapshot {
-    output_device_id: u32,
-    initial_device_muted: bool,
-    initial_main_volume_scalar: Option<f32>,
-    initial_stereo_channel_volume_scalars: Option<[f32; 2]>,
-    mute_strategy_used: MuteStrategy,
-}
-
 /// macOS audio controller using `CoreAudio`.
-pub struct MacOSAudioController {
-    output_state_snapshot: Mutex<Option<MacOsOutputStateSnapshot>>,
-}
+pub struct MacOSAudioController;
 
 // SAFETY: CoreAudio APIs are thread-safe
 unsafe impl Send for MacOSAudioController {}
@@ -44,9 +32,7 @@ impl MacOSAudioController {
     /// Create a new macOS audio controller.
     pub fn new() -> Result<Self, AudioControlError> {
         let _ = Self::get_default_output_device()?;
-        Ok(Self {
-            output_state_snapshot: Mutex::new(None),
-        })
+        Ok(Self)
     }
 
     /// Get the default audio output device ID.
@@ -313,66 +299,105 @@ impl MacOSAudioController {
         select_mute_strategy(mute_property_exists, mute_property_is_settable)
     }
 
-    fn apply_volume_zero_fallback(device_id: u32) -> Result<(), AudioControlError> {
-        let mut successfully_muted_any_volume_control = false;
-        let mut latest_volume_zero_error: Option<AudioControlError> = None;
-
-        let mut attempt_volume_zero_for_element =
-            |volume_element: u32, volume_element_label: &str| match Self::is_property_settable(
-                device_id,
-                kAudioDevicePropertyVolumeScalar,
-                volume_element,
-            ) {
-                Ok(true) => match Self::set_f32_property(
-                    device_id,
-                    kAudioDevicePropertyVolumeScalar,
-                    volume_element,
-                    0.0,
-                ) {
-                    Ok(()) => {
-                        successfully_muted_any_volume_control = true;
-                    }
-                    Err(error) => {
-                        log::warn!(
-                            "Failed to set {volume_element_label} volume to zero on device {device_id}: {error}"
-                        );
-                        latest_volume_zero_error = Some(error);
-                    }
-                },
-                Ok(false) => {}
-                Err(error) => {
-                    log::warn!(
-                        "Failed to query whether {volume_element_label} volume is settable on device {device_id}: {error}"
-                    );
-                    latest_volume_zero_error = Some(error);
-                }
-            };
-
-        attempt_volume_zero_for_element(kAudioObjectPropertyElementMain, "main output");
+    fn build_volume_zero_fallback_targets(device_id: u32) -> Vec<(u32, String)> {
+        let mut volume_zero_fallback_targets =
+            vec![(kAudioObjectPropertyElementMain, "main output".to_string())];
 
         match Self::get_preferred_stereo_channels(device_id) {
             Ok(preferred_stereo_channels) => {
                 for (stereo_channel_index, stereo_channel_element) in
                     preferred_stereo_channels.into_iter().enumerate()
                 {
+                    if volume_zero_fallback_targets
+                        .iter()
+                        .any(|(existing_element, _)| *existing_element == stereo_channel_element)
+                    {
+                        continue;
+                    }
+
                     let stereo_channel_label = if stereo_channel_index == 0 {
                         "left stereo channel"
                     } else {
                         "right stereo channel"
                     };
-                    attempt_volume_zero_for_element(stereo_channel_element, stereo_channel_label);
+                    volume_zero_fallback_targets
+                        .push((stereo_channel_element, stereo_channel_label.to_string()));
                 }
             }
             Err(error) => {
                 log::warn!(
                     "Failed to get preferred stereo channels while applying volume-zero fallback on device {device_id}: {error}"
                 );
-                latest_volume_zero_error = Some(error);
             }
         }
 
-        if successfully_muted_any_volume_control {
-            return Ok(());
+        volume_zero_fallback_targets
+    }
+
+    fn apply_volume_zero_fallback_and_capture_snapshot(
+        device_id: u32,
+    ) -> Result<Vec<OutputVolumeScalarSnapshot>, AudioControlError> {
+        let volume_zero_fallback_targets = Self::build_volume_zero_fallback_targets(device_id);
+        let mut latest_volume_zero_error: Option<AudioControlError> = None;
+        let mut captured_volume_scalars: Vec<OutputVolumeScalarSnapshot> = Vec::new();
+
+        for (volume_element, volume_element_label) in volume_zero_fallback_targets {
+            match Self::is_property_settable(
+                device_id,
+                kAudioDevicePropertyVolumeScalar,
+                volume_element,
+            ) {
+                Ok(true) => {}
+                Ok(false) => {
+                    continue;
+                }
+                Err(error) => {
+                    log::warn!(
+                        "Failed to query whether {volume_element_label} volume is settable on device {device_id}: {error}"
+                    );
+                    latest_volume_zero_error = Some(error);
+                    continue;
+                }
+            }
+
+            let initial_volume_scalar = match Self::get_f32_property(
+                device_id,
+                kAudioDevicePropertyVolumeScalar,
+                volume_element,
+            ) {
+                Ok(initial_volume_scalar) => initial_volume_scalar,
+                Err(error) => {
+                    log::warn!(
+                        "Failed to capture {volume_element_label} volume scalar on device {device_id}: {error}"
+                    );
+                    latest_volume_zero_error = Some(error);
+                    continue;
+                }
+            };
+
+            match Self::set_f32_property(
+                device_id,
+                kAudioDevicePropertyVolumeScalar,
+                volume_element,
+                0.0,
+            ) {
+                Ok(()) => {
+                    captured_volume_scalars.push(OutputVolumeScalarSnapshot {
+                        property_element: volume_element,
+                        initial_volume_scalar,
+                    });
+                }
+                Err(error) => {
+                    log::warn!(
+                        "Failed to set {volume_element_label} volume to zero on device {device_id}: {error}"
+                    );
+                    latest_volume_zero_error = Some(error);
+                }
+            }
+        }
+
+        if !captured_volume_scalars.is_empty() {
+            return Ok(captured_volume_scalars);
         }
 
         Err(latest_volume_zero_error.unwrap_or_else(|| {
@@ -383,102 +408,55 @@ impl MacOSAudioController {
         }))
     }
 
-    fn capture_output_state_snapshot(
-        device_id: u32,
-        mute_strategy_used: MuteStrategy,
-    ) -> MacOsOutputStateSnapshot {
-        let initial_device_muted = Self::get_u32_property(
-            device_id,
+    fn restore_device_mute_session(
+        output_device_id: u32,
+        initial_device_muted: bool,
+    ) -> Result<(), AudioControlError> {
+        Self::set_u32_property(
+            output_device_id,
             kAudioDevicePropertyMute,
             kAudioObjectPropertyElementMain,
+            u32::from(initial_device_muted),
         )
-        .map(|raw_muted_value| raw_muted_value != 0)
-        .unwrap_or(false);
-
-        let initial_main_volume_scalar = Self::get_f32_property(
-            device_id,
-            kAudioDevicePropertyVolumeScalar,
-            kAudioObjectPropertyElementMain,
-        )
-        .ok();
-
-        let initial_stereo_channel_volume_scalars = Self::get_preferred_stereo_channels(device_id)
-            .ok()
-            .and_then(|preferred_stereo_channels| {
-                let left_channel_volume = Self::get_f32_property(
-                    device_id,
-                    kAudioDevicePropertyVolumeScalar,
-                    preferred_stereo_channels[0],
-                )
-                .ok()?;
-                let right_channel_volume = Self::get_f32_property(
-                    device_id,
-                    kAudioDevicePropertyVolumeScalar,
-                    preferred_stereo_channels[1],
-                )
-                .ok()?;
-                Some([left_channel_volume, right_channel_volume])
-            });
-
-        MacOsOutputStateSnapshot {
-            output_device_id: device_id,
-            initial_device_muted,
-            initial_main_volume_scalar,
-            initial_stereo_channel_volume_scalars,
-            mute_strategy_used,
-        }
     }
 
-    fn restore_snapshot_to_original_device(output_state_snapshot: MacOsOutputStateSnapshot) {
-        let original_output_device_id = output_state_snapshot.output_device_id;
-        if let Err(error) = Self::set_u32_property(
-            original_output_device_id,
-            kAudioDevicePropertyMute,
-            kAudioObjectPropertyElementMain,
-            u32::from(output_state_snapshot.initial_device_muted),
-        ) {
-            log::warn!("Failed to restore device mute state: {error}");
-        }
+    fn restore_volume_zero_fallback_session(
+        output_device_id: u32,
+        captured_volume_scalars: &[OutputVolumeScalarSnapshot],
+    ) -> Result<(), AudioControlError> {
+        let mut latest_restore_error: Option<AudioControlError> = None;
+        let mut successfully_restored_any_volume = false;
 
-        if let Some(initial_main_volume_scalar) = output_state_snapshot.initial_main_volume_scalar {
-            if let Err(error) = Self::set_f32_property(
-                original_output_device_id,
+        for captured_volume_scalar in captured_volume_scalars {
+            match Self::set_f32_property(
+                output_device_id,
                 kAudioDevicePropertyVolumeScalar,
-                kAudioObjectPropertyElementMain,
-                initial_main_volume_scalar,
+                captured_volume_scalar.property_element,
+                captured_volume_scalar.initial_volume_scalar,
             ) {
-                log::warn!("Failed to restore main volume scalar: {error}");
-            }
-        }
-
-        if let Some(initial_stereo_channel_volume_scalars) =
-            output_state_snapshot.initial_stereo_channel_volume_scalars
-        {
-            match Self::get_preferred_stereo_channels(original_output_device_id) {
-                Ok(preferred_stereo_channels) => {
-                    if let Err(error) = Self::set_f32_property(
-                        original_output_device_id,
-                        kAudioDevicePropertyVolumeScalar,
-                        preferred_stereo_channels[0],
-                        initial_stereo_channel_volume_scalars[0],
-                    ) {
-                        log::warn!("Failed to restore left stereo channel volume: {error}");
-                    }
-
-                    if let Err(error) = Self::set_f32_property(
-                        original_output_device_id,
-                        kAudioDevicePropertyVolumeScalar,
-                        preferred_stereo_channels[1],
-                        initial_stereo_channel_volume_scalars[1],
-                    ) {
-                        log::warn!("Failed to restore right stereo channel volume: {error}");
-                    }
+                Ok(()) => {
+                    successfully_restored_any_volume = true;
                 }
                 Err(error) => {
-                    log::warn!("Failed to get preferred stereo channels during restore: {error}");
+                    log::warn!(
+                        "Failed to restore volume scalar for element {}: {error}",
+                        captured_volume_scalar.property_element
+                    );
+                    latest_restore_error = Some(error);
                 }
             }
         }
+
+        if successfully_restored_any_volume {
+            return Ok(());
+        }
+
+        Err(latest_restore_error.unwrap_or_else(|| {
+            AudioControlError::SetPropertyFailed(
+                "Failed to restore macOS fallback volume: no captured controls were restorable"
+                    .to_string(),
+            )
+        }))
     }
 }
 
@@ -493,60 +471,78 @@ impl SystemAudioControl for MacOSAudioController {
         .map(|raw_muted_value| raw_muted_value != 0)
     }
 
-    fn set_muted(&self, muted: bool) -> Result<(), AudioControlError> {
+    fn begin_mute_session(&self) -> Result<ActiveMuteSession, AudioControlError> {
         let current_default_output_device_id = Self::get_default_output_device()?;
+        let mute_strategy_to_apply =
+            Self::select_mute_strategy_for_device(current_default_output_device_id);
 
-        if muted {
-            let mute_strategy_to_apply =
-                Self::select_mute_strategy_for_device(current_default_output_device_id);
-            let output_state_snapshot = Self::capture_output_state_snapshot(
-                current_default_output_device_id,
-                mute_strategy_to_apply,
-            );
+        match mute_strategy_to_apply {
+            MuteStrategy::DeviceMuteProperty => {
+                log::info!("Applying mute strategy: DeviceMuteProperty");
+                let initial_device_muted = Self::get_u32_property(
+                    current_default_output_device_id,
+                    kAudioDevicePropertyMute,
+                    kAudioObjectPropertyElementMain,
+                )? != 0;
 
-            match mute_strategy_to_apply {
-                MuteStrategy::DeviceMuteProperty => {
-                    log::info!("Applying mute strategy: DeviceMuteProperty");
-                    Self::set_u32_property(
-                        current_default_output_device_id,
-                        kAudioDevicePropertyMute,
-                        kAudioObjectPropertyElementMain,
-                        1,
-                    )?;
-                }
-                MuteStrategy::VolumeZeroFallback => {
-                    log::info!(
-                        "Applying mute strategy: VolumeZeroFallback (mute property unavailable or unsettable)"
-                    );
-                    Self::apply_volume_zero_fallback(current_default_output_device_id)?;
-                }
+                Self::set_u32_property(
+                    current_default_output_device_id,
+                    kAudioDevicePropertyMute,
+                    kAudioObjectPropertyElementMain,
+                    1,
+                )?;
+
+                Ok(ActiveMuteSession::MacOsDeviceMute {
+                    output_device_id: current_default_output_device_id,
+                    initial_device_muted,
+                })
             }
+            MuteStrategy::VolumeZeroFallback => {
+                log::info!(
+                    "Applying mute strategy: VolumeZeroFallback (mute property unavailable or unsettable)"
+                );
+                let captured_volume_scalars =
+                    Self::apply_volume_zero_fallback_and_capture_snapshot(
+                        current_default_output_device_id,
+                    )?;
 
-            *self.output_state_snapshot.lock().unwrap() = Some(output_state_snapshot);
-            return Ok(());
+                Ok(ActiveMuteSession::MacOsVolumeZeroFallback {
+                    output_device_id: current_default_output_device_id,
+                    captured_volume_scalars,
+                })
+            }
         }
+    }
 
-        let mut snapshot_guard = self.output_state_snapshot.lock().unwrap();
-        if let Some(output_state_snapshot) = *snapshot_guard {
-            Self::restore_snapshot_to_original_device(output_state_snapshot);
-            snapshot_guard.take();
-            log::info!(
-                "Restored macOS output state after unmute using strategy {:?}",
-                output_state_snapshot.mute_strategy_used
-            );
-            return Ok(());
+    fn end_mute_session(
+        &self,
+        active_mute_session: &ActiveMuteSession,
+    ) -> Result<(), AudioControlError> {
+        match active_mute_session {
+            ActiveMuteSession::MacOsDeviceMute {
+                output_device_id,
+                initial_device_muted,
+            } => {
+                Self::restore_device_mute_session(*output_device_id, *initial_device_muted)?;
+                log::info!(
+                    "Restored macOS output state after unmute using strategy DeviceMuteProperty"
+                );
+                Ok(())
+            }
+            ActiveMuteSession::MacOsVolumeZeroFallback {
+                output_device_id,
+                captured_volume_scalars,
+            } => {
+                Self::restore_volume_zero_fallback_session(
+                    *output_device_id,
+                    captured_volume_scalars,
+                )?;
+                log::info!(
+                    "Restored macOS output state after unmute using strategy VolumeZeroFallback"
+                );
+                Ok(())
+            }
         }
-
-        log::info!("No macOS output state snapshot found, using best-effort unmute");
-        if let Err(error) = Self::set_u32_property(
-            current_default_output_device_id,
-            kAudioDevicePropertyMute,
-            kAudioObjectPropertyElementMain,
-            0,
-        ) {
-            log::warn!("Best-effort unmute failed: {error}");
-        }
-        Ok(())
     }
 }
 

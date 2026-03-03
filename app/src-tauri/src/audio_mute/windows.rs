@@ -3,7 +3,7 @@
 //! Uses the Windows Audio Session API (WASAPI) to control the default audio
 //! output device's mute state.
 
-use super::{AudioControlError, SystemAudioControl};
+use super::{ActiveMuteSession, AudioControlError, SystemAudioControl};
 use windows::Win32::{
     Media::Audio::{
         eConsole, eRender, Endpoints::IAudioEndpointVolume, IMMDevice, IMMDeviceEnumerator,
@@ -32,27 +32,27 @@ impl WindowsAudioController {
 
             // Create device enumerator
             let enumerator: IMMDeviceEnumerator =
-                CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(|e| {
+                CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(|error| {
                     AudioControlError::InitializationFailed(format!(
-                        "Failed to create device enumerator: {e}"
+                        "Failed to create device enumerator: {error}"
                     ))
                 })?;
 
             // Get default audio output device
             let device: IMMDevice = enumerator
                 .GetDefaultAudioEndpoint(eRender, eConsole)
-                .map_err(|e| {
+                .map_err(|error| {
                     AudioControlError::InitializationFailed(format!(
-                        "Failed to get default audio endpoint: {e}"
+                        "Failed to get default audio endpoint: {error}"
                     ))
                 })?;
 
             // Get the endpoint volume interface
             let endpoint_volume = device
                 .Activate::<IAudioEndpointVolume>(CLSCTX_ALL, None)
-                .map_err(|e| {
+                .map_err(|error| {
                     AudioControlError::InitializationFailed(format!(
-                        "Failed to activate endpoint volume: {e}"
+                        "Failed to activate endpoint volume: {error}"
                     ))
                 })?;
 
@@ -67,15 +67,36 @@ impl SystemAudioControl for WindowsAudioController {
             self.endpoint_volume
                 .GetMute()
                 .map(windows::core::BOOL::as_bool)
-                .map_err(|e| AudioControlError::GetPropertyFailed(format!("GetMute: {e}")))
+                .map_err(|error| AudioControlError::GetPropertyFailed(format!("GetMute: {error}")))
         }
     }
 
-    fn set_muted(&self, muted: bool) -> Result<(), AudioControlError> {
+    fn begin_mute_session(&self) -> Result<ActiveMuteSession, AudioControlError> {
         unsafe {
             self.endpoint_volume
-                .SetMute(muted, std::ptr::null())
-                .map_err(|e| AudioControlError::SetPropertyFailed(format!("SetMute: {e}")))
+                .SetMute(true, std::ptr::null())
+                .map_err(|error| {
+                    AudioControlError::SetPropertyFailed(format!("SetMute: {error}"))
+                })?;
+        }
+
+        Ok(ActiveMuteSession::WindowsEndpointMute)
+    }
+
+    fn end_mute_session(
+        &self,
+        active_mute_session: &ActiveMuteSession,
+    ) -> Result<(), AudioControlError> {
+        if !matches!(active_mute_session, ActiveMuteSession::WindowsEndpointMute) {
+            return Err(AudioControlError::SetPropertyFailed(
+                "Received non-Windows mute session in Windows audio controller".to_string(),
+            ));
+        }
+
+        unsafe {
+            self.endpoint_volume
+                .SetMute(false, std::ptr::null())
+                .map_err(|error| AudioControlError::SetPropertyFailed(format!("SetMute: {error}")))
         }
     }
 }
