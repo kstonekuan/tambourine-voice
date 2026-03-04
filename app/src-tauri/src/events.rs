@@ -18,6 +18,8 @@ use serde::Serialize;
 pub enum EventName {
     /// Rust → All: Recording started
     RecordingStart,
+    /// Rust → All: Recording start failed
+    RecordingStartFailed,
     /// Rust → All: Recording stopped
     RecordingStop,
     /// Rust → All: Prepare for recording (mic warmup)
@@ -50,6 +52,7 @@ impl EventName {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::RecordingStart => "recording-start",
+            Self::RecordingStartFailed => "recording-start-failed",
             Self::RecordingStop => "recording-stop",
             Self::PrepareRecording => "prepare-recording",
             Self::ConfigResponse => "config-response",
@@ -132,4 +135,9 @@ pub struct ReconnectResultPayload {
     pub success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RecordingStartFailedPayload {
+    pub error: String,
 }

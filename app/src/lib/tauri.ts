@@ -539,6 +539,12 @@ export const tauriAPI = {
 		return listenEvent(AppEvents.recordingStart, callback);
 	},
 
+	async onStartRecordingFailed(
+		callback: (payload: { error: string }) => void,
+	): Promise<UnlistenFn> {
+		return listenEvent(AppEvents.recordingStartFailed, callback);
+	},
+
 	async onStopRecording(callback: () => void): Promise<UnlistenFn> {
 		return listenEvent(AppEvents.recordingStop, callback);
 	},

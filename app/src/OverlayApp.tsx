@@ -442,6 +442,16 @@ function RecordingControl() {
 		send({ type: "START_RECORDING" });
 	}, [send]);
 
+	const onStartRecordingFailed = useCallback(() => {
+		// Rust start may fail after prepare-recording pre-warmed native capture.
+		// Ensure we always release capture and reset prewarm state on this path.
+		stopNativeCapture();
+		lastMicIdRef.current = undefined;
+		micPreparedRef.current = false;
+		setIsMicAcquiring(false);
+		setShowError(true);
+	}, [stopNativeCapture]);
+
 	useEffect(() => {
 		if (displayState !== "startingRecording") {
 			return;
@@ -720,22 +730,27 @@ function RecordingControl() {
 	useEffect(() => {
 		let isCancelled = false;
 		let unlistenStart: (() => void) | undefined;
+		let unlistenStartFailed: (() => void) | undefined;
 		let unlistenStop: (() => void) | undefined;
 
 		const setup = async () => {
-			const [startUnlisten, stopUnlisten] = await Promise.all([
-				tauriAPI.onStartRecording(onStartRecording),
-				tauriAPI.onStopRecording(onStopRecording),
-			]);
+			const [startUnlisten, startFailedUnlisten, stopUnlisten] =
+				await Promise.all([
+					tauriAPI.onStartRecording(onStartRecording),
+					tauriAPI.onStartRecordingFailed(onStartRecordingFailed),
+					tauriAPI.onStopRecording(onStopRecording),
+				]);
 
 			// If cancelled before setup completed, clean up immediately
 			if (isCancelled) {
 				startUnlisten();
+				startFailedUnlisten();
 				stopUnlisten();
 				return;
 			}
 
 			unlistenStart = startUnlisten;
+			unlistenStartFailed = startFailedUnlisten;
 			unlistenStop = stopUnlisten;
 		};
 
@@ -744,9 +759,10 @@ function RecordingControl() {
 		return () => {
 			isCancelled = true;
 			unlistenStart?.();
+			unlistenStartFailed?.();
 			unlistenStop?.();
 		};
-	}, [onStartRecording, onStopRecording]);
+	}, [onStartRecording, onStartRecordingFailed, onStopRecording]);
 
 	// Listen for prepare-recording event (toggle key press) to pre-warm microphone
 	// This reduces perceived latency by acquiring the mic while user holds the key

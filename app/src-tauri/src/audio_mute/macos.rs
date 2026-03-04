@@ -21,6 +21,17 @@ enum MuteStrategy {
     VolumeZeroFallback,
 }
 
+enum VolumeZeroFallbackMuteAttemptResult {
+    MutedAllSettable {
+        captured_volume_scalars: Vec<OutputVolumeScalarSnapshot>,
+    },
+    FailedToMuteAllSettable {
+        captured_volume_scalars: Vec<OutputVolumeScalarSnapshot>,
+        total_settable_target_count: usize,
+        mute_error: AudioControlError,
+    },
+}
+
 /// macOS audio controller using `CoreAudio`.
 pub struct MacOSAudioController;
 
@@ -437,60 +448,49 @@ impl MacOSAudioController {
                 device_id,
                 volume_targets_with_snapshot_scalars,
             );
-        let latest_volume_zero_error = latest_apply_error.or(latest_capture_error);
-
-        let all_settable_targets_muted_successfully = latest_volume_zero_error.is_none()
-            && !captured_volume_scalars.is_empty()
-            && captured_volume_scalars.len() == total_settable_target_count;
-
-        if all_settable_targets_muted_successfully {
-            return Ok(captured_volume_scalars);
-        }
-        if !captured_volume_scalars.is_empty() {
-            let partial_mute_error = Self::build_partial_volume_zero_fallback_mute_error(
-                captured_volume_scalars.len(),
-                total_settable_target_count,
-                latest_volume_zero_error,
-            );
-            let rollback_result = Self::rollback_partially_applied_volume_zero_fallback(
-                device_id,
-                &captured_volume_scalars,
-            );
-
-            return match rollback_result {
-                Ok(()) => Err(partial_mute_error),
-                Err(rollback_error) => {
-                    log::warn!(
-                        "macOS volume-zero rollback failed: device_id={} muted_control_count={} total_settable_control_count={} rollback_error={}",
-                        device_id,
-                        captured_volume_scalars.len(),
-                        total_settable_target_count,
-                        rollback_error,
-                    );
-                    Err(Self::build_mute_session_start_error_with_recovery(
-                        partial_mute_error,
-                        rollback_error,
-                        device_id,
-                        captured_volume_scalars,
-                    ))
-                }
-            };
-        }
-
-        if total_settable_target_count == 0 {
-            return Err(latest_volume_zero_error.unwrap_or_else(|| {
-                AudioControlError::SetPropertyFailed(
-                    "Failed to apply volume-zero fallback: no settable volume controls were available"
-                        .to_string(),
-                )
-            }));
-        }
-
-        Err(Self::build_partial_volume_zero_fallback_mute_error(
-            captured_volume_scalars.len(),
+        match evaluate_volume_zero_fallback_mute_attempt(
+            captured_volume_scalars,
             total_settable_target_count,
-            latest_volume_zero_error,
-        ))
+            latest_capture_error,
+            latest_apply_error,
+        ) {
+            VolumeZeroFallbackMuteAttemptResult::MutedAllSettable {
+                captured_volume_scalars,
+            } => Ok(captured_volume_scalars),
+            VolumeZeroFallbackMuteAttemptResult::FailedToMuteAllSettable {
+                captured_volume_scalars,
+                total_settable_target_count,
+                mute_error,
+            } => {
+                if captured_volume_scalars.is_empty() {
+                    return Err(mute_error);
+                }
+
+                let rollback_result = Self::rollback_partially_applied_volume_zero_fallback(
+                    device_id,
+                    &captured_volume_scalars,
+                );
+
+                match rollback_result {
+                    Ok(()) => Err(mute_error),
+                    Err(rollback_error) => {
+                        log::warn!(
+                            "macOS volume-zero rollback failed: device_id={} muted_control_count={} total_settable_control_count={} rollback_error={}",
+                            device_id,
+                            captured_volume_scalars.len(),
+                            total_settable_target_count,
+                            rollback_error,
+                        );
+                        Err(Self::build_mute_session_start_error_with_recovery(
+                            mute_error,
+                            rollback_error,
+                            device_id,
+                            captured_volume_scalars,
+                        ))
+                    }
+                }
+            }
+        }
     }
 
     fn rollback_partially_applied_volume_zero_fallback(
@@ -691,6 +691,63 @@ impl SystemAudioControl for MacOSAudioController {
     }
 }
 
+fn evaluate_volume_zero_fallback_mute_attempt(
+    captured_volume_scalars: Vec<OutputVolumeScalarSnapshot>,
+    total_settable_target_count: usize,
+    latest_capture_error: Option<AudioControlError>,
+    latest_apply_error: Option<AudioControlError>,
+) -> VolumeZeroFallbackMuteAttemptResult {
+    let successfully_muted_target_count = captured_volume_scalars.len();
+    let latest_volume_zero_error = latest_apply_error.or(latest_capture_error);
+    let muted_all_settable_targets_without_errors = latest_volume_zero_error.is_none()
+        && successfully_muted_target_count != 0
+        && successfully_muted_target_count == total_settable_target_count;
+
+    if muted_all_settable_targets_without_errors {
+        return VolumeZeroFallbackMuteAttemptResult::MutedAllSettable {
+            captured_volume_scalars,
+        };
+    }
+
+    if !captured_volume_scalars.is_empty() {
+        let mute_error = MacOSAudioController::build_partial_volume_zero_fallback_mute_error(
+            successfully_muted_target_count,
+            total_settable_target_count,
+            latest_volume_zero_error,
+        );
+        return VolumeZeroFallbackMuteAttemptResult::FailedToMuteAllSettable {
+            captured_volume_scalars,
+            total_settable_target_count,
+            mute_error,
+        };
+    }
+
+    if total_settable_target_count == 0 {
+        let mute_error = latest_volume_zero_error.unwrap_or_else(|| {
+            AudioControlError::SetPropertyFailed(
+                "Failed to apply volume-zero fallback: no settable volume controls were available"
+                    .to_string(),
+            )
+        });
+        return VolumeZeroFallbackMuteAttemptResult::FailedToMuteAllSettable {
+            captured_volume_scalars,
+            total_settable_target_count,
+            mute_error,
+        };
+    }
+
+    let mute_error = MacOSAudioController::build_partial_volume_zero_fallback_mute_error(
+        successfully_muted_target_count,
+        total_settable_target_count,
+        latest_volume_zero_error,
+    );
+    VolumeZeroFallbackMuteAttemptResult::FailedToMuteAllSettable {
+        captured_volume_scalars,
+        total_settable_target_count,
+        mute_error,
+    }
+}
+
 fn select_mute_strategy(
     mute_property_exists: bool,
     mute_property_is_settable: bool,
@@ -704,7 +761,17 @@ fn select_mute_strategy(
 
 #[cfg(test)]
 mod tests {
-    use super::{select_mute_strategy, MuteStrategy};
+    use super::{
+        evaluate_volume_zero_fallback_mute_attempt, select_mute_strategy, AudioControlError,
+        MuteStrategy, OutputVolumeScalarSnapshot, VolumeZeroFallbackMuteAttemptResult,
+    };
+
+    fn build_output_volume_scalar_snapshot(property_element: u32) -> OutputVolumeScalarSnapshot {
+        OutputVolumeScalarSnapshot {
+            property_element,
+            initial_volume_scalar: 0.5,
+        }
+    }
 
     #[test]
     fn select_mute_strategy_prefers_device_mute_property_when_supported_and_settable() {
@@ -724,5 +791,68 @@ mod tests {
             select_mute_strategy(false, false),
             MuteStrategy::VolumeZeroFallback
         );
+    }
+
+    #[test]
+    fn volume_zero_fallback_outcome_is_success_when_all_settable_targets_are_muted() {
+        let mute_attempt_outcome = evaluate_volume_zero_fallback_mute_attempt(
+            vec![
+                build_output_volume_scalar_snapshot(1),
+                build_output_volume_scalar_snapshot(2),
+            ],
+            2,
+            None,
+            None,
+        );
+        assert!(matches!(
+            mute_attempt_outcome,
+            VolumeZeroFallbackMuteAttemptResult::MutedAllSettable { .. }
+        ));
+    }
+
+    #[test]
+    fn volume_zero_fallback_outcome_fails_when_no_settable_targets_are_available() {
+        let mute_attempt_outcome =
+            evaluate_volume_zero_fallback_mute_attempt(Vec::new(), 0, None, None);
+        assert!(matches!(
+            mute_attempt_outcome,
+            VolumeZeroFallbackMuteAttemptResult::FailedToMuteAllSettable { .. }
+        ));
+    }
+
+    #[test]
+    fn volume_zero_fallback_outcome_requires_rollback_when_capture_probe_reports_an_error() {
+        let capture_error = AudioControlError::GetPropertyFailed("OSStatus: -1".to_string());
+        let mute_attempt_outcome = evaluate_volume_zero_fallback_mute_attempt(
+            vec![
+                build_output_volume_scalar_snapshot(1),
+                build_output_volume_scalar_snapshot(2),
+            ],
+            2,
+            Some(capture_error),
+            None,
+        );
+        assert!(matches!(
+            mute_attempt_outcome,
+            VolumeZeroFallbackMuteAttemptResult::FailedToMuteAllSettable { .. }
+        ));
+    }
+
+    #[test]
+    fn volume_zero_fallback_outcome_requires_rollback_when_apply_reports_an_error() {
+        let apply_error = AudioControlError::SetPropertyFailed("OSStatus: -1".to_string());
+        let mute_attempt_outcome = evaluate_volume_zero_fallback_mute_attempt(
+            vec![
+                build_output_volume_scalar_snapshot(1),
+                build_output_volume_scalar_snapshot(2),
+            ],
+            2,
+            None,
+            Some(apply_error),
+        );
+        assert!(matches!(
+            mute_attempt_outcome,
+            VolumeZeroFallbackMuteAttemptResult::FailedToMuteAllSettable { .. }
+        ));
     }
 }

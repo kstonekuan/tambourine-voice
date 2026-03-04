@@ -15,7 +15,7 @@ pub mod events;
 mod history;
 
 use active_app_context::get_current_active_app_context;
-use events::EventName;
+use events::{EventName, RecordingStartFailedPayload};
 mod mic_capture;
 mod settings;
 mod state;
@@ -166,7 +166,7 @@ fn start_recording(
     audio_mute_manager: Option<&AudioMuteManager>,
     auto_mute_audio: bool,
     source: &str,
-) {
+) -> Result<(), String> {
     log::info!("{source}: starting recording");
     // Play sound BEFORE muting so it's audible
     if sound_enabled {
@@ -174,14 +174,53 @@ fn start_recording(
         // Brief delay to let sound play before muting
         std::thread::sleep(std::time::Duration::from_millis(150));
     }
+
+    let mut mute_manager_used_for_start_attempt: Option<&AudioMuteManager> = None;
     if auto_mute_audio {
-        if let Some(manager) = audio_mute_manager {
-            if let Err(e) = manager.mute() {
-                log::warn!("Failed to mute audio: {e}");
+        let required_audio_mute_manager = audio_mute_manager.ok_or_else(|| {
+            "Mute-audio setting is enabled, but audio mute is unavailable on this system"
+                .to_string()
+        })?;
+        if let Err(mute_error) = required_audio_mute_manager.mute() {
+            if let Err(recovery_error) = required_audio_mute_manager.unmute() {
+                return Err(format!(
+                    "Failed to mute system audio before recording: {mute_error}. \
+                     Additionally failed to recover audio mute state after mute failure: {recovery_error}"
+                ));
+            }
+            return Err(format!(
+                "Failed to mute system audio before recording: {mute_error}"
+            ));
+        }
+        mute_manager_used_for_start_attempt = Some(required_audio_mute_manager);
+    }
+
+    if let Err(emit_error) = app.emit(EventName::RecordingStart.as_str(), ()) {
+        if let Some(mute_manager) = mute_manager_used_for_start_attempt {
+            if let Err(unmute_error) = mute_manager.unmute() {
+                return Err(format!(
+                    "Failed to emit recording-start event: {emit_error}. \
+                     Additionally failed to restore system audio mute state: {unmute_error}"
+                ));
             }
         }
+        return Err(format!(
+            "Failed to emit recording-start event: {emit_error}"
+        ));
     }
-    let _ = app.emit(EventName::RecordingStart.as_str(), ());
+
+    Ok(())
+}
+
+#[cfg(desktop)]
+fn emit_recording_start_failed(app: &AppHandle, error: String, source: &str) {
+    log::warn!("{source}: recording start aborted: {error}");
+    if let Err(emit_error) = app.emit(
+        EventName::RecordingStartFailed.as_str(),
+        RecordingStartFailedPayload { error },
+    ) {
+        log::warn!("{source}: failed to emit recording-start-failed event: {emit_error}");
+    }
 }
 
 /// Stop recording with sound and audio unmute handling
@@ -276,14 +315,20 @@ pub fn handle_shortcut_event(app: &AppHandle, shortcut: &Shortcut, event: TauriS
             ShortcutState::PreparingToRecordViaToggle
         }
         (ShortcutState::PreparingToRecordViaToggle, ShortcutEvent::ToggleReleased) => {
-            start_recording(
+            let recording_start_result = start_recording(
                 app,
                 sound_enabled,
                 audio_mute_manager.as_deref(),
                 auto_mute_audio,
                 "Toggle",
             );
-            ShortcutState::RecordingViaToggle
+            match recording_start_result {
+                Ok(()) => ShortcutState::RecordingViaToggle,
+                Err(error) => {
+                    emit_recording_start_failed(app, error, "Toggle");
+                    ShortcutState::Idle
+                }
+            }
         }
         (ShortcutState::RecordingViaToggle, ShortcutEvent::TogglePressed) => {
             ShortcutState::RecordingViaToggle
@@ -299,14 +344,20 @@ pub fn handle_shortcut_event(app: &AppHandle, shortcut: &Shortcut, event: TauriS
             ShortcutState::Idle
         }
         (ShortcutState::Idle, ShortcutEvent::HoldPressed) => {
-            start_recording(
+            let recording_start_result = start_recording(
                 app,
                 sound_enabled,
                 audio_mute_manager.as_deref(),
                 auto_mute_audio,
                 "Hold",
             );
-            ShortcutState::RecordingViaHold
+            match recording_start_result {
+                Ok(()) => ShortcutState::RecordingViaHold,
+                Err(error) => {
+                    emit_recording_start_failed(app, error, "Hold");
+                    ShortcutState::Idle
+                }
+            }
         }
         (ShortcutState::RecordingViaHold, ShortcutEvent::HoldReleased) => {
             stop_recording(

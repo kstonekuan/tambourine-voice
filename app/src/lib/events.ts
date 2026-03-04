@@ -18,6 +18,7 @@ import type { ActiveAppContextSnapshot } from "./activeAppContext";
 export const AppEvents = {
 	// Rust → All: Hotkey triggers
 	recordingStart: "recording-start",
+	recordingStartFailed: "recording-start-failed",
 	recordingStop: "recording-stop",
 	prepareRecording: "prepare-recording",
 
@@ -114,6 +115,7 @@ export interface ProviderChangeRequestPayload {
 
 export interface EventPayloads {
 	[AppEvents.recordingStart]: undefined;
+	[AppEvents.recordingStartFailed]: { error: string };
 	[AppEvents.recordingStop]: undefined;
 	[AppEvents.prepareRecording]: undefined;
 	[AppEvents.configResponse]: ConfigResponse;
