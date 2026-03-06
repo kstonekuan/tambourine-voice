@@ -14,6 +14,7 @@ mod stub;
 #[cfg(target_os = "windows")]
 mod windows;
 
+#[cfg(target_os = "macos")]
 #[derive(Debug, Clone, PartialEq)]
 pub struct OutputVolumeScalarSnapshot {
     pub property_element: u32,
