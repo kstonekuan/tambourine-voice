@@ -51,7 +51,7 @@ uuid = { version = "1.21.0", features = ["v4", "serde"] }
 tempfile = "3.26.0"
 
 # Audio playback
-rodio = { version = "0.22.1", default-features = false, features = [
+rodio = { version = "0.22.2", default-features = false, features = [
     "mp3",
     "playback",
 ] }
