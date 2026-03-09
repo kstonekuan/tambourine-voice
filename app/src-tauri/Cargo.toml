@@ -15,7 +15,7 @@ tauri-build = { version = "2.5.5", features = [] }
 
 [dependencies]
 # Tauri core and plugins
-tauri = { version = "2.10.2", features = [
+tauri = { version = "2.10.3", features = [
     "tray-icon",
     "macos-private-api",
     "image-png",
