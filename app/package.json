@@ -56,7 +56,7 @@
 		"zustand": "5.0.11"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.4.5",
+		"@biomejs/biome": "2.4.6",
 		"@tauri-apps/cli": "2.10.0",
 		"@types/node": "25.3.3",
 		"@types/react": "19.2.14",
