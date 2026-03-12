@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from processors.context_manager import DictationContextManager
 
 # Default timeout for waiting for STT transcriptions (can be overridden at runtime)
-DEFAULT_TRANSCRIPTION_WAIT_TIMEOUT_SECONDS: Final[float] = 0.5
+DEFAULT_TRANSCRIPTION_WAIT_TIMEOUT_SECONDS: Final[float] = 2.0
 
 
 # =============================================================================
