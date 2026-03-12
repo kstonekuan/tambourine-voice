@@ -30,7 +30,6 @@ from pipecat.services.openai.llm import OpenAILLMService
 from pipecat.services.openai.stt import OpenAISTTService
 from pipecat.services.openrouter.llm import OpenRouterLLMService
 from pipecat.services.speechmatics.stt import SpeechmaticsSTTService
-from services.speechmatics_stt import ReconnectingSpeechmaticsSTTService
 from pipecat.services.stt_service import STTService
 from pipecat.services.whisper.stt import WhisperSTTService, WhisperSTTServiceMLX
 
@@ -39,6 +38,7 @@ from protocol.providers import LLMProviderId, STTProviderId
 
 # Custom service for Nemotron ASR
 from services.nvidia_stt import NVidiaWebSocketSTTService
+from services.speechmatics_stt import ReconnectingSpeechmaticsSTTService
 
 if TYPE_CHECKING:
     from config.settings import Settings

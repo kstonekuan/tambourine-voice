@@ -8,6 +8,8 @@ object remains non-None — causing TransportError on finalize().
 This subclass detects a dead transport and reconnects before processing.
 """
 
+from collections.abc import AsyncGenerator
+
 from loguru import logger
 from pipecat.frames.frames import Frame, VADUserStoppedSpeakingFrame
 from pipecat.processors.frame_processor import FrameDirection
@@ -46,19 +48,20 @@ class ReconnectingSpeechmaticsSTTService(SpeechmaticsSTTService):
         else:
             logger.error(f"{self} reconnection failed")
 
-    async def process_frame(self, frame: Frame, direction: FrameDirection):
+    async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         """Process frame with transport health check before finalize.
 
         VADUserStoppedSpeakingFrame triggers finalize() on the client. If the
         transport is dead, reconnect first so finalize has a live session.
         """
-        if isinstance(frame, VADUserStoppedSpeakingFrame):
-            if self._client is not None and not self._is_client_alive():
-                await self._reconnect()
+        if isinstance(frame, VADUserStoppedSpeakingFrame) and (
+            self._client is not None and not self._is_client_alive()
+        ):
+            await self._reconnect()
 
         await super().process_frame(frame, direction)
 
-    async def run_stt(self, audio: bytes):
+    async def run_stt(self, audio: bytes) -> AsyncGenerator[Frame]:
         """Send audio with transport health check.
 
         If audio frames arrive on a dead transport (e.g. immediately after
