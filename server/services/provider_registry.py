@@ -39,6 +39,11 @@ from protocol.providers import LLMProviderId, STTProviderId
 # Custom service for Nemotron ASR
 from services.nvidia_stt import NVidiaWebSocketSTTService
 
+# Vocabulary-based STT prompt
+from processors.llm import build_stt_prompt
+
+_stt_prompt = build_stt_prompt()
+
 if TYPE_CHECKING:
     from config.settings import Settings
 
@@ -264,6 +269,7 @@ STT_PROVIDERS: Final[dict[STTProviderId, STTProviderConfig]] = {
         display_name="Groq",
         service_class=GroqSTTService,
         credential_mapper=ApiKeyMapper("groq_api_key"),
+        default_kwargs={"language": None, "prompt": _stt_prompt},
     ),
     STTProviderId.NEMOTRON: STTProviderConfig(
         provider_id=STTProviderId.NEMOTRON,
@@ -279,6 +285,7 @@ STT_PROVIDERS: Final[dict[STTProviderId, STTProviderConfig]] = {
         display_name="OpenAI",
         service_class=OpenAISTTService,
         credential_mapper=ApiKeyMapper("openai_api_key"),
+        default_kwargs={"language": None, "prompt": _stt_prompt},
     ),
     STTProviderId.WHISPER: STTProviderConfig(
         provider_id=STTProviderId.WHISPER,
