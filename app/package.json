@@ -48,7 +48,7 @@
 		"react": "^19.2.4",
 		"react-dom": "^19.2.4",
 		"react-hotkeys-hook": "^5.2.4",
-		"tailwindcss": "4.2.1",
+		"tailwindcss": "4.2.2",
 		"ts-pattern": "^5.9.0",
 		"ufo": "^1.6.3",
 		"xstate": "^5.28.0",
