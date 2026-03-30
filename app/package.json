@@ -52,7 +52,7 @@
 		"tailwindcss": "4.2.2",
 		"ts-pattern": "^5.9.0",
 		"ufo": "^1.6.3",
-		"xstate": "^5.28.0",
+		"xstate": "^5.30.0",
 		"zod": "4.3.6",
 		"zustand": "5.0.12"
 	},
