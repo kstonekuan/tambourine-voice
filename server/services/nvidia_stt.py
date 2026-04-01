@@ -126,7 +126,7 @@ class NVidiaWebSocketSTTService(WebsocketSTTService):
         await super().cancel(frame)
         await self._disconnect()
 
-    async def run_stt(self, audio: bytes) -> AsyncGenerator[Frame]:  # type: ignore[override]
+    async def run_stt(self, audio: bytes) -> AsyncGenerator[Frame]:  # ty: ignore[invalid-method-override]
         """Send audio data to NVIDIA ASR server for transcription.
 
         Args:
@@ -143,7 +143,7 @@ class NVidiaWebSocketSTTService(WebsocketSTTService):
             except Exception as e:
                 logger.error(f"{self} failed to send audio: {e}")
                 await self._report_error(ErrorFrame(f"Failed to send audio: {e}"))
-        yield None
+        yield None  # ty: ignore[invalid-yield]
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         """Process frames with NVIDIA-specific handling.

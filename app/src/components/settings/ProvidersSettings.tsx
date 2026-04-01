@@ -143,16 +143,16 @@ export function ProvidersSettings() {
 	// - During mutation: show what user selected (mutation.variables.value)
 	// - Otherwise: show confirmed value from local store, or "auto" if unavailable
 	const sttCandidate = sttMutation.isPending
-		? (sttMutation.variables?.value)
-		: (settings?.stt_provider);
+		? sttMutation.variables?.value
+		: settings?.stt_provider;
 	const isSttAvailable =
 		sttCandidate === "auto" ||
 		availableProviders?.stt.some((p) => p.value === sttCandidate);
 	const sttDisplayValue = isSttAvailable ? sttCandidate : "auto";
 
 	const llmCandidate = llmMutation.isPending
-		? (llmMutation.variables?.value)
-		: (settings?.llm_provider);
+		? llmMutation.variables?.value
+		: settings?.llm_provider;
 	const isLlmAvailable =
 		llmCandidate === "auto" ||
 		availableProviders?.llm.some((p) => p.value === llmCandidate);
