@@ -204,11 +204,12 @@ fn start_recording(
         return Err(StartRecordingError::UnavailableWhileConnecting);
     }
 
-    // Play sound BEFORE muting so it's audible
+    // Play start sound without blocking event emission.
     if sound_enabled {
-        audio::play_sound(audio::SoundType::Start);
-        // Brief delay to let sound play before muting
-        std::thread::sleep(std::time::Duration::from_millis(150));
+        let _ = std::thread::spawn(|| {
+            audio::play_sound(audio::SoundType::Start);
+            std::thread::sleep(std::time::Duration::from_millis(150));
+        });
     }
 
     let mut mute_manager_used_for_start_attempt: Option<&AudioMuteManager> = None;
