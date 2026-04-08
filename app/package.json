@@ -35,7 +35,7 @@
 		"@pipecat-ai/small-webrtc-transport": "^1.10.0",
 		"@pipecat-ai/voice-ui-kit": "^0.8.2",
 		"@tailwindcss/vite": "^4.2.2",
-		"@tanstack/react-query": "^5.96.1",
+		"@tanstack/react-query": "^5.96.2",
 		"@tauri-apps/api": "^2.10.1",
 		"@tauri-apps/plugin-dialog": "^2.6.0",
 		"@tauri-apps/plugin-fs": "^2.4.5",
