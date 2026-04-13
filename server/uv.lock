@@ -2035,7 +2035,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.135.3" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "pipecat-ai", extras = ["anthropic", "speechmatics", "assemblyai", "aws", "azure", "cartesia", "cerebras", "deepgram", "google", "groq", "openai", "openrouter", "silero", "webrtc"], specifier = ">=0.0.108" },
-    { name = "pipecat-ai", extras = ["mlx-whisper"], marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", specifier = ">=0.0.103" },
+    { name = "pipecat-ai", extras = ["mlx-whisper"], marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", specifier = ">=0.0.108" },
     { name = "pipecat-ai", extras = ["whisper"], marker = "sys_platform != 'darwin'", specifier = ">=0.0.103" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.13.1" },
