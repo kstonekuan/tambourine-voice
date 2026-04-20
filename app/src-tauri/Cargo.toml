@@ -43,7 +43,7 @@ enigo = "0.6.1"
 arboard = "3.6.1"
 
 # Async runtime
-tokio = { version = "1.52.0", features = ["rt", "sync"] }
+tokio = { version = "1.52.1", features = ["rt", "sync"] }
 
 # Settings and history
 chrono = { version = "0.4.44", features = ["serde"] }
