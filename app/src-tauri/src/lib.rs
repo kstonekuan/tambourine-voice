@@ -204,33 +204,110 @@ fn start_recording(
         return Err(StartRecordingError::UnavailableWhileConnecting);
     }
 
-    // Play start sound without blocking event emission.
+    let recording_start_committed = auto_mute_audio.then(|| {
+        std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false))
+    });
+
+    // Play start sound without blocking event emission. If auto-mute is
+    // enabled, defer the mute work to a background thread so the start event
+    // can be emitted immediately while still giving the sound a short head
+    // start before muting the system output.
     if sound_enabled {
-        let _ = std::thread::spawn(|| {
+        if auto_mute_audio {
+            use std::sync::{mpsc, Arc};
+            use std::time::Duration as StdDuration;
+
+            let (tx, rx) = mpsc::channel();
+            // Request playback with notify (audio module spawns its own thread)
+            audio::play_sound_with_notify(audio::SoundType::Start, Some(tx));
+
+            let app_for_mute = app.clone();
+            let source_for_mute = source.to_string();
+            let recording_start_committed_for_thread = recording_start_committed
+                .as_ref()
+                .map(Arc::clone)
+                .expect("auto_mute_audio implies a commit flag exists");
+            std::thread::spawn(move || {
+                use std::io::Write;
+
+                let playback_started = wait_for_recording_start_commit(
+                    rx,
+                    recording_start_committed_for_thread,
+                    StdDuration::from_millis(250),
+                    StdDuration::from_millis(500),
+                    None,
+                );
+
+                if !playback_started {
+                    return;
+                }
+
+                let should_mute = if let Some(app_state) = app_for_mute.try_state::<AppState>() {
+                    let shortcut_state = app_state.shortcut_state.lock().unwrap_or_else(|error| {
+                        panic!("Failed to lock shortcut state while deferring mute: {error}")
+                    });
+                    matches!(
+                        *shortcut_state,
+                        ShortcutState::PreparingToRecordViaToggle
+                            | ShortcutState::RecordingViaToggle
+                            | ShortcutState::RecordingViaHold
+                    )
+                } else {
+                    false
+                };
+
+                if should_mute {
+                    if let Some(audio_mute_manager) = app_for_mute.try_state::<AudioMuteManager>() {
+                        if let Err(mute_error) = audio_mute_manager.mute() {
+                            log::warn!("Failed to mute system audio for recording start: {mute_error}");
+                        }
+                    }
+                }
+
+                if let Ok(app_data_dir) = app_for_mute.path().app_data_dir() {
+                    let _ = std::fs::create_dir_all(&app_data_dir);
+                    let log_path = app_data_dir.join("e2e_playback_timestamps.log");
+                    if let Ok(mut f) = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(&log_path)
+                    {
+                        let _ = writeln!(
+                            f,
+                            "{},{},{}",
+                            chrono::Utc::now().to_rfc3339(),
+                            if playback_started { "playback_started" } else { "playback_timeout" },
+                            source_for_mute
+                        );
+                        if should_mute {
+                            let _ = writeln!(
+                                f,
+                                "{},{},{}",
+                                chrono::Utc::now().to_rfc3339(),
+                                "muted",
+                                source_for_mute
+                            );
+                        }
+                    }
+                }
+            });
+        } else {
+            // Non-auto-mute path: just play without waiting
             audio::play_sound(audio::SoundType::Start);
-            std::thread::sleep(std::time::Duration::from_millis(150));
-        });
+        }
     }
 
     let mut mute_manager_used_for_start_attempt: Option<&AudioMuteManager> = None;
     if auto_mute_audio {
+        // The actual mute happens asynchronously after the start sound begins.
+        // We still keep this block so the start path can fail early when mute
+        // support is unavailable on the current platform.
         let required_audio_mute_manager = audio_mute_manager.ok_or_else(|| {
             StartRecordingError::Other(
                 "Mute-audio setting is enabled, but audio mute is unavailable on this system"
                     .to_string(),
             )
         })?;
-        if let Err(mute_error) = required_audio_mute_manager.mute() {
-            if let Err(recovery_error) = required_audio_mute_manager.unmute() {
-                return Err(StartRecordingError::Other(format!(
-                    "Failed to mute system audio before recording: {mute_error}. \
-                     Additionally failed to recover audio mute state after mute failure: {recovery_error}"
-                )));
-            }
-            return Err(StartRecordingError::Other(format!(
-                "Failed to mute system audio before recording: {mute_error}"
-            )));
-        }
         mute_manager_used_for_start_attempt = Some(required_audio_mute_manager);
     }
 
@@ -248,7 +325,37 @@ fn start_recording(
         )));
     }
 
+    if let Some(recording_start_committed) = &recording_start_committed {
+        recording_start_committed.store(true, std::sync::atomic::Ordering::Release);
+    }
+
     Ok(())
+}
+
+#[cfg(desktop)]
+fn wait_for_recording_start_commit(
+    playback_started_rx: std::sync::mpsc::Receiver<()>,
+    recording_start_committed: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    playback_started_wait: std::time::Duration,
+    commit_wait: std::time::Duration,
+    wait_started_notify: Option<std::sync::mpsc::Sender<()>>,
+) -> bool {
+    use std::sync::atomic::Ordering;
+    use std::time::Duration as StdDuration;
+
+    if let Some(wait_started_notify) = wait_started_notify {
+        let _ = wait_started_notify.send(());
+    }
+
+    let playback_started = playback_started_rx.recv_timeout(playback_started_wait).is_ok();
+
+    let mut waited_for_commit = StdDuration::ZERO;
+    while !recording_start_committed.load(Ordering::Acquire) && waited_for_commit < commit_wait {
+        std::thread::sleep(StdDuration::from_millis(10));
+        waited_for_commit += StdDuration::from_millis(10);
+    }
+
+    playback_started && recording_start_committed.load(Ordering::Acquire)
 }
 
 #[cfg(desktop)]
