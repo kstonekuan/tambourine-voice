@@ -54,7 +54,7 @@
 		"ts-pattern": "^5.9.0",
 		"xstate": "^5.31.0",
 		"zod": "4.4.2",
-		"zustand": "5.0.12"
+		"zustand": "5.0.13"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.4.14",
