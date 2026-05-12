@@ -26,7 +26,7 @@ tambourine-voice-server = "main:app"
 dev = [
     "pytest>=9.0.3",    #
     "ruff>=0.15.12",
-    "ty>=0.0.34",
+    "ty>=0.0.35",
     "yamllint>=1.38.0",
 ]
 
