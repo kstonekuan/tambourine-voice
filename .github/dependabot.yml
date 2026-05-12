@@ -9,13 +9,20 @@ updates:
     directory: "/app" # Location of package manifests
     schedule:
       interval: "weekly"
-      
+    # Supply-chain hardening: wait 7 days before opening a PR for a new release.
+    cooldown:
+      default-days: 7
+
   - package-ecosystem: "cargo" # See documentation for possible values
     directory: "/app/src-tauri" # Location of package manifests
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "uv" # See documentation for possible values
     directory: "/server" # Location of package manifests
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7

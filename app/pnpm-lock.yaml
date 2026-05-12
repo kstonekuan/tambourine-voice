@@ -21,23 +21,23 @@ importers:
         specifier: ^9.1.1
         version: 9.1.1(@mantine/core@9.1.1(@mantine/hooks@9.1.1(react@19.2.5))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@mantine/hooks@9.1.1(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@pipecat-ai/client-js':
-        specifier: ^1.7.0
-        version: 1.7.0
+        specifier: ^1.8.0
+        version: 1.8.0
       '@pipecat-ai/client-react':
         specifier: ^1.3.0
-        version: 1.3.0(@babel/core@7.29.0)(@babel/template@7.28.6)(@pipecat-ai/client-js@1.7.0)(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+        version: 1.3.0(@babel/core@7.29.0)(@babel/template@7.28.6)(@pipecat-ai/client-js@1.8.0)(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@pipecat-ai/small-webrtc-transport':
         specifier: ^1.10.0
-        version: 1.10.0(@pipecat-ai/client-js@1.7.0)
+        version: 1.10.0(@pipecat-ai/client-js@1.8.0)
       '@pipecat-ai/voice-ui-kit':
-        specifier: ^0.9.0
-        version: 0.9.0(@daily-co/daily-js@0.89.1)(@pipecat-ai/client-js@1.7.0)(@pipecat-ai/client-react@1.3.0(@babel/core@7.29.0)(@babel/template@7.28.6)(@pipecat-ai/client-js@1.7.0)(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@pipecat-ai/small-webrtc-transport@1.10.0(@pipecat-ai/client-js@1.7.0))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(use-sync-external-store@1.6.0(react@19.2.5))
+        specifier: ^0.10.0
+        version: 0.10.0(@daily-co/daily-js@0.89.1)(@pipecat-ai/client-js@1.8.0)(@pipecat-ai/client-react@1.3.0(@babel/core@7.29.0)(@babel/template@7.28.6)(@pipecat-ai/client-js@1.8.0)(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@pipecat-ai/small-webrtc-transport@1.10.0(@pipecat-ai/client-js@1.8.0))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(use-sync-external-store@1.6.0(react@19.2.5))
       '@tailwindcss/vite':
         specifier: ^4.2.4
         version: 4.2.4(vite@8.0.10(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(yaml@2.8.4))
       '@tanstack/react-query':
-        specifier: ^5.100.8
-        version: 5.100.8(react@19.2.5)
+        specifier: ^5.100.9
+        version: 5.100.9(react@19.2.5)
       '@tauri-apps/api':
         specifier: ^2.11.0
         version: 2.11.0
@@ -90,11 +90,11 @@ importers:
         specifier: ^5.31.0
         version: 5.31.0
       zod:
-        specifier: 4.4.2
-        version: 4.4.2
+        specifier: 4.4.3
+        version: 4.4.3
       zustand:
-        specifier: 5.0.12
-        version: 5.0.12(@types/react@19.2.14)(react@19.2.5)(use-sync-external-store@1.6.0(react@19.2.5))
+        specifier: 5.0.13
+        version: 5.0.13(@types/react@19.2.14)(react@19.2.5)(use-sync-external-store@1.6.0(react@19.2.5))
     devDependencies:
       '@biomejs/biome':
         specifier: 2.4.14
@@ -741,8 +741,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@pipecat-ai/client-js@1.7.0':
-    resolution: {integrity: sha512-52RoctPc1EdzlJwy/uP3dmmcVPDF24SZyHEM0mOMK2EHvo6sN0MzM3h4rv6snyEdxBZYqS53eQMVU2L7nub2uw==}
+  '@pipecat-ai/client-js@1.8.0':
+    resolution: {integrity: sha512-MrrKlIMHbcAzVz6SU5JHQFWxbr3iDKCiCmBj4SnBisL/ruz54J4pYf61Y5IP8yoUzjYTX9+NYOw/ADKp2NV5nQ==}
 
   '@pipecat-ai/client-react@1.3.0':
     resolution: {integrity: sha512-1HmSNi5aDmSvTY2GuSoxwEW+h7sO1OP0qjdHDlE8J8SjILRi8gnh3/4BSMyv+lVHp48PdkIGqmtaMaVf0o3uvA==}
@@ -756,13 +756,13 @@ packages:
     peerDependencies:
       '@pipecat-ai/client-js': ~1.7.0
 
-  '@pipecat-ai/voice-ui-kit@0.9.0':
-    resolution: {integrity: sha512-7qkwFigZn/bOZfHJneTm6pxq0492vygaUSgqQ7SVDjJRAF3qQAScsgzvvbvhXjOwVqAXPZkgZnU/y5labj9yXQ==}
+  '@pipecat-ai/voice-ui-kit@0.10.0':
+    resolution: {integrity: sha512-/1njVgBZe/hnoiSsld8UVj0X63zvSpsFdXc6PYsITdgRKr9FrPvKpjMtMF9SMw3Yxr2yAIUcR0mub6/kbKAR5Q==}
     engines: {node: '>=18'}
     peerDependencies:
       '@daily-co/daily-js': '>=0.84.0'
       '@pipecat-ai/client-js': '>=1.6.0'
-      '@pipecat-ai/client-react': '>=1.1.0'
+      '@pipecat-ai/client-react': '>=1.3.0'
       '@pipecat-ai/daily-transport': '>=1.6.0'
       '@pipecat-ai/small-webrtc-transport': '>=1.9.0'
       react: '>=16.8.0 || >=17.0.0 || >=18.0.0'
@@ -1626,11 +1626,11 @@ packages:
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
 
-  '@tanstack/query-core@5.100.8':
-    resolution: {integrity: sha512-ceYwSFOqjPwET5TA6IOYxzxlGc0ekyH/gfOtWkP0PX43rzX9bxW48Iuw8KAduKCToi4rJAQ6nRy2kAe8gszdmg==}
+  '@tanstack/query-core@5.100.9':
+    resolution: {integrity: sha512-SJSFw1S8+kQ0+knv/XGfrbocWoAlT7vDKsSImtLx3ZPQmEcR46hkDjLSvynSy25N8Ms4tIEini1FuBd5k7IscQ==}
 
-  '@tanstack/react-query@5.100.8':
-    resolution: {integrity: sha512-iNNEekixXU5vtAGKKZX2lx3jTooG5yNY+kv0wSgEdEYG0Mj0JM5bcuQtC35ZAP3nDopT6jciUK3xeX65U7AnfA==}
+  '@tanstack/react-query@5.100.9':
+    resolution: {integrity: sha512-Oa44XkaI3kCNN6ME0KByU3xT3SEUNOMfZpHxL6+wFoTm+OeUFYHKdeYVe0aOXlRDm/f15sgLwEt2HDorIdW8+A==}
     peerDependencies:
       react: ^18 || ^19
 
@@ -1728,8 +1728,8 @@ packages:
   '@tauri-apps/plugin-store@2.4.3':
     resolution: {integrity: sha512-9LWPj9yMphRi9czEtUv87XHbl1b6xgd9EXpPrUnq6nG7+nbtoF84d4Kwz9xhAv/Hf30sr58pq7EOlyI936y8qw==}
 
-  '@tybys/wasm-util@0.10.1':
-    resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
+  '@tybys/wasm-util@0.10.2':
+    resolution: {integrity: sha512-RoBvJ2X0wuKlWFIjrwffGw1IqZHKQqzIchKaadZZfnNpsAYp2mM0h36JtPCjNDAHGgYez/15uMBpfGwchhiMgg==}
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
@@ -1824,8 +1824,8 @@ packages:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
     engines: {node: '>=12'}
 
-  baseline-browser-mapping@2.10.25:
-    resolution: {integrity: sha512-QO/VHsXCQdnzADMfmkeOPvHdIAkoB7i0/rGjINPJEetLx75hNttVWGQ/jycHUDP9zZ9rupbm60WRxcwViB0MiA==}
+  baseline-browser-mapping@2.10.27:
+    resolution: {integrity: sha512-zEs/ufmZoUd7WftKpKyXaT6RFxpQ5Qm9xytKRHvJfxFV9DFJkZph9RvJ1LcOUi0Z1ZVijMte65JbILeV+8QQEA==}
     engines: {node: '>=6.0.0'}
     hasBin: true
 
@@ -2216,8 +2216,8 @@ packages:
     resolution: {integrity: sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A==}
     engines: {node: '>=12'}
 
-  postcss@8.5.13:
-    resolution: {integrity: sha512-qif0+jGGZoLWdHey3UFHHWP0H7Gbmsk8T5VEqyYFbWqPr1XqvLGBbk/sl8V5exGmcYJklJOhOQq1pV9IcsiFag==}
+  postcss@8.5.14:
+    resolution: {integrity: sha512-SoSL4+OSEtR99LHFZQiJLkT59C5B1amGO1NzTwj7TT1qCUgUO6hxOvzkOYxD+vMrXBM3XJIKzokoERdqQq/Zmg==}
     engines: {node: ^10 || ^12 || >=14}
 
   prop-types@15.8.1:
@@ -2569,11 +2569,11 @@ packages:
     engines: {node: '>= 14.6'}
     hasBin: true
 
-  zod@4.4.2:
-    resolution: {integrity: sha512-IynmDyxsEsb9RKzO3J9+4SxXnl2FTFSzNBaKKaMV6tsSk0rw9gYw9gs+JFCq/qk2LCZ78KDwyj+Z289TijSkUw==}
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
-  zustand@5.0.12:
-    resolution: {integrity: sha512-i77ae3aZq4dhMlRhJVCYgMLKuSiZAaUPAct2AksxQ+gOtimhGMdXljRT21P5BNpeT4kXlLIckvkPM029OljD7g==}
+  zustand@5.0.13:
+    resolution: {integrity: sha512-efI2tVaVQPqtOh114loML/Z80Y4NP3yc+Ff0fYiZJPauNeWZeIp/bRFD7I9bfmCOYBh/PHxlglQ9+wvlwnPikQ==}
     engines: {node: '>=12.20.0'}
     peerDependencies:
       '@types/react': '>=18.0.0'
@@ -2911,7 +2911,7 @@ snapshots:
     dependencies:
       '@emnapi/core': 1.10.0
       '@emnapi/runtime': 1.10.0
-      '@tybys/wasm-util': 0.10.1
+      '@tybys/wasm-util': 0.10.2
     optional: true
 
   '@oxc-parser/binding-android-arm-eabi@0.128.0':
@@ -3047,7 +3047,7 @@ snapshots:
   '@oxc-resolver/binding-win32-x64-msvc@11.19.1':
     optional: true
 
-  '@pipecat-ai/client-js@1.7.0':
+  '@pipecat-ai/client-js@1.8.0':
     dependencies:
       '@types/events': 3.0.3
       bowser: 2.14.1
@@ -3056,9 +3056,9 @@ snapshots:
       typed-emitter: 2.1.0
       uuid: 10.0.0
 
-  '@pipecat-ai/client-react@1.3.0(@babel/core@7.29.0)(@babel/template@7.28.6)(@pipecat-ai/client-js@1.7.0)(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
+  '@pipecat-ai/client-react@1.3.0(@babel/core@7.29.0)(@babel/template@7.28.6)(@pipecat-ai/client-js@1.8.0)(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
-      '@pipecat-ai/client-js': 1.7.0
+      '@pipecat-ai/client-js': 1.8.0
       jotai: 2.19.1(@babel/core@7.29.0)(@babel/template@7.28.6)(@types/react@19.2.14)(react@19.2.5)
       react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)
@@ -3067,18 +3067,18 @@ snapshots:
       - '@babel/template'
       - '@types/react'
 
-  '@pipecat-ai/small-webrtc-transport@1.10.0(@pipecat-ai/client-js@1.7.0)':
+  '@pipecat-ai/small-webrtc-transport@1.10.0(@pipecat-ai/client-js@1.8.0)':
     dependencies:
       '@daily-co/daily-js': 0.89.1
-      '@pipecat-ai/client-js': 1.7.0
+      '@pipecat-ai/client-js': 1.8.0
       dequal: 2.0.3
       lodash: 4.18.1
 
-  '@pipecat-ai/voice-ui-kit@0.9.0(@daily-co/daily-js@0.89.1)(@pipecat-ai/client-js@1.7.0)(@pipecat-ai/client-react@1.3.0(@babel/core@7.29.0)(@babel/template@7.28.6)(@pipecat-ai/client-js@1.7.0)(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@pipecat-ai/small-webrtc-transport@1.10.0(@pipecat-ai/client-js@1.7.0))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(use-sync-external-store@1.6.0(react@19.2.5))':
+  '@pipecat-ai/voice-ui-kit@0.10.0(@daily-co/daily-js@0.89.1)(@pipecat-ai/client-js@1.8.0)(@pipecat-ai/client-react@1.3.0(@babel/core@7.29.0)(@babel/template@7.28.6)(@pipecat-ai/client-js@1.8.0)(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@pipecat-ai/small-webrtc-transport@1.10.0(@pipecat-ai/client-js@1.8.0))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(use-sync-external-store@1.6.0(react@19.2.5))':
     dependencies:
       '@daily-co/daily-js': 0.89.1
-      '@pipecat-ai/client-js': 1.7.0
-      '@pipecat-ai/client-react': 1.3.0(@babel/core@7.29.0)(@babel/template@7.28.6)(@pipecat-ai/client-js@1.7.0)(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@pipecat-ai/client-js': 1.8.0
+      '@pipecat-ai/client-react': 1.3.0(@babel/core@7.29.0)(@babel/template@7.28.6)(@pipecat-ai/client-js@1.8.0)(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@radix-ui/react-collapsible': 1.1.12(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@radix-ui/react-dropdown-menu': 2.1.16(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@radix-ui/react-popover': 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -3100,9 +3100,9 @@ snapshots:
       react-resizable-panels: 3.0.6(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       semver: 7.7.4
       tailwind-merge: 3.5.0
-      zustand: 5.0.12(@types/react@19.2.14)(react@19.2.5)(use-sync-external-store@1.6.0(react@19.2.5))
+      zustand: 5.0.13(@types/react@19.2.14)(react@19.2.5)(use-sync-external-store@1.6.0(react@19.2.5))
     optionalDependencies:
-      '@pipecat-ai/small-webrtc-transport': 1.10.0(@pipecat-ai/client-js@1.7.0)
+      '@pipecat-ai/small-webrtc-transport': 1.10.0(@pipecat-ai/client-js@1.8.0)
     transitivePeerDependencies:
       - '@types/react'
       - '@types/react-dom'
@@ -3825,11 +3825,11 @@ snapshots:
       tailwindcss: 4.2.4
       vite: 8.0.10(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(yaml@2.8.4)
 
-  '@tanstack/query-core@5.100.8': {}
+  '@tanstack/query-core@5.100.9': {}
 
-  '@tanstack/react-query@5.100.8(react@19.2.5)':
+  '@tanstack/react-query@5.100.9(react@19.2.5)':
     dependencies:
-      '@tanstack/query-core': 5.100.8
+      '@tanstack/query-core': 5.100.9
       react: 19.2.5
 
   '@tauri-apps/api@2.11.0': {}
@@ -3901,7 +3901,7 @@ snapshots:
     dependencies:
       '@tauri-apps/api': 2.11.0
 
-  '@tybys/wasm-util@0.10.1':
+  '@tybys/wasm-util@0.10.2':
     dependencies:
       tslib: 2.8.1
     optional: true
@@ -4000,13 +4000,13 @@ snapshots:
 
   assertion-error@2.0.1: {}
 
-  baseline-browser-mapping@2.10.25: {}
+  baseline-browser-mapping@2.10.27: {}
 
   bowser@2.14.1: {}
 
   browserslist@4.28.2:
     dependencies:
-      baseline-browser-mapping: 2.10.25
+      baseline-browser-mapping: 2.10.27
       caniuse-lite: 1.0.30001791
       electron-to-chromium: 1.5.349
       node-releases: 2.0.38
@@ -4206,7 +4206,7 @@ snapshots:
       tinyglobby: 0.2.16
       unbash: 3.0.0
       yaml: 2.8.4
-      zod: 4.4.2
+      zod: 4.4.3
     transitivePeerDependencies:
       - '@emnapi/core'
       - '@emnapi/runtime'
@@ -4377,7 +4377,7 @@ snapshots:
 
   picomatch@4.0.4: {}
 
-  postcss@8.5.13:
+  postcss@8.5.14:
     dependencies:
       nanoid: 3.3.12
       picocolors: 1.1.1
@@ -4632,7 +4632,7 @@ snapshots:
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.4
-      postcss: 8.5.13
+      postcss: 8.5.14
       rolldown: 1.0.0-rc.17
       tinyglobby: 0.2.16
     optionalDependencies:
@@ -4682,9 +4682,9 @@ snapshots:
 
   yaml@2.8.4: {}
 
-  zod@4.4.2: {}
+  zod@4.4.3: {}
 
-  zustand@5.0.12(@types/react@19.2.14)(react@19.2.5)(use-sync-external-store@1.6.0(react@19.2.5)):
+  zustand@5.0.13(@types/react@19.2.14)(react@19.2.5)(use-sync-external-store@1.6.0(react@19.2.5)):
     optionalDependencies:
       '@types/react': 19.2.14
       react: 19.2.5
