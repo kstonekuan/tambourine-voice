@@ -1312,7 +1312,7 @@ wheels = [
 
 [[package]]
 name = "pipecat-ai"
-version = "1.1.0"
+version = "1.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiofiles" },
@@ -1334,9 +1334,9 @@ dependencies = [
     { name = "soxr" },
     { name = "transformers" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/37/01/e83db0b7e51b13c76579f04ad16167231db1dea9726e43b182ca7324c8c4/pipecat_ai-1.1.0.tar.gz", hash = "sha256:abcb1eda51aac81ed0f236c49581e3ff6afa3d7e1fbce9022645d45b905446a1", size = 11049587, upload-time = "2026-04-27T21:03:48.777Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f8/22/19d75d5189b9399a873ab3c55ce2506b7a2d06b7e832b73a04e7d289899b/pipecat_ai-1.2.1.tar.gz", hash = "sha256:5f687e7239f7e20cc240a279f55e3b0ced5c8828b76285ab4ee39db354c8aaa9", size = 11120637, upload-time = "2026-05-15T22:21:10.033Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/88/cf/3fa12ae09e891f5485a0f3cf15aa307049a358d9d4d06e1378c04340fc1f/pipecat_ai-1.1.0-py3-none-any.whl", hash = "sha256:74e576a9434477c11f352ca22ad804c5fd52b49b5c3ff6e7f06615f1f8f24573", size = 10711531, upload-time = "2026-04-27T21:03:45.931Z" },
+    { url = "https://files.pythonhosted.org/packages/4f/cf/2900d4e2aaa2afb8cd7d63405295fc6bfd90779b2e9734066dbe36de2fd7/pipecat_ai-1.2.1-py3-none-any.whl", hash = "sha256:ae31f48d8bf040763b93cfe001d9d77a53e542c8f32d22cd66494171eb4a794f", size = 10770689, upload-time = "2026-05-15T22:21:07.431Z" },
 ]
 
 [package.optional-dependencies]
@@ -2006,8 +2006,8 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.136.1" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "pipecat-ai", extras = ["anthropic", "speechmatics", "assemblyai", "aws", "azure", "cartesia", "cerebras", "deepgram", "google", "groq", "openai", "openrouter", "silero", "webrtc"], specifier = ">=1.1.0" },
-    { name = "pipecat-ai", extras = ["mlx-whisper"], marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", specifier = ">=1.1.0" },
-    { name = "pipecat-ai", extras = ["whisper"], marker = "sys_platform != 'darwin'", specifier = ">=1.1.0" },
+    { name = "pipecat-ai", extras = ["mlx-whisper"], marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", specifier = ">=1.2.1" },
+    { name = "pipecat-ai", extras = ["whisper"], marker = "sys_platform != 'darwin'", specifier = ">=1.2.1" },
     { name = "pydantic", specifier = ">=2.13.3" },
     { name = "pydantic-settings", specifier = ">=2.14.0" },
     { name = "slowapi", specifier = ">=0.1.9" },
