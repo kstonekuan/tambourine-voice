@@ -21,7 +21,7 @@ tauri = { version = "2.11.1", features = [
     "image-png",
     "devtools",
 ] }
-tauri-utils = "2.9.1"
+tauri-utils = "2.9.2"
 tauri-plugin-opener = "2.5.4"
 tauri-plugin-store = "2.4.3"
 tauri-plugin-http = { version = "2.5.9", features = ["json"] }
