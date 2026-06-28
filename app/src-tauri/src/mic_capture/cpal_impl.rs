@@ -298,11 +298,7 @@ fn create_stream(
         Some(id) => host
             .input_devices()
             .map_err(|e| MicCaptureError::DeviceNotFound(e.to_string()))?
-            .find(|d| {
-                d.id()
-                    .map(|dev_id| dev_id.to_string() == id)
-                    .unwrap_or(false)
-            })
+            .find(|d| d.id().is_ok_and(|dev_id| dev_id.to_string() == id))
             .ok_or_else(|| MicCaptureError::DeviceNotFound(id.to_string()))?,
         None => host
             .default_input_device()

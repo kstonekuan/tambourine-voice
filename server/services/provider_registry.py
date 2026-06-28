@@ -195,7 +195,7 @@ class LLMProviderConfig:
 
     provider_id: LLMProviderId
     display_name: str
-    service_class: type[LLMService]
+    service_class: type[LLMService[Any]]
     credential_mapper: CredentialMapper
     default_kwargs: dict[str, Any] = field(default_factory=dict)
     settings_class: type | None = None

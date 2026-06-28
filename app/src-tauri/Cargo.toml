@@ -11,17 +11,17 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 name = "tambourine_voice_lib"
 
 [build-dependencies]
-tauri-build = { version = "2.6.1", features = [] }
+tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
 # Tauri core and plugins
-tauri = { version = "2.11.1", features = [
+tauri = { version = "2.11.3", features = [
     "tray-icon",
     "macos-private-api",
     "image-png",
     "devtools",
 ] }
-tauri-utils = "2.9.1"
+tauri-utils = "2.9.3"
 tauri-plugin-opener = "2.5.4"
 tauri-plugin-store = "2.4.3"
 tauri-plugin-http = { version = "2.5.9", features = ["json"] }
@@ -31,12 +31,12 @@ tauri-plugin-os = "2.3.2"
 
 # Serialization
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
-anyhow = "1.0.102"
+serde_json = "1.0.150"
+anyhow = "1.0.103"
 
 # Logging
-log = "0.4.29"
-env_logger = "0.11.10"
+log = "0.4.33"
+env_logger = "0.11.11"
 
 # Keyboard automation
 enigo = "0.6.1"
@@ -46,8 +46,8 @@ arboard = "3.6.1"
 tokio = { version = "1.52.3", features = ["rt", "sync"] }
 
 # Settings and history
-chrono = { version = "0.4.44", features = ["serde"] }
-uuid = { version = "1.23.1", features = ["v4", "serde"] }
+chrono = { version = "0.4.45", features = ["serde"] }
+uuid = { version = "1.23.4", features = ["v4", "serde"] }
 tempfile = "3.27.0"
 
 # Audio playback
@@ -61,7 +61,7 @@ cpal = "0.17.3"
 tauri-plugin-single-instance = "2.4.2"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
-tauri-plugin-global-shortcut = "2.3.1"
+tauri-plugin-global-shortcut = "2.3.2"
 
 # Windows audio control (WASAPI)
 [target.'cfg(target_os = "windows")'.dependencies]

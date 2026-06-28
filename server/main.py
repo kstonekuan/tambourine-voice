@@ -27,9 +27,8 @@ from pipecat.frames.frames import HeartbeatFrame
 from pipecat.observers.user_bot_latency_observer import UserBotLatencyObserver
 from pipecat.pipeline.llm_switcher import LLMSwitcher
 from pipecat.pipeline.pipeline import Pipeline
-from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.service_switcher import ServiceSwitcher, ServiceSwitcherStrategyManual
-from pipecat.pipeline.task import PipelineParams, PipelineTask
+from pipecat.pipeline.worker import PipelineParams, PipelineWorker
 from pipecat.processors.frameworks.rtvi import RTVIProcessor
 from pipecat.services.llm_service import LLMService
 from pipecat.services.stt_service import STTService
@@ -41,6 +40,7 @@ from pipecat.transports.smallwebrtc.request_handler import (
     SmallWebRTCRequestHandler,
 )
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
+from pipecat.workers.runner import WorkerRunner
 from pydantic import BaseModel
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -334,9 +334,9 @@ async def run_pipeline(
             f"⏱️ LATENCY FROM USER STOPPED SPEAKING TO BOT STARTED SPEAKING: {latency_seconds:.3f}s"
         )
 
-    # Create pipeline task - RTVI is automatically enabled and accessible via task.rtvi
+    # Create pipeline worker - RTVI is automatically enabled and accessible via worker.rtvi
     # This avoids duplicate RTVIObservers that caused text duplication in 0.0.101
-    task = PipelineTask(
+    pipeline_worker = PipelineWorker(
         pipeline,
         params=PipelineParams(
             enable_metrics=True,
@@ -353,7 +353,7 @@ async def run_pipeline(
     # ConfigurationHandler processes provider switching messages from RTVI client
     # Note: State-only config (prompts, timeouts) is now handled via HTTP API
     config_handler = ConfigurationHandler(
-        rtvi_processor=task.rtvi,
+        rtvi_processor=pipeline_worker.rtvi,
         stt_switcher=stt_switcher,
         llm_switcher=llm_switcher,
         stt_services=stt_services,
@@ -362,7 +362,7 @@ async def run_pipeline(
     )
 
     # Register event handler for client messages on the RTVI processor
-    @task.rtvi.event_handler("on_client_message")
+    @pipeline_worker.rtvi.event_handler("on_client_message")
     async def on_client_message(processor: RTVIProcessor, message: object) -> None:
         """Handle RTVI client messages for configuration and recording control."""
         _ = processor  # Unused, required by event handler signature
@@ -400,11 +400,12 @@ async def run_pipeline(
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(_transport: object, client: object) -> None:
         logger.info(f"Client disconnected: {client}")
-        await task.cancel()
+        await pipeline_worker.cancel()
 
     # Run the pipeline
-    runner = PipelineRunner(handle_sigint=False)
-    await runner.run(task)
+    runner = WorkerRunner(handle_sigint=False)
+    await runner.add_workers(pipeline_worker)
+    await runner.run()
 
 
 def initialize_services(settings: Settings) -> AppServices | None:

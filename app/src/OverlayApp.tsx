@@ -16,7 +16,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { useDrag } from "@use-gesture/react";
 import { AlertCircle } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+	type ComponentProps,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import { match } from "ts-pattern";
 import { z } from "zod";
 import Logo from "./assets/logo.svg?react";
@@ -72,6 +78,9 @@ const KnownRTVICustomServerMessageSchema = z.discriminatedUnion("type", [
 type KnownRTVICustomServerMessage = z.infer<
 	typeof KnownRTVICustomServerMessageSchema
 >;
+type PipecatProviderClient = ComponentProps<
+	typeof PipecatClientProvider
+>["client"];
 
 /**
  * Unknown RTVI custom server message type (forward compatibility).
@@ -1320,7 +1329,7 @@ function RecordingControlWithClient() {
 	}
 
 	return (
-		<PipecatClientProvider client={client}>
+		<PipecatClientProvider client={client as unknown as PipecatProviderClient}>
 			<RecordingControl />
 		</PipecatClientProvider>
 	);
