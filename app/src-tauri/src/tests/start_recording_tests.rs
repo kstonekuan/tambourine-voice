@@ -1,7 +1,6 @@
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    mpsc,
-    Arc,
+    mpsc, Arc,
 };
 use std::thread;
 use std::time::Duration;
@@ -17,7 +16,7 @@ fn auto_mute_waits_for_start_sound_and_commit_before_proceeding() {
 
     let handle = thread::spawn(move || {
         let result = crate::wait_for_recording_start_commit(
-            playback_started_rx,
+            Some(playback_started_rx),
             recording_start_committed_for_thread,
             Duration::from_millis(250),
             Duration::from_millis(500),
