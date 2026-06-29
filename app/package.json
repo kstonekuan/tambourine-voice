@@ -60,7 +60,7 @@
 		"@biomejs/biome": "2.4.15",
 		"@tauri-apps/cli": "2.11.0",
 		"@types/node": "25.6.0",
-		"@types/react": "19.2.14",
+		"@types/react": "19.2.17",
 		"@types/react-dom": "19.2.3",
 		"@vitejs/plugin-react": "6.0.1",
 		"knip": "6.11.0",
