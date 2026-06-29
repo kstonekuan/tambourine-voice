@@ -55,11 +55,17 @@ fn auto_mute_proceeds_without_sound_when_commit_fires() {
     });
 
     wait_started_rx.recv().unwrap();
-    assert!(completion_rx.try_recv().is_err(), "should not complete before commit");
+    assert!(
+        completion_rx.try_recv().is_err(),
+        "should not complete before commit"
+    );
 
     recording_start_committed.store(true, Ordering::Release);
 
-    assert!(completion_rx.recv().unwrap(), "should return true once commit fires");
+    assert!(
+        completion_rx.recv().unwrap(),
+        "should return true once commit fires"
+    );
     handle.join().unwrap();
 }
 
