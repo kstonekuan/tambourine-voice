@@ -75,6 +75,18 @@ Open-source alternative to [Wispr Flow](https://wisprflow.ai), [Superwhisper](ht
 - **Auto-Mute Audio** - Automatically mute system audio while dictating (Windows/macOS)
 - **Misc.** - System tray integration, microphone selection, sound feedback, configure hotkeys
 
+## Native macOS App
+
+You can build Tambourine as a standalone `.app` and run the Python server as a background service that starts automatically on login — no terminal windows needed.
+
+See **[docs/macos-deployment.md](docs/macos-deployment.md)** for the full guide, or quick-start:
+
+```bash
+cd app && pnpm tauri build                        # Build the .app
+cp -r src-tauri/target/release/bundle/macos/Tambourine.app /Applications/
+cd .. && scripts/macos-server.sh install           # Auto-start server on login
+```
+
 ## Planned Features
 
 - **Voice-Driven Text Modification** - Highlight existing text and describe how to modify it. Select a paragraph and say "make this more formal" or "fix the grammar" to transform text in place.
