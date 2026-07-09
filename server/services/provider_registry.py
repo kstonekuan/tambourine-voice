@@ -45,6 +45,7 @@ from protocol.providers import LLMProviderId, STTProviderId
 from services.nvidia_stt import NVidiaWebSocketSTTService
 from services.speechmatics_stt import ReconnectingSpeechmaticsSTTService
 
+
 if TYPE_CHECKING:
     from config.settings import Settings
 
