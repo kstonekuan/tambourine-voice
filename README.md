@@ -16,7 +16,7 @@ Your personal voice interface for any app. Speak naturally and your words appear
 Open-source alternative to [Wispr Flow](https://wisprflow.ai), [Superwhisper](https://superwhisper.com), and [Willow](https://willowvoice.com).
 
 
-> 🚀 **Hosted Service Coming Soon!**
+> 🚀 **Hosted Service — Coming Soon!**
 > [Join the waitlist](https://docs.google.com/forms/d/e/1FAIpQLSf6JfLheFlBU-jAVMzgA7CKCcFb39fGZOaizKjxSBMCwSrVZg/viewform) to use Tambourine without running the server yourself.
 
 <p align="center">
@@ -39,12 +39,12 @@ Open-source alternative to [Wispr Flow](https://wisprflow.ai), [Superwhisper](ht
 
 **AI that understands you.** Unlike raw transcription, Tambourine uses AI to format your speech into clean text—removing filler words, adding punctuation, and applying your personal dictionary for technical terms and proper nouns.
 
-**Why not native dictation?** Built-in dictation is not personalized but Tambourine can be customized to your speaking and writing style, and with a personal dictionary for uncommon terms.
+**Why not native dictation?** Built-in dictation is not personalized, but Tambourine can be customized to your speaking and writing style, with a personal dictionary for uncommon terms.
 
 **Why not proprietary tools?** Unlike Wispr Flow or Superwhisper, this project gives you full control and transparency.
 
 **Fully customizable.** This is your voice interface, built your way:
-- **Choose your AI providers** — Pick your STT (Cartesia, Deepgram, AssemblyAI, Speechmatics, Azure, AWS, Google, Groq, OpenAI, Nemotron) and LLM (Cerebras, OpenAI, Anthropic, Gemini, Groq, OpenRouter), run fully local with Whisper and Ollama, or add more from [Pipecat's supported services](https://docs.pipecat.ai/server/services/supported-services)
+- **Choose your AI providers** — Pick your STT (Cartesia, Deepgram, AssemblyAI, Speechmatics, Azure, AWS, Google, Groq, OpenAI, Nemotron) and LLM (Cerebras, OpenAI, Anthropic, Gemini, Groq, OpenRouter), run fully locally with Whisper and Ollama, or add more from [Pipecat's supported services](https://docs.pipecat.ai/server/services/supported-services)
 - **Customize the formatting** — Modify prompts, add custom rules, build your personal dictionary
 - **Extend freely** — Built on [Pipecat](https://github.com/pipecat-ai/pipecat)'s modular pipeline, fully open-source
 
@@ -54,7 +54,7 @@ Open-source alternative to [Wispr Flow](https://wisprflow.ai), [Superwhisper](ht
 | -------- | ------------- |
 | Windows  | ✅             |
 | macOS    | ✅             |
-| Linux    | ⚠️             |
+| Linux    | ⚠️ Experimental|
 | Android  | ❌             |
 | iOS      | ❌             |
 
@@ -68,7 +68,7 @@ Open-source alternative to [Wispr Flow](https://wisprflow.ai), [Superwhisper](ht
 - **Context-Aware Formatting** - Automatically detect which application is focused and tailor formatting accordingly. Email clients get proper salutations and sign-offs, messaging apps get casual formatting, code editors get syntax-aware output with proper casing and punctuation.
 - **Customizable Prompts** - Edit formatting rules, enable advanced features, add personal dictionary
 - **In-App Provider Selection** - Switch STT and LLM providers without restarting
-- **Automatic Typing** - Input text directly at focused position
+- **Automatic Typing** - Inputs text directly at the focused cursor position.
 - **Recording Overlay** - Floating visual indicator
 - **Transcription History** - View and copy previous dictations
 - **Paste Last Transcription** - Re-type previous dictation with `Ctrl+Alt+.`
@@ -195,7 +195,7 @@ pnpm dev
 3. Use either shortcut:
    - **Toggle**: Press `Ctrl+Alt+Space` to start, press again to stop
    - **Hold**: Hold `` Ctrl+Alt+` `` while speaking, release to stop
-4. Your cleaned text is typed at your cursor
+4. Your cleaned text is typed at the cursor.
 
 ## Server Commands
 
@@ -215,7 +215,7 @@ uv run python main.py --verbose
 ## Docker Deployment
 
 Run the server in Docker instead of installing Python dependencies locally.
-Server requires host networking due to RTP/WebRTC random UDP port assignments.
+The server requires host networking due to the random UDP port assignments used by RTP/WebRTC.
 
 To use GPU acceleration for a locally hosted Whisper model, set up GPU access for your container daemon:
 
@@ -315,7 +315,7 @@ The app connects to `http://127.0.0.1:8765` by default via WebRTC. Settings are 
 
 ### Data Management
 
-Tambourine supports exporting and importing your configuration data, making it easy to backup settings, share configurations, or try community examples.
+Tambourine supports exporting and importing your configuration data, making it easy to back up settings, share configurations, or try community examples.
 
 #### Export Data
 
@@ -331,7 +331,7 @@ Go to **Settings > Data Management** and click the export button. Select a folde
 
 #### Import Data
 
-Click the import button in **Settings > Data Management** and select one or more files (`.json` or `.md`). Tambourine auto-detects file types from their content.
+Click the import button in **Settings > Data Management** and select one or more files (`.json` or `.md`). Tambourine automatically detects file types from their content.
 
 For history imports, you can choose a merge strategy:
 - **Merge (skip duplicates)** - Add new entries, skip existing ones
@@ -359,7 +359,7 @@ Your prompts will be updated immediately. You can further customize them in **Se
 - **State Management:** Zustand, Tanstack Query, XState
 - **Backend:** Python, FastAPI
 - **Voice Pipeline:** Pipecat
-- **Communications:** WebRTC
+- **Communication:** WebRTC
 - **Validation:** Zod, Pydantic
 - **Code Quality:** Biome, Ruff, Ty, Clippy
 
