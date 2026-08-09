@@ -44,7 +44,7 @@ Open-source alternative to [Wispr Flow](https://wisprflow.ai), [Superwhisper](ht
 **Why not proprietary tools?** Unlike Wispr Flow or Superwhisper, this project gives you full control and transparency.
 
 **Fully customizable.** This is your voice interface, built your way:
-- **Choose your AI providers** — Pick your STT (Cartesia, Deepgram, AssemblyAI, Speechmatics, Azure, AWS, Google, Groq, OpenAI, Nemotron) and LLM (Cerebras, OpenAI, Anthropic, Gemini, Groq, OpenRouter), run fully local with Whisper and Ollama, or add more from [Pipecat's supported services](https://docs.pipecat.ai/server/services/supported-services)
+- **Choose your AI providers** — Pick your STT (Cartesia, Deepgram, AssemblyAI, Speechmatics, Azure, AWS, Google, Groq, OpenAI, Nemotron) and LLM (Cerebras, OpenAI, Anthropic, Gemini, Groq, OpenRouter, AWS Bedrock), run fully local with Whisper and Ollama, or add more from [Pipecat's supported services](https://docs.pipecat.ai/server/services/supported-services)
 - **Customize the formatting** — Modify prompts, add custom rules, build your personal dictionary
 - **Extend freely** — Built on [Pipecat](https://github.com/pipecat-ai/pipecat)'s modular pipeline, fully open-source
 
@@ -319,15 +319,15 @@ Tambourine supports exporting and importing your configuration data, making it e
 
 #### Export Data
 
-Go to **Settings > Data Management** and click the export button. Select a folder and Tambourine exports 5 files:
+Go to **Settings > Data Management** and click the export button. Select a folder and Tambourine exports the following files:
 
 | File                              | Description                                                |
 | --------------------------------- | ---------------------------------------------------------- |
 | `tambourine-settings.json`        | App settings (hotkeys, providers, audio preferences)       |
 | `tambourine-history.json`         | Transcription history entries                              |
-| `tambourine-prompt-main.md`       | Core formatting rules                                      |
-| `tambourine-prompt-advanced.md`   | Advanced features (backtrack corrections, list formatting) |
-| `tambourine-prompt-dictionary.md` | Personal dictionary for custom terminology                 |
+| `tambourine-prompt-main.md`       | Core formatting rules (included when prompt settings have been saved) |
+| `tambourine-prompt-advanced.md`   | Advanced features (included when prompt settings have been saved)     |
+| `tambourine-prompt-dictionary.md` | Personal dictionary (included when prompt settings have been saved)   |
 
 #### Import Data
 
