@@ -1,4 +1,4 @@
-import { Badge, Loader, Select, Slider, Text } from "@mantine/core";
+import { Badge, Loader, Select, Slider, Text, Tooltip } from "@mantine/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	useAvailableProviders,
@@ -67,9 +67,20 @@ function groupProvidersByType(
 
 function ProviderBadge({ isLocal }: { isLocal: boolean }) {
 	return (
-		<Badge size="xs" variant="light" color={isLocal ? "teal" : "blue"}>
-			{isLocal ? "Local" : "Cloud"}
-		</Badge>
+		<Tooltip
+			label={
+				isLocal
+					? "Runs on the machine hosting the server, not necessarily on this device"
+					: "Requests leave the server to a third-party API"
+			}
+			multiline
+			w={220}
+			withArrow
+		>
+			<Badge size="xs" variant="light" color={isLocal ? "teal" : "blue"}>
+				{isLocal ? "Local" : "Cloud"}
+			</Badge>
+		</Tooltip>
 	);
 }
 
