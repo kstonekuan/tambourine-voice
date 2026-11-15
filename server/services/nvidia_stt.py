@@ -126,7 +126,7 @@ class NVidiaWebSocketSTTService(WebsocketSTTService):
         await super().cancel(frame)
         await self._disconnect()
 
-    async def run_stt(self, audio: bytes) -> AsyncGenerator[Frame]:  # ty: ignore[invalid-method-override]
+    async def run_stt(self, audio: bytes) -> AsyncGenerator[Frame]:
         """Send audio data to NVIDIA ASR server for transcription.
 
         Args:

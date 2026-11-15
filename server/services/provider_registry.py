@@ -29,7 +29,7 @@ from pipecat.services.ollama.llm import OLLamaLLMService, OllamaLLMSettings
 from pipecat.services.openai.llm import OpenAILLMService
 from pipecat.services.openai.stt import OpenAISTTService
 from pipecat.services.openrouter.llm import OpenRouterLLMService
-from pipecat.services.speechmatics.stt import SpeechmaticsSTTSettings
+from pipecat.services.speechmatics.stt import SpeechmaticsSTTService
 from pipecat.services.stt_service import STTService
 from pipecat.services.whisper.stt import (
     WhisperMLXSTTSettings,
@@ -43,7 +43,6 @@ from protocol.providers import LLMProviderId, STTProviderId
 
 # Custom service for Nemotron ASR
 from services.nvidia_stt import NVidiaWebSocketSTTService
-from services.speechmatics_stt import ReconnectingSpeechmaticsSTTService
 
 if TYPE_CHECKING:
     from config.settings import Settings
@@ -210,13 +209,8 @@ STT_PROVIDERS: Final[dict[STTProviderId, STTProviderConfig]] = {
     STTProviderId.SPEECHMATICS: STTProviderConfig(
         provider_id=STTProviderId.SPEECHMATICS,
         display_name="Speechmatics",
-        service_class=ReconnectingSpeechmaticsSTTService,
+        service_class=SpeechmaticsSTTService,
         credential_mapper=ApiKeyMapper("speechmatics_api_key"),
-        default_kwargs={
-            "settings": SpeechmaticsSTTSettings(
-                end_of_utterance_silence_trigger=0.5,
-            )
-        },
     ),
     STTProviderId.ASSEMBLYAI: STTProviderConfig(
         provider_id=STTProviderId.ASSEMBLYAI,

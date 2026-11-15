@@ -16,8 +16,6 @@ Your personal voice interface for any app. Speak naturally and your words appear
 Open-source alternative to [Wispr Flow](https://wisprflow.ai), [Superwhisper](https://superwhisper.com), and [Willow](https://willowvoice.com).
 
 
-> 🚀 **Hosted Service Coming Soon!**
-> [Join the waitlist](https://docs.google.com/forms/d/e/1FAIpQLSf6JfLheFlBU-jAVMzgA7CKCcFb39fGZOaizKjxSBMCwSrVZg/viewform) to use Tambourine without running the server yourself.
 
 <p align="center">
   <img src="assets/home.png" alt="Home" width="600">
@@ -81,7 +79,6 @@ Open-source alternative to [Wispr Flow](https://wisprflow.ai), [Superwhisper](ht
 - **Voice Shortcuts** - Create custom triggers that expand to full formatted text. Say "insert meeting link" to paste your scheduling URL, or "sign off" for your email signature.
 - **Auto-Learning Dictionary** - Automatically learn new words, names, and terminology from your usage patterns rather than requiring manual dictionary entries.
 - **Observability and Evaluation** - Integrate tooling from Pipecat and other voice agent frameworks to track transcription quality, latency metrics, and formatting accuracy. Use insights to continuously optimize your personal dictation workflow.
-- **Hosted Service** - Optional cloud-hosted backend so you can use Tambourine without running the Python server locally.
 
 ## Architecture
 
