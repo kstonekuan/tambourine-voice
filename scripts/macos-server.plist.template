@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.tambourine.voice-server</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>{{UV_PATH}}</string>
+        <string>run</string>
+        <string>python</string>
+        <string>main.py</string>
+        <string>--host</string>
+        <string>127.0.0.1</string>
+        <string>--port</string>
+        <string>8765</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>{{INSTALL_DIR}}/server</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>{{LOG_PATH}}/server-stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>{{LOG_PATH}}/server-stderr.log</string>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+</dict>
+</plist>
