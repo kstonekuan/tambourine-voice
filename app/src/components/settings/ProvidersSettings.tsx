@@ -173,6 +173,11 @@ export function ProvidersSettings() {
 	return (
 		<div className="settings-section animate-in animate-in-delay-1">
 			<h3 className="settings-section-title">Providers</h3>
+			<p className="settings-description">
+				Local providers can run on your server or another configured machine;
+				cloud providers typically use an external service. The server itself may
+				be remote from this device.
+			</p>
 			<div className="settings-card">
 				<div className="settings-row">
 					<div>
