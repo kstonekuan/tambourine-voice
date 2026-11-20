@@ -1,0 +1,66 @@
+# Tambourine Vocabulary File
+# Format: word/phrase OR pronunciation = correct spelling
+# Blank lines and lines starting with # are ignored.
+#
+# This file serves two purposes:
+# 1. STT prompt hints — improves speech recognition for domain terms
+# 2. LLM dictionary — auto-generates the dictionary prompt section
+#
+# Add your own terms below.
+
+# ── AI Models & Companies ──
+Anthropic
+ant row pick = Anthropic
+Claude
+OpenAI
+GPT
+Gemini
+Groq
+Cerebras
+Ollama
+Mistral
+Llama
+DeepSeek
+Qwen
+
+# ── AI/ML Concepts ──
+LLM
+RAG
+embedding
+fine-tuning
+fine-tune
+prompt
+token
+context window
+multimodal
+agent
+agentic
+
+# ── Dev Frameworks & Tools ──
+Pipecat
+Tauri
+WebRTC
+FastAPI
+Pydantic
+React
+Next.js
+TypeScript
+JavaScript
+Python
+Rust
+
+# ── Audio/Voice ──
+STT
+TTS
+VAD
+Whisper
+Silero
+Deepgram
+Speechmatics
+
+# ── Your Custom Terms ──
+# Add project names, brand names, or uncommon terms here.
+# Examples:
+# my project = MyProject
+# jee pee tee = GPT
+Tambourine

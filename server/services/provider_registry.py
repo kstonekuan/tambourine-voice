@@ -44,6 +44,7 @@ from protocol.providers import LLMProviderId, STTProviderId
 # Custom service for Nemotron ASR
 from services.nvidia_stt import NVidiaWebSocketSTTService
 
+
 if TYPE_CHECKING:
     from config.settings import Settings
 
