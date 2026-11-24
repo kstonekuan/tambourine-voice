@@ -1,6 +1,7 @@
 use rodio::source::Source;
 use rodio::{Decoder, DeviceSinkBuilder};
 use std::io::Cursor;
+use std::sync::mpsc::Sender;
 use std::thread;
 use std::time::Duration;
 
@@ -19,8 +20,14 @@ const DEFAULT_AUDIO_PLAYBACK_DURATION_MS: u64 = 500;
 
 /// Play a sound effect (non-blocking)
 pub fn play_sound(sound_type: SoundType) {
+    play_sound_with_notify(sound_type, None);
+}
+
+/// Play a sound effect (non-blocking), optionally sending a notification once
+/// playback has been submitted to the sink.
+pub fn play_sound_with_notify(sound_type: SoundType, notify: Option<Sender<()>>) {
     thread::spawn(move || {
-        if let Err(e) = play_sound_blocking(sound_type) {
+        if let Err(e) = play_sound_blocking(sound_type, notify) {
             log::warn!("Failed to play sound: {e}");
         }
     });
@@ -28,6 +35,7 @@ pub fn play_sound(sound_type: SoundType) {
 
 fn play_sound_blocking(
     sound_type: SoundType,
+    notify: Option<Sender<()>>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut sink = DeviceSinkBuilder::open_default_sink()?;
     sink.log_on_drop(false);
@@ -46,6 +54,9 @@ fn play_sound_blocking(
         .unwrap_or(Duration::from_millis(DEFAULT_AUDIO_PLAYBACK_DURATION_MS));
 
     sink.mixer().add(source);
+    if let Some(tx) = notify {
+        let _ = tx.send(());
+    }
     thread::sleep(duration + Duration::from_millis(50));
 
     Ok(())
